@@ -20,15 +20,17 @@ interface LandingPageProps {
 }
 
 type AuthModal = 'none' | 'signin' | 'signup' | 'reset-password' | 'new-password';
+type PageView = 'landing' | 'dashboard';
 
 const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
   const [scrollY, setScrollY] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isDashboardOpen, setIsDashboardOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState<PageView>('landing');
   const [email, setEmail] = useState('');
   const [authModal, setAuthModal] = useState<AuthModal>('none');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [signUpSuccess, setSignUpSuccess] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -40,18 +42,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
     setUserEmail(email);
     setIsLoggedIn(true);
     setAuthModal('none');
+    setCurrentPage('dashboard'); // Redirect to dashboard after sign in
   };
 
   const handleSignUp = (email: string) => {
-    setUserEmail(email);
-    setIsLoggedIn(true);
-    setAuthModal('none');
+    // After sign up, redirect to sign in page with success message
+    setSignUpSuccess(true);
+    setAuthModal('signin');
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setUserEmail('');
-    setIsDashboardOpen(false);
+    setCurrentPage('landing');
+  };
+
+  const goToDashboard = () => {
+    if (isLoggedIn) {
+      setCurrentPage('dashboard');
+    } else {
+      setAuthModal('signin');
+    }
   };
 
   const apps: AppCard[] = [
@@ -130,6 +141,9 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
         />
       </div>
 
+      {/* Landing Page Content */}
+      {currentPage === 'landing' && (
+      <>
       {/* Header / Navbar */}
       <header 
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${
@@ -167,7 +181,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
               </a>
               {isLoggedIn ? (
                 <button
-                  onClick={() => setIsDashboardOpen(true)}
+                  onClick={goToDashboard}
                   className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-cyan-500 rounded-xl font-semibold text-sm hover:shadow-lg hover:shadow-green-500/25 transition-all transform hover:scale-105 flex items-center gap-2"
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +226,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
                 <a href="#pricing" className="text-gray-400 hover:text-white transition-colors">Pricing</a>
                 {isLoggedIn ? (
                   <button
-                    onClick={() => { setIsDashboardOpen(true); setIsMenuOpen(false); }}
+                    onClick={() => { goToDashboard(); setIsMenuOpen(false); }}
                     className="mt-2 px-5 py-3 bg-gradient-to-r from-green-500 to-cyan-500 rounded-xl font-semibold text-sm w-full"
                   >
                     Dashboard
@@ -261,7 +275,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             <button 
-              onClick={() => setIsDashboardOpen(true)}
+              onClick={goToDashboard}
               className="group px-8 py-4 bg-gradient-to-r from-green-500 to-cyan-500 rounded-2xl font-bold text-lg hover:shadow-2xl hover:shadow-green-500/30 transition-all transform hover:scale-105 flex items-center gap-3"
             >
               <span>Open Dashboard</span>
@@ -647,42 +661,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
         </div>
       </footer>
       </main>
+      </>
+      )}
 
-      {/* Dashboard Modal */}
-      {isDashboardOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={() => setIsDashboardOpen(false)}
-          />
-          
-          {/* Modal */}
-          <div className="relative w-full max-w-5xl max-h-[90vh] bg-[#0a0a0a] border border-white/10 rounded-3xl overflow-hidden shadow-2xl">
-            {/* Close button */}
-            <button
-              onClick={() => setIsDashboardOpen(false)}
-              className="absolute top-4 right-4 z-10 p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-            
-            <div className="p-8 overflow-y-auto max-h-[90vh]">
-              <DashboardContent userEmail={userEmail} onLogout={handleLogout} />
-            </div>
-          </div>
-        </div>
+      {/* Full Page Dashboard */}
+      {currentPage === 'dashboard' && (
+        <FullPageDashboard userEmail={userEmail} onLogout={handleLogout} onBackToHome={() => setCurrentPage('landing')} />
       )}
 
       {/* Auth Modals */}
       {authModal === 'signin' && (
         <SignIn
-          onClose={() => setAuthModal('none')}
+          onClose={() => { setAuthModal('none'); setSignUpSuccess(false); }}
           onSignIn={handleSignIn}
-          onSwitchToSignUp={() => setAuthModal('signup')}
+          onSwitchToSignUp={() => { setAuthModal('signup'); setSignUpSuccess(false); }}
           onSwitchToResetPassword={() => setAuthModal('reset-password')}
+          showSuccessMessage={signUpSuccess}
         />
       )}
 
@@ -730,7 +724,482 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
   );
 };
 
-// Dashboard Content Component
+// Full Page Dashboard Component
+interface FullPageDashboardProps {
+  userEmail?: string;
+  onLogout?: () => void;
+  onBackToHome?: () => void;
+}
+
+const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user@example.com', onLogout, onBackToHome }) => {
+  const [activeTab, setActiveTab] = useState<'overview' | 'apps' | 'credits' | 'usage' | 'billing' | 'security' | 'settings'>('overview');
+  const creditBalance = 247;
+  
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: '📊' },
+    { id: 'apps', label: 'My Apps', icon: '🚀' },
+    { id: 'credits', label: 'Credits', icon: '💰' },
+    { id: 'usage', label: 'Usage', icon: '📈' },
+    { id: 'billing', label: 'Billing', icon: '💳' },
+    { id: 'security', label: 'Security', icon: '🔒' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+  ];
+
+  const recentActivity = [
+    { app: 'Neural Chat', action: 'Chat conversation', credits: 5, time: '2 min ago', icon: '🧠' },
+    { app: 'Canvas Studio', action: 'Generated landing page', credits: 12, time: '15 min ago', icon: '🎨' },
+    { app: 'Maula Editor', action: 'Code completion', credits: 3, time: '1 hour ago', icon: '⚡' },
+    { app: 'Neural Chat', action: 'Voice conversation', credits: 8, time: '3 hours ago', icon: '🧠' },
+  ];
+
+  return (
+    <div className="min-h-screen relative z-10">
+      {/* Dashboard Header */}
+      <header className="sticky top-0 z-50 backdrop-blur-xl bg-black/70 border-b border-white/10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            {/* Logo & Back */}
+            <div className="flex items-center gap-4">
+              <button
+                onClick={onBackToHome}
+                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-gray-400 hover:text-white"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                </svg>
+              </button>
+              <div className="flex items-center gap-3 group cursor-pointer" onClick={onBackToHome}>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-400 via-cyan-400 to-green-400 flex items-center justify-center shadow-lg shadow-green-500/20">
+                  <span className="text-xl font-black text-black">O</span>
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-white">OneLast AI</h1>
+                  <p className="text-[10px] text-gray-500 uppercase tracking-wider">Dashboard</p>
+                </div>
+              </div>
+            </div>
+
+            {/* User Info & Actions */}
+            <div className="flex items-center gap-4">
+              <div className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-green-500/10 to-cyan-500/10 border border-green-500/20">
+                <span className="text-xl">🪙</span>
+                <div>
+                  <div className="text-xs text-gray-500">Balance</div>
+                  <div className="text-lg font-bold text-green-400">{creditBalance}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-cyan-500 flex items-center justify-center text-lg font-bold">
+                  {userEmail.charAt(0).toUpperCase()}
+                </div>
+                <div className="hidden sm:block">
+                  <div className="text-sm font-medium text-white">{userEmail.split('@')[0]}</div>
+                  <div className="text-xs text-gray-500">{userEmail}</div>
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                className="p-2 rounded-lg bg-white/5 hover:bg-red-500/20 hover:text-red-400 transition-all text-gray-400"
+                title="Logout"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Tabs Navigation */}
+        <div className="flex gap-2 p-1.5 rounded-2xl bg-white/5 border border-white/10 overflow-x-auto mb-8">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-medium transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-gradient-to-r from-green-500/20 to-cyan-500/20 text-white border border-green-500/30 shadow-lg shadow-green-500/10'
+                  : 'text-gray-500 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <span className="text-lg">{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'overview' && (
+          <div className="space-y-8">
+            {/* Welcome Banner */}
+            <div className="p-8 rounded-3xl bg-gradient-to-r from-green-500/10 via-cyan-500/5 to-purple-500/10 border border-green-500/20 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-gradient-to-br from-green-500/20 to-cyan-500/20 rounded-full blur-[80px]" />
+              <div className="relative">
+                <h2 className="text-3xl font-bold text-white mb-2">Welcome back! 👋</h2>
+                <p className="text-gray-400 text-lg">Ready to build something amazing today?</p>
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {[
+                { label: 'Credits Used Today', value: '28', icon: '⚡', color: 'cyan', change: '+12%' },
+                { label: 'Total Requests', value: '156', icon: '📊', color: 'purple', change: '+23%' },
+                { label: 'Apps Used', value: '3', icon: '🚀', color: 'pink', change: 'All Active' },
+                { label: 'Credits Remaining', value: creditBalance.toString(), icon: '🪙', color: 'green', change: '49%' },
+              ].map((stat, i) => (
+                <div key={i} className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group">
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-2xl group-hover:scale-110 transition-transform">{stat.icon}</span>
+                    <span className="text-xs text-gray-500 uppercase tracking-wider">{stat.label}</span>
+                  </div>
+                  <div className="text-3xl font-black text-white mb-1">{stat.value}</div>
+                  <div className={`text-sm text-${stat.color}-400`}>{stat.change}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Actions */}
+            <div>
+              <h3 className="text-xl font-bold mb-4 text-white">Quick Actions</h3>
+              <div className="grid md:grid-cols-3 gap-4">
+                {[
+                  { name: 'Neural Chat', icon: '🧠', desc: 'Start a conversation', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat' },
+                  { name: 'Canvas Studio', icon: '🎨', desc: 'Build something new', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio' },
+                  { name: 'Buy Credits', icon: '🪙', desc: 'Top up your balance', gradient: 'from-green-500 to-emerald-500', path: null },
+                ].map((action, i) => (
+                  <a
+                    key={i}
+                    href={action.path || '#'}
+                    onClick={(e) => { if (!action.path) { e.preventDefault(); setActiveTab('credits'); }}}
+                    className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
+                  >
+                    <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${action.gradient} flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform shadow-lg`}>
+                      {action.icon}
+                    </div>
+                    <h4 className="font-bold text-white text-lg mb-1">{action.name}</h4>
+                    <p className="text-sm text-gray-500">{action.desc}</p>
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Activity */}
+            <div>
+              <h3 className="text-xl font-bold mb-4 text-white">Recent Activity</h3>
+              <div className="space-y-3">
+                {recentActivity.map((activity, i) => (
+                  <div key={i} className="flex items-center gap-4 p-5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center text-2xl">
+                      {activity.icon}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-white text-lg">{activity.action}</div>
+                      <div className="text-sm text-gray-500">{activity.app} • {activity.time}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-cyan-400">-{activity.credits}</div>
+                      <div className="text-xs text-gray-500">credits</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'apps' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-white">My Apps</h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {[
+                { name: 'Neural Chat', icon: '🧠', status: 'Active', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat', desc: 'AI conversation interface' },
+                { name: 'Canvas Studio', icon: '🎨', status: 'Active', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio', desc: 'Visual app builder' },
+                { name: 'Maula Editor', icon: '⚡', status: 'Active', gradient: 'from-green-500 to-emerald-500', path: '/maula-editor', desc: 'AI code editor' },
+              ].map((app, i) => (
+                <div key={i} className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group">
+                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${app.gradient} flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-${app.gradient.split('-')[1]}-500/20`}>
+                    {app.icon}
+                  </div>
+                  <h4 className="font-bold text-white text-xl mb-2">{app.name}</h4>
+                  <p className="text-gray-500 mb-4">{app.desc}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">{app.status}</span>
+                    <a href={app.path} className="px-4 py-2 rounded-xl bg-white/5 text-sm font-medium hover:bg-white/10 transition-colors">
+                      Launch →
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'credits' && (
+          <div className="space-y-8">
+            <div className="p-8 rounded-3xl bg-gradient-to-r from-green-500/10 to-cyan-500/10 border border-green-500/20">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Current Balance</div>
+                  <div className="text-5xl font-black text-green-400">{creditBalance}</div>
+                </div>
+                <span className="text-7xl">🪙</span>
+              </div>
+              <div className="h-3 rounded-full bg-gray-800 overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full" style={{ width: '49%' }} />
+              </div>
+              <div className="flex justify-between mt-2 text-sm text-gray-500">
+                <span>0</span>
+                <span>500</span>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold mb-6 text-white">Buy Credits</h3>
+              <div className="grid md:grid-cols-3 gap-6">
+                {[
+                  { credits: 50, price: 5, savings: null, popular: false },
+                  { credits: 350, price: 30, savings: '15%', popular: true },
+                  { credits: 1500, price: 100, savings: '35%', popular: false },
+                ].map((pkg, i) => (
+                  <button key={i} className={`p-8 rounded-2xl border transition-all text-left relative ${pkg.popular ? 'bg-gradient-to-br from-green-500/10 to-cyan-500/10 border-green-500/30 scale-105' : 'bg-white/[0.02] border-white/10 hover:border-white/20'}`}>
+                    {pkg.popular && (
+                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-green-500 to-cyan-500 rounded-full text-xs font-bold">
+                        MOST POPULAR
+                      </div>
+                    )}
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-4xl">🪙</span>
+                      <span className="text-3xl font-black text-white">{pkg.credits}</span>
+                    </div>
+                    {pkg.savings && <span className="inline-block px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold mb-4">{pkg.savings} OFF</span>}
+                    <div className="text-4xl font-black text-cyan-400 mb-2">${pkg.price}</div>
+                    <div className="text-sm text-gray-500">${(pkg.price / pkg.credits).toFixed(2)} per credit</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'usage' && (
+          <div className="space-y-8">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10">
+                <h4 className="text-sm text-gray-500 uppercase tracking-wider mb-4">This Week</h4>
+                <div className="text-4xl font-black text-white mb-2">156</div>
+                <div className="text-lg text-green-400">+23% from last week</div>
+              </div>
+              <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10">
+                <h4 className="text-sm text-gray-500 uppercase tracking-wider mb-4">Credits Used</h4>
+                <div className="text-4xl font-black text-white mb-2">89</div>
+                <div className="text-lg text-cyan-400">Avg 12.7 per day</div>
+              </div>
+            </div>
+            
+            <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10">
+              <h4 className="text-xl font-bold mb-6 text-white">Usage by App</h4>
+              <div className="space-y-6">
+                {[
+                  { name: 'Neural Chat', percent: 45, color: 'purple' },
+                  { name: 'Canvas Studio', percent: 35, color: 'cyan' },
+                  { name: 'Maula Editor', percent: 20, color: 'green' },
+                ].map((app, i) => (
+                  <div key={i}>
+                    <div className="flex justify-between mb-2">
+                      <span className="text-white font-medium">{app.name}</span>
+                      <span className="text-gray-400">{app.percent}%</span>
+                    </div>
+                    <div className="h-3 rounded-full bg-gray-800 overflow-hidden">
+                      <div className={`h-full bg-${app.color}-500 rounded-full transition-all`} style={{ width: `${app.percent}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'billing' && (
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-2xl font-bold mb-6 text-white">Payment Methods</h3>
+              <div className="space-y-4">
+                <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-10 rounded-lg bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold">
+                      VISA
+                    </div>
+                    <div>
+                      <div className="text-white font-medium">•••• •••• •••• 4242</div>
+                      <div className="text-sm text-gray-500">Expires 12/27</div>
+                    </div>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">Default</span>
+                </div>
+                <button className="w-full p-6 rounded-2xl border border-dashed border-white/20 text-gray-500 hover:text-white hover:border-green-500/50 transition-all flex items-center justify-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Payment Method
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold mb-6 text-white">Billing History</h3>
+              <div className="rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/10">
+                      <th className="text-left p-5 text-sm font-medium text-gray-500">Date</th>
+                      <th className="text-left p-5 text-sm font-medium text-gray-500">Description</th>
+                      <th className="text-left p-5 text-sm font-medium text-gray-500">Amount</th>
+                      <th className="text-left p-5 text-sm font-medium text-gray-500">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { date: 'Jan 15, 2026', desc: '350 Credits - Pro Package', amount: '$30.00', status: 'Paid' },
+                      { date: 'Dec 20, 2025', desc: '50 Credits - Starter Package', amount: '$5.00', status: 'Paid' },
+                      { date: 'Dec 01, 2025', desc: '350 Credits - Pro Package', amount: '$30.00', status: 'Paid' },
+                    ].map((item, i) => (
+                      <tr key={i} className="border-b border-white/5 last:border-0">
+                        <td className="p-5 text-gray-400">{item.date}</td>
+                        <td className="p-5 text-white">{item.desc}</td>
+                        <td className="p-5 text-cyan-400 font-medium">{item.amount}</td>
+                        <td className="p-5">
+                          <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">{item.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'security' && (
+          <div className="space-y-6">
+            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-lg">Password</h4>
+                    <p className="text-gray-500">Last changed 30 days ago</p>
+                  </div>
+                </div>
+                <button className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors font-medium">
+                  Change Password
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-green-500/20 flex items-center justify-center">
+                    <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-white text-lg">Two-Factor Authentication</h4>
+                    <p className="text-gray-500">Add an extra layer of security</p>
+                  </div>
+                </div>
+                <button className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-green-500 to-cyan-500 hover:shadow-lg hover:shadow-green-500/25 transition-all font-medium">
+                  Enable 2FA
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-red-500/5 border border-red-500/20">
+              <h4 className="font-bold text-red-400 text-lg mb-2">Danger Zone</h4>
+              <p className="text-gray-500 mb-4">Once you delete your account, there is no going back. Please be certain.</p>
+              <button className="px-5 py-2.5 rounded-xl bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors font-medium">
+                Delete Account
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="space-y-8">
+            <div>
+              <h3 className="text-2xl font-bold mb-6 text-white">Profile Settings</h3>
+              <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 space-y-6">
+                <div className="flex items-center gap-6">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-500 to-cyan-500 flex items-center justify-center text-3xl font-bold">
+                    {userEmail.charAt(0).toUpperCase()}
+                  </div>
+                  <button className="px-5 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 transition-colors font-medium">
+                    Change Avatar
+                  </button>
+                </div>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Full Name</label>
+                    <input
+                      type="text"
+                      defaultValue="John Doe"
+                      className="w-full px-5 py-3.5 rounded-xl bg-white/5 border border-white/10 focus:border-green-500/50 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-400 mb-2">Email</label>
+                    <input
+                      type="email"
+                      defaultValue={userEmail}
+                      className="w-full px-5 py-3.5 rounded-xl bg-white/5 border border-white/10 focus:border-green-500/50 focus:outline-none focus:ring-2 focus:ring-green-500/20 text-white"
+                    />
+                  </div>
+                </div>
+                <button className="px-6 py-3 rounded-xl bg-gradient-to-r from-green-500 to-cyan-500 hover:shadow-lg hover:shadow-green-500/25 transition-all font-medium">
+                  Save Changes
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-2xl font-bold mb-6 text-white">Notifications</h3>
+              <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 space-y-6">
+                {[
+                  { label: 'Email Notifications', desc: 'Receive emails about your account activity', checked: true },
+                  { label: 'Usage Alerts', desc: 'Get notified when credits are running low', checked: true },
+                  { label: 'Marketing Emails', desc: 'Receive updates about new features and offers', checked: false },
+                  { label: 'Weekly Summary', desc: 'Get a weekly summary of your usage', checked: true },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-center justify-between py-2">
+                    <div>
+                      <div className="font-medium text-white text-lg">{item.label}</div>
+                      <div className="text-gray-500">{item.desc}</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" defaultChecked={item.checked} className="sr-only peer" />
+                      <div className="w-12 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Dashboard Content Component (kept for reference, may be removed later)
 interface DashboardContentProps {
   userEmail?: string;
   onLogout?: () => void;
