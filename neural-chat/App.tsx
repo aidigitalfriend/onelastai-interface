@@ -11,8 +11,7 @@ import Footer from './components/Footer';
 // Fix: Import WorkspaceMode which was missing and causing a reference error on line 312
 import { ChatSession, Message, SettingsState, NavItem, CanvasState, WorkspaceMode } from './types';
 import { DEFAULT_SETTINGS, NEURAL_PRESETS } from './constants';
-import { callGemini } from './services/geminiService';
-import { GoogleGenAI, Modality, LiveServerMessage } from '@google/genai';
+import { callBackendAPI } from './services/apiService';
 
 const App: React.FC = () => {
   // UI State
@@ -71,7 +70,7 @@ const App: React.FC = () => {
     ));
 
     setIsThinking(true);
-    const result = await callGemini(text, activeSession.settings);
+    const result = await callBackendAPI(text, activeSession.settings);
     setIsThinking(false);
 
     const settingsUpdate: Partial<SettingsState> = {};
@@ -164,88 +163,18 @@ const App: React.FC = () => {
   };
 
   const toggleLive = async () => {
+    // Voice chat feature coming soon - requires backend integration
+    alert('🎙️ Voice chat feature coming soon! For now, please use text input.');
+    return;
+    
+    /* Disabled: Direct Gemini API calls - needs backend integration
     if (isLiveActive) {
       liveSessionRef.current?.close();
       setIsLiveActive(false);
     } else {
-      // Fix: Use process.env.API_KEY directly and initialize inside the trigger to follow SDK guidelines
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      setIsLiveActive(true);
-
-      // Audio setup
-      const inputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      const outputCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-      audioContextRef.current = outputCtx;
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const sessionPromise = ai.live.connect({
-          model: 'gemini-2.5-flash-native-audio-preview-09-2025',
-          callbacks: {
-            onopen: () => {
-              const source = inputCtx.createMediaStreamSource(stream);
-              const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
-              scriptProcessor.onaudioprocess = (e) => {
-                const inputData = e.inputBuffer.getChannelData(0);
-                const l = inputData.length;
-                const int16 = new Int16Array(l);
-                for (let i = 0; i < l; i++) int16[i] = inputData[i] * 32768;
-                
-                const binary = new Uint8Array(int16.buffer);
-                // Fix: Implemented manual audio encoding following GenAI SDK guidelines
-                let bStr = '';
-                for (let i = 0; i < binary.length; i++) bStr += String.fromCharCode(binary[i]);
-                const base64 = btoa(bStr);
-
-                sessionPromise.then(session => {
-                  session.sendRealtimeInput({ media: { data: base64, mimeType: 'audio/pcm;rate=16000' } });
-                });
-              };
-              source.connect(scriptProcessor);
-              scriptProcessor.connect(inputCtx.destination);
-            },
-            onmessage: async (message: LiveServerMessage) => {
-              const base64 = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-              if (base64) {
-                // Fix: Implemented manual audio decoding following GenAI SDK guidelines
-                const binStr = atob(base64);
-                const bytes = new Uint8Array(binStr.length);
-                for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                
-                const dataInt16 = new Int16Array(bytes.buffer);
-                const buffer = outputCtx.createBuffer(1, dataInt16.length, 24000);
-                const channelData = buffer.getChannelData(0);
-                for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-
-                const source = outputCtx.createBufferSource();
-                source.buffer = buffer;
-                source.connect(outputCtx.destination);
-                
-                nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
-                source.start(nextStartTimeRef.current);
-                nextStartTimeRef.current += buffer.duration;
-                sourcesRef.current.add(source);
-              }
-              if (message.serverContent?.interrupted) {
-                sourcesRef.current.forEach(s => s.stop());
-                sourcesRef.current.clear();
-                nextStartTimeRef.current = 0;
-              }
-            },
-            onclose: () => setIsLiveActive(false),
-            onerror: () => setIsLiveActive(false)
-          },
-          config: {
-            responseModalities: [Modality.AUDIO],
-            systemInstruction: activeSession.settings.customPrompt
-          }
-        });
-        liveSessionRef.current = await sessionPromise;
-      } catch (err) {
-        console.error("Live failed:", err);
-        setIsLiveActive(false);
-      }
+      // ... voice code ...
     }
+    */
   };
 
   const deleteSession = (id: string) => {

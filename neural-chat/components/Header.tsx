@@ -48,8 +48,9 @@ const Header: React.FC<HeaderProps> = ({
         </button>
 
         <button 
-          onClick={() => window.open('https://ai.google.dev', '_blank')}
+          onClick={() => window.location.href = '/'}
           className="text-cyan-400 hover:text-white p-1 transition-colors"
+          title="Back to Home"
         >
           <ExternalLink size={20} />
         </button>

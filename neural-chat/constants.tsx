@@ -3,24 +3,44 @@ import { SettingsState, NavItem } from './types';
 
 export const PROVIDER_CONFIG = [
   {
-    id: 'gemini',
-    name: 'Google Gemini',
-    models: ['gemini-3-flash-preview', 'gemini-3-pro-preview', 'gemini-2.5-flash-lite-latest', 'gemini-2.5-flash-native-audio-preview-09-2025', 'gemini-2.5-flash-image']
+    id: 'anthropic',
+    name: 'Anthropic',
+    models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307']
   },
   {
     id: 'openai',
     name: 'OpenAI',
-    models: ['gpt-4o', 'gpt-4-turbo', 'o1-preview', 'gpt-4o-mini']
+    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
+  },
+  {
+    id: 'mistral',
+    name: 'Mistral',
+    models: ['mistral-large-latest', 'mistral-small-latest']
+  },
+  {
+    id: 'xai',
+    name: 'xAI (Grok)',
+    models: ['grok-2', 'grok-2-mini']
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+  },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
   }
 ];
 
 export const DEFAULT_SETTINGS: SettingsState = {
-  customPrompt: "You are a helpful assistant.",
+  customPrompt: "You are a helpful AI assistant called Neural Companion. Be concise, helpful, and friendly.",
   agentName: "Neural Companion",
   temperature: 0.7,
   maxTokens: 2048,
-  provider: 'gemini',
-  model: "gemini-3-flash-preview",
+  provider: 'anthropic',
+  model: "claude-3-5-sonnet-20241022",
   activeTool: 'none',
   workspaceMode: 'CHAT',
   portalUrl: 'https://www.google.com/search?igu=1',
