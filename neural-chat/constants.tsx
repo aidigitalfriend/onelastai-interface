@@ -4,33 +4,77 @@ import { SettingsState, NavItem } from './types';
 export const PROVIDER_CONFIG = [
   {
     id: 'anthropic',
-    name: 'Anthropic',
-    models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307']
+    name: 'MAULA AI',
+    icon: '🧠',
+    color: '#ec4899', // pink
+    models: [
+      { id: 'claude-3-5-sonnet-20241022', name: 'ULTRA FAST' }
+    ]
   },
   {
     id: 'openai',
-    name: 'OpenAI',
-    models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo']
-  },
-  {
-    id: 'mistral',
-    name: 'Mistral',
-    models: ['mistral-large-latest', 'mistral-small-latest']
-  },
-  {
-    id: 'xai',
-    name: 'xAI (Grok)',
-    models: ['grok-2', 'grok-2-mini']
-  },
-  {
-    id: 'groq',
-    name: 'Groq',
-    models: ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768']
+    name: 'ONE LAST AI',
+    icon: '⚡',
+    color: '#22c55e', // green
+    models: [
+      { id: 'gpt-4o', name: 'POWER MODE' },
+      { id: 'gpt-4o-mini', name: 'QUICK REPLY' },
+      { id: 'gpt-4-turbo', name: 'LIGHT SPEED' }
+    ]
   },
   {
     id: 'gemini',
-    name: 'Google Gemini',
-    models: ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemini-1.5-flash']
+    name: 'PLANNER',
+    icon: '📋',
+    color: '#94a3b8', // gray
+    models: [
+      { id: 'gemini-1.5-pro', name: 'MASTER PLAN' },
+      { id: 'gemini-2.0-flash', name: 'QUICK PLAN' }
+    ]
+  },
+  {
+    id: 'mistral',
+    name: 'CODE EXPERT',
+    icon: '💻',
+    color: '#f97316', // orange
+    models: [
+      { id: 'codestral-latest', name: 'PRO CODER' },
+      { id: 'mistral-large-latest', name: 'SENIOR DEV' },
+      { id: 'mistral-small-latest', name: 'QUICK FIX' }
+    ]
+  },
+  {
+    id: 'xai',
+    name: 'DESIGNER',
+    icon: '🎨',
+    color: '#06b6d4', // cyan
+    models: [
+      { id: 'grok-2', name: 'CREATIVE PRO' },
+      { id: 'grok-2-mini', name: 'FAST DESIGN' },
+      { id: 'grok-beta', name: 'QUICK SKETCH' }
+    ]
+  },
+  {
+    id: 'groq',
+    name: 'WRITER',
+    icon: '✍️',
+    color: '#a855f7', // purple
+    models: [
+      { id: 'llama-3.3-70b-versatile', name: 'BESTSELLER' },
+      { id: 'llama-3.1-70b-versatile', name: 'STORY MODE' },
+      { id: 'llama-3.1-8b-instant', name: 'QUICK DRAFT' }
+    ]
+  },
+  {
+    id: 'cerebras',
+    name: 'RESEARCHER',
+    icon: '🔬',
+    color: '#8b5cf6', // violet
+    models: [
+      { id: 'llama3.1-70b', name: 'DEEP DIVE' },
+      { id: 'llama3.1-8b', name: 'ANALYSIS PRO' },
+      { id: 'llama-3.3-70b', name: 'QUICK SEARCH' }
+    ]
   }
 ];
 

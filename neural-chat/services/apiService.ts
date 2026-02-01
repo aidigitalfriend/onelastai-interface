@@ -22,49 +22,19 @@ interface ChatResponse {
 const mapProviderModel = (provider: string, model: string): { provider: string; model: string } => {
   // Map to backend supported providers
   const providerMap: Record<string, string> = {
-    'gemini': 'gemini',
-    'openai': 'openai',
     'anthropic': 'anthropic',
+    'openai': 'openai',
+    'gemini': 'gemini',
     'mistral': 'mistral',
     'xai': 'xai',
     'groq': 'groq',
     'cerebras': 'cerebras'
   };
 
-  // Map models to valid backend models
-  const modelMap: Record<string, string> = {
-    // Gemini
-    'gemini-3-flash-preview': 'gemini-2.0-flash',
-    'gemini-3-pro-preview': 'gemini-1.5-pro',
-    'gemini-2.5-flash-lite-latest': 'gemini-1.5-flash',
-    'gemini-2.5-flash-native-audio-preview-09-2025': 'gemini-1.5-flash',
-    'gemini-2.5-flash-image': 'gemini-1.5-flash',
-    // OpenAI
-    'gpt-4o': 'gpt-4o',
-    'gpt-4-turbo': 'gpt-4-turbo',
-    'gpt-4o-mini': 'gpt-4o-mini',
-    'o1-preview': 'gpt-4o',
-    // Anthropic
-    'claude-3-5-sonnet': 'claude-3-5-sonnet-20241022',
-    'claude-3-opus': 'claude-3-opus-20240229',
-    'claude-3-haiku': 'claude-3-haiku-20240307',
-    // Mistral
-    'mistral-large': 'mistral-large-latest',
-    'mistral-small': 'mistral-small-latest',
-    // xAI
-    'grok-2': 'grok-2',
-    'grok-2-mini': 'grok-2-mini',
-    // Groq
-    'llama-3.3-70b': 'llama-3.3-70b-versatile',
-    'llama-3.1-8b': 'llama-3.1-8b-instant',
-    // Cerebras
-    'llama3.1-70b': 'llama3.1-70b',
-    'llama3.1-8b': 'llama3.1-8b',
-  };
-
+  // Model IDs are passed directly - backend handles them
   return {
     provider: providerMap[provider] || 'anthropic',
-    model: modelMap[model] || model
+    model: model
   };
 };
 
