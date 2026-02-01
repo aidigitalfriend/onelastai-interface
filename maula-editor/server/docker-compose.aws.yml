@@ -1,0 +1,165 @@
+# ================================================================
+# Docker Compose for AWS Local Development/Testing
+# AI Digital Friend Zone Backend
+# ================================================================
+
+version: '3.8'
+
+services:
+  # ==================== BACKEND API ====================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.aws
+    container_name: ai-friend-zone-backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=development
+      - PORT=4000
+      - HOST=0.0.0.0
+      
+      # Database (local PostgreSQL)
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=ai_friend_zone
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres123
+      - DATABASE_URL=postgresql://postgres:postgres123@postgres:5432/ai_friend_zone
+      
+      # Redis
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      
+      # AWS (use localstack for local development)
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_REGION=us-east-1
+      - AWS_S3_BUCKET=ai-friend-zone-local
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      
+      # JWT
+      - JWT_SECRET=local-development-secret-key-12345
+      
+      # Run migrations
+      - RUN_MIGRATIONS=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ai-friend-zone-network
+    volumes:
+      - ./src:/app/src:ro
+      - ./prisma:/app/prisma:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==================== POSTGRESQL ====================
+  postgres:
+    image: postgres:16-alpine
+    container_name: ai-friend-zone-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres123
+      - POSTGRES_DB=ai_friend_zone
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./prisma/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - ai-friend-zone-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ai_friend_zone"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==================== REDIS ====================
+  redis:
+    image: redis:7-alpine
+    container_name: ai-friend-zone-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ai-friend-zone-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # ==================== LOCALSTACK (AWS LOCAL) ====================
+  localstack:
+    image: localstack/localstack:latest
+    container_name: ai-friend-zone-localstack
+    ports:
+      - "4566:4566"  # LocalStack Gateway
+      - "4510-4559:4510-4559"  # External services port range
+    environment:
+      - SERVICES=s3,sqs,secretsmanager
+      - DEBUG=0
+      - DATA_DIR=/tmp/localstack/data
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - localstack-data:/tmp/localstack
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+    networks:
+      - ai-friend-zone-network
+    restart: unless-stopped
+
+  # ==================== ADMINER (DB UI) ====================
+  adminer:
+    image: adminer:latest
+    container_name: ai-friend-zone-adminer
+    ports:
+      - "8080:8080"
+    environment:
+      - ADMINER_DEFAULT_SERVER=postgres
+    networks:
+      - ai-friend-zone-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ==================== REDIS COMMANDER ====================
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: ai-friend-zone-redis-commander
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    networks:
+      - ai-friend-zone-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+# ==================== VOLUMES ====================
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  localstack-data:
+    driver: local
+
+# ==================== NETWORKS ====================
+networks:
+  ai-friend-zone-network:
+    driver: bridge

@@ -1,0 +1,25 @@
+services:
+  # Spaces - AI Project Generator
+  spaces:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: spaces-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "3002:3001"
+    volumes:
+      - spaces-generated:/app/generated
+    networks:
+      - app-network
+
+volumes:
+  spaces-generated:
+
+networks:
+  app-network:
+    driver: bridge

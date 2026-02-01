@@ -1,0 +1,55 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+server/node_modules
+server/dist
+
+# Environment files (NEVER commit!)
+.env
+.env.*
+!.env.example
+!.env.local.example
+server/.env
+server/.env.*
+!server/.env.example
+spaces/server/.env
+spaces/server/.env.*
+!spaces/server/.env.example
+*.env.local
+*.env.production
+*.env.docker
+*.env.native
+
+# SSH Keys (NEVER commit!)
+*.pem
+*.key
+workspace.pem
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Prisma
+server/prisma/migrations/
+
+# Build artifacts & archives
+*.tar
+*.zip
+*.tar.gz

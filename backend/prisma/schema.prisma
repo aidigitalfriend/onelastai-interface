@@ -1,0 +1,346 @@
+// Neural Link Database Schema
+// Separate database from main One Last AI app
+// Uses same Stripe account but independent credits, usage, billing
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// USER & AUTHENTICATION
+// ============================================================================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  passwordHash      String?   @map("password_hash")  // Optional - for direct login
+  name              String?
+  avatarUrl         String?
+  
+  // Linked from main One Last AI account
+  onelastaiUserId   String?   @unique @map("onelastai_user_id")
+  
+  // Account status
+  isActive          Boolean   @default(true)
+  isVerified        Boolean   @default(false)
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  lastLoginAt       DateTime? @map("last_login_at")
+  
+  // Relations
+  credits           UserCredits?
+  sessions          ChatSession[]
+  usageLogs         UsageLog[]
+  billingHistory    BillingHistory[]
+  apiKeys           ApiKey[]
+  
+  @@map("users")
+}
+
+// ============================================================================
+// CREDITS SYSTEM
+// ============================================================================
+
+model UserCredits {
+  id              String    @id @default(cuid())
+  userId          String    @unique @map("user_id")
+  
+  // Credit balance
+  balance         Decimal   @default(0) @db.Decimal(12, 4)
+  lifetimeEarned  Decimal   @default(0) @map("lifetime_earned") @db.Decimal(12, 4)
+  lifetimeSpent   Decimal   @default(0) @map("lifetime_spent") @db.Decimal(12, 4)
+  
+  // Free tier tracking
+  freeCreditsUsed Decimal   @default(0) @map("free_credits_used") @db.Decimal(12, 4)
+  freeCreditsMax  Decimal   @default(5) @map("free_credits_max") @db.Decimal(12, 4)
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions    CreditTransaction[]
+  
+  @@map("user_credits")
+}
+
+model CreditTransaction {
+  id              String            @id @default(cuid())
+  userCreditsId   String            @map("user_credits_id")
+  
+  // Transaction details
+  type            TransactionType
+  amount          Decimal           @db.Decimal(12, 4)
+  balanceAfter    Decimal           @map("balance_after") @db.Decimal(12, 4)
+  
+  // Context
+  description     String?
+  referenceId     String?           @map("reference_id")
+  referenceType   String?           @map("reference_type") // 'stripe', 'usage', 'bonus', 'refund'
+  
+  // Metadata
+  metadata        Json?
+  
+  // Timestamps
+  createdAt       DateTime          @default(now()) @map("created_at")
+  
+  // Relations
+  userCredits     UserCredits       @relation(fields: [userCreditsId], references: [id], onDelete: Cascade)
+  
+  @@index([userCreditsId, createdAt])
+  @@map("credit_transactions")
+}
+
+enum TransactionType {
+  PURCHASE
+  USAGE
+  BONUS
+  REFUND
+  ADJUSTMENT
+}
+
+// ============================================================================
+// CHAT SESSIONS & MESSAGES
+// ============================================================================
+
+model ChatSession {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  
+  // Session info
+  name          String    @default("New Chat")
+  provider      String    @default("gemini")
+  model         String    @default("gemini-3-flash-preview")
+  
+  // Settings (stored as JSON)
+  settings      Json?
+  
+  // Status
+  isActive      Boolean   @default(true)
+  messageCount  Int       @default(0) @map("message_count")
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages      ChatMessage[]
+  
+  @@index([userId, createdAt])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id            String    @id @default(cuid())
+  sessionId     String    @map("session_id")
+  
+  // Message content
+  role          MessageRole
+  content       String    @db.Text
+  
+  // AI metadata
+  provider      String?
+  model         String?
+  tokensUsed    Int?      @map("tokens_used")
+  creditsCost   Decimal?  @map("credits_cost") @db.Decimal(12, 6)
+  latencyMs     Int?      @map("latency_ms")
+  
+  // Metadata
+  metadata      Json?
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  session       ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ============================================================================
+// USAGE TRACKING
+// ============================================================================
+
+model UsageLog {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  
+  // Request details
+  provider      String
+  model         String
+  endpoint      String    // 'chat', 'image', 'audio', 'canvas'
+  
+  // Token usage
+  inputTokens   Int       @default(0) @map("input_tokens")
+  outputTokens  Int       @default(0) @map("output_tokens")
+  totalTokens   Int       @default(0) @map("total_tokens")
+  
+  // Cost
+  creditsCost   Decimal   @map("credits_cost") @db.Decimal(12, 6)
+  
+  // Performance
+  latencyMs     Int?      @map("latency_ms")
+  success       Boolean   @default(true)
+  errorMessage  String?   @map("error_message")
+  
+  // Context
+  sessionId     String?   @map("session_id")
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@index([provider, createdAt])
+  @@map("usage_logs")
+}
+
+// ============================================================================
+// BILLING & PAYMENTS
+// ============================================================================
+
+model BillingHistory {
+  id                String    @id @default(cuid())
+  userId            String    @map("user_id")
+  
+  // Stripe details
+  stripePaymentId   String?   @unique @map("stripe_payment_id")
+  stripeCustomerId  String?   @map("stripe_customer_id")
+  
+  // Amount
+  amount            Decimal   @db.Decimal(10, 2)
+  currency          String    @default("usd")
+  creditsAdded      Decimal   @map("credits_added") @db.Decimal(12, 4)
+  
+  // Status
+  status            PaymentStatus @default(PENDING)
+  
+  // Metadata
+  description       String?
+  metadata          Json?
+  
+  // Timestamps
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, createdAt])
+  @@map("billing_history")
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+// ============================================================================
+// API KEYS (for power users)
+// ============================================================================
+
+model ApiKey {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  
+  // Key details
+  name          String
+  keyHash       String    @unique @map("key_hash")
+  keyPrefix     String    @map("key_prefix") // First 8 chars for identification
+  
+  // Permissions & limits
+  permissions   String[]  @default(["chat"])
+  rateLimit     Int       @default(100) @map("rate_limit") // requests per minute
+  
+  // Status
+  isActive      Boolean   @default(true)
+  lastUsedAt    DateTime? @map("last_used_at")
+  expiresAt     DateTime? @map("expires_at")
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@map("api_keys")
+}
+
+// ============================================================================
+// CREDIT PRICING
+// ============================================================================
+
+model CreditPricing {
+  id            String    @id @default(cuid())
+  
+  // Provider & model
+  provider      String
+  model         String
+  
+  // Pricing (credits per 1K tokens)
+  inputCost     Decimal   @map("input_cost") @db.Decimal(12, 6)
+  outputCost    Decimal   @map("output_cost") @db.Decimal(12, 6)
+  
+  // Status
+  isActive      Boolean   @default(true)
+  
+  // Timestamps
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  
+  @@unique([provider, model])
+  @@map("credit_pricing")
+}
+
+// ============================================================================
+// CREDIT PACKAGES (Stripe products)
+// ============================================================================
+
+model CreditPackage {
+  id              String    @id @default(cuid())
+  
+  // Package details
+  name            String
+  credits         Decimal   @db.Decimal(12, 4)
+  price           Decimal   @db.Decimal(10, 2)
+  currency        String    @default("usd")
+  
+  // Stripe integration
+  stripePriceId   String?   @unique @map("stripe_price_id")
+  stripeProductId String?   @map("stripe_product_id")
+  
+  // Display
+  description     String?
+  isPopular       Boolean   @default(false) @map("is_popular")
+  sortOrder       Int       @default(0) @map("sort_order")
+  
+  // Status
+  isActive        Boolean   @default(true)
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  @@map("credit_packages")
+}
