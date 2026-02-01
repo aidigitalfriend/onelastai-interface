@@ -1,0 +1,8 @@
+{
+  "name": "GenCraft - AI App Builder",
+  "description": "An advanced AI-powered web application builder that generates complete, functional, and responsive web templates and components using Gemini 3 Pro. Features real-time preview, code inspection, and prompt-driven design.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

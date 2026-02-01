@@ -1,0 +1,8 @@
+{
+  "name": "Copy of Neural Link Interface",
+  "description": "A high-fidelity matrix-themed chat interface powered by Gemini API, featuring multi-agent support and customizable neural parameters.",
+  "requestFramePermissions": [
+    "microphone",
+    "camera"
+  ]
+}
