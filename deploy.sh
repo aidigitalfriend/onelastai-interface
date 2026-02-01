@@ -1,143 +1,286 @@
 #!/bin/bash
 # =============================================================================
-# NEURAL LINK DEPLOYMENT SCRIPT
-# Deploy the Neural Link subdomain (maula.onelastai.co)
+# ONELASTAI INTERFACE - UNIFIED DEPLOYMENT SCRIPT
+# Deploy all apps to maula.onelastai.co
+# =============================================================================
+# 
+# Project Structure:
+# ├── /                    → Main Landing + Neural Chat (root app)
+# ├── /backend             → Express.js API Server (Port 3200)
+# ├── /canvas-app          → GenCraft AI Canvas Studio (/canvas route)
+# └── /maula-editor        → AI Code Editor (/editor route)
+#
 # =============================================================================
 
 set -e
 
-echo ""
-echo "═══════════════════════════════════════════════════════════"
-echo "   🧠 NEURAL LINK DEPLOYMENT"
-echo "   Subdomain: maula.onelastai.co"
-echo "═══════════════════════════════════════════════════════════"
-echo ""
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_ROOT="/home/ubuntu/shiny-friend-disco"
-NEURAL_LINK_DIR="$PROJECT_ROOT/Onelastai-neural-link"
-BACKEND_DIR="$NEURAL_LINK_DIR/backend"
-FRONTEND_DIR="$NEURAL_LINK_DIR"
-NGINX_CONF="$PROJECT_ROOT/nginx/maula.onelastai.co.conf"
+DOMAIN="maula.onelastai.co"
+PROJECT_ROOT="/home/ubuntu/onelastai-interface"
+BACKEND_DIR="$PROJECT_ROOT/backend"
+MAIN_APP_DIR="$PROJECT_ROOT"
+CANVAS_APP_DIR="$PROJECT_ROOT/canvas-app"
+EDITOR_APP_DIR="$PROJECT_ROOT/maula-editor"
+WEB_ROOT="/var/www/onelastai"
+NGINX_CONF="$PROJECT_ROOT/nginx/maula.onelastai.co"
+BACKEND_PORT=3200
 
-# Step 1: Navigate to project
+echo ""
+echo -e "${PURPLE}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${PURPLE}   🚀 ONELASTAI INTERFACE - UNIFIED DEPLOYMENT${NC}"
+echo -e "${PURPLE}   Domain: ${CYAN}$DOMAIN${NC}"
+echo -e "${PURPLE}═══════════════════════════════════════════════════════════${NC}"
+echo ""
+
+# Function to print step headers
+print_step() {
+    echo ""
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BLUE}  $1${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+}
+
+# =============================================================================
+# STEP 1: Navigate to project and pull latest code
+# =============================================================================
+print_step "📂 STEP 1: Project Setup"
+
 cd $PROJECT_ROOT
-echo "📂 Working in: $PROJECT_ROOT"
+echo -e "   ${CYAN}Working directory:${NC} $PROJECT_ROOT"
 
-# Step 2: Pull latest code
-echo ""
-echo "📥 Pulling latest code..."
-git pull origin main
+echo -e "   ${YELLOW}📥 Pulling latest code...${NC}"
+git pull origin main || echo -e "   ${YELLOW}⚠️  Git pull skipped (not a git repo or no changes)${NC}"
 
-# Step 3: Install backend dependencies
-echo ""
-echo "📦 Installing Neural Link backend dependencies..."
+# =============================================================================
+# STEP 2: Backend Setup
+# =============================================================================
+print_step "🔧 STEP 2: Backend Setup"
+
 cd $BACKEND_DIR
-npm install
+echo -e "   ${CYAN}Backend directory:${NC} $BACKEND_DIR"
 
-# Step 4: Generate Prisma client
-echo ""
-echo "🗄️  Generating Prisma client..."
+echo -e "   ${YELLOW}📦 Installing backend dependencies...${NC}"
+npm install --production
+
+echo -e "   ${YELLOW}🗄️  Generating Prisma client...${NC}"
 npx prisma generate
 
-# Step 5: Push database schema (if needed)
-echo ""
-echo "🔄 Syncing database schema..."
-npx prisma db push --accept-data-loss 2>/dev/null || echo "   ⚠️  Schema already up to date"
+echo -e "   ${YELLOW}🔄 Syncing database schema...${NC}"
+npx prisma db push --accept-data-loss 2>/dev/null || echo -e "   ${GREEN}✓ Schema already up to date${NC}"
 
-# Step 6: Build frontend (if exists)
-if [ -d "$FRONTEND_DIR/src" ]; then
-    echo ""
-    echo "🏗️  Building Neural Link frontend..."
-    cd $FRONTEND_DIR
-    npm install
-    npm run build
-    
-    # Copy build to web root
-    echo "📁 Copying build to /var/www/neural-link/dist..."
-    sudo mkdir -p /var/www/neural-link/dist
-    sudo cp -r dist/* /var/www/neural-link/dist/
-    sudo chown -R www-data:www-data /var/www/neural-link
-fi
+# =============================================================================
+# STEP 3: Build Main App (Landing + Neural Chat)
+# =============================================================================
+print_step "🏗️  STEP 3: Building Main App (Landing + Neural Chat)"
 
-# Step 7: Setup NGINX
-echo ""
-echo "🌐 Configuring NGINX..."
+cd $MAIN_APP_DIR
+echo -e "   ${CYAN}App directory:${NC} $MAIN_APP_DIR"
+
+echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
+npm install
+
+echo -e "   ${YELLOW}🔨 Building main app...${NC}"
+npm run build
+
+# Create web root and copy build
+echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
+sudo mkdir -p $WEB_ROOT/main
+sudo rm -rf $WEB_ROOT/main/*
+sudo cp -r dist/* $WEB_ROOT/main/
+echo -e "   ${GREEN}✓ Main app deployed to $WEB_ROOT/main${NC}"
+
+# =============================================================================
+# STEP 4: Build Canvas App (GenCraft AI Studio)
+# =============================================================================
+print_step "🎨 STEP 4: Building Canvas App (GenCraft AI Studio)"
+
+cd $CANVAS_APP_DIR
+echo -e "   ${CYAN}App directory:${NC} $CANVAS_APP_DIR"
+
+echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
+npm install
+
+echo -e "   ${YELLOW}🔨 Building canvas app...${NC}"
+npm run build
+
+# Copy to web root under /canvas
+echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
+sudo mkdir -p $WEB_ROOT/canvas
+sudo rm -rf $WEB_ROOT/canvas/*
+sudo cp -r dist/* $WEB_ROOT/canvas/
+echo -e "   ${GREEN}✓ Canvas app deployed to $WEB_ROOT/canvas${NC}"
+
+# =============================================================================
+# STEP 5: Build Maula Editor (AI Code Editor)
+# =============================================================================
+print_step "💻 STEP 5: Building Maula Editor (AI Code Editor)"
+
+cd $EDITOR_APP_DIR
+echo -e "   ${CYAN}App directory:${NC} $EDITOR_APP_DIR"
+
+echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
+npm install
+
+echo -e "   ${YELLOW}🔨 Building editor app...${NC}"
+npm run build
+
+# Copy to web root under /editor
+echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
+sudo mkdir -p $WEB_ROOT/editor
+sudo rm -rf $WEB_ROOT/editor/*
+sudo cp -r dist/* $WEB_ROOT/editor/
+echo -e "   ${GREEN}✓ Editor app deployed to $WEB_ROOT/editor${NC}"
+
+# Set permissions
+sudo chown -R www-data:www-data $WEB_ROOT
+
+# =============================================================================
+# STEP 6: Configure NGINX
+# =============================================================================
+print_step "🌐 STEP 6: Configuring NGINX"
 
 # Check if SSL cert exists
-if [ ! -f "/etc/letsencrypt/live/maula.onelastai.co/fullchain.pem" ]; then
-    echo "   ⚠️  SSL certificate not found. Creating..."
-    echo "   Run: sudo certbot certonly --nginx -d maula.onelastai.co"
+if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
+    echo -e "   ${YELLOW}⚠️  SSL certificate not found${NC}"
+    echo -e "   ${CYAN}Run: sudo certbot certonly --nginx -d $DOMAIN${NC}"
     echo ""
-    echo "   After certificate is created, run this script again."
-    # Create temp config without SSL for certbot
-    sudo cp $NGINX_CONF /etc/nginx/sites-available/maula.onelastai.co
-else
-    # Copy config
-    sudo cp $NGINX_CONF /etc/nginx/sites-available/maula.onelastai.co
+    echo -e "   After certificate is created, run this script again."
 fi
 
+# Copy NGINX config
+echo -e "   ${YELLOW}📝 Copying NGINX configuration...${NC}"
+sudo cp $NGINX_CONF /etc/nginx/sites-available/$DOMAIN
+
 # Enable site
-sudo ln -sf /etc/nginx/sites-available/maula.onelastai.co /etc/nginx/sites-enabled/
+sudo ln -sf /etc/nginx/sites-available/$DOMAIN /etc/nginx/sites-enabled/
 
 # Test NGINX config
-echo "   Testing NGINX configuration..."
+echo -e "   ${YELLOW}🔍 Testing NGINX configuration...${NC}"
 sudo nginx -t
 
 # Reload NGINX
-echo "   Reloading NGINX..."
+echo -e "   ${YELLOW}🔄 Reloading NGINX...${NC}"
 sudo systemctl reload nginx
+echo -e "   ${GREEN}✓ NGINX configured and reloaded${NC}"
 
-# Step 8: Start/Restart PM2 processes
-echo ""
-echo "🚀 Starting Neural Link backend with PM2..."
+# =============================================================================
+# STEP 7: Start/Restart Backend with PM2
+# =============================================================================
+print_step "🚀 STEP 7: Starting Backend Services"
+
 cd $PROJECT_ROOT
 
-# Check if process exists
-if pm2 describe neural-link-backend > /dev/null 2>&1; then
-    echo "   Restarting existing process..."
-    pm2 restart neural-link-backend
+# Create PM2 ecosystem config if it doesn't exist
+if [ ! -f "ecosystem.config.cjs" ]; then
+    echo -e "   ${YELLOW}📝 Creating PM2 ecosystem config...${NC}"
+    cat > ecosystem.config.cjs << 'EOF'
+module.exports = {
+  apps: [
+    {
+      name: 'onelastai-backend',
+      script: 'backend/server.js',
+      cwd: '/home/ubuntu/onelastai-interface',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '1G',
+      env: {
+        NODE_ENV: 'production',
+        PORT: 3200
+      }
+    }
+  ]
+};
+EOF
+fi
+
+# Check if process exists and restart or start
+if pm2 describe onelastai-backend > /dev/null 2>&1; then
+    echo -e "   ${YELLOW}🔄 Restarting backend...${NC}"
+    pm2 restart onelastai-backend
 else
-    echo "   Starting new process..."
-    pm2 start ecosystem.config.cjs --only neural-link-backend
+    echo -e "   ${YELLOW}▶️  Starting backend...${NC}"
+    pm2 start ecosystem.config.cjs --only onelastai-backend
 fi
 
 # Save PM2 config
 pm2 save
+echo -e "   ${GREEN}✓ Backend running on port $BACKEND_PORT${NC}"
 
-# Step 9: Verify deployment
-echo ""
-echo "🔍 Verifying deployment..."
+# =============================================================================
+# STEP 8: Verify Deployment
+# =============================================================================
+print_step "🔍 STEP 8: Verifying Deployment"
+
 sleep 3
 
 # Check backend health
-HEALTH_CHECK=$(curl -s http://localhost:3200/health 2>/dev/null || echo '{"status":"error"}')
-if echo "$HEALTH_CHECK" | grep -q "healthy"; then
-    echo "   ✅ Backend is healthy"
+echo -e "   ${YELLOW}Checking backend health...${NC}"
+HEALTH_CHECK=$(curl -s http://localhost:$BACKEND_PORT/health 2>/dev/null || echo '{"status":"error"}')
+if echo "$HEALTH_CHECK" | grep -q "healthy\|ok"; then
+    echo -e "   ${GREEN}✓ Backend is healthy${NC}"
 else
-    echo "   ❌ Backend health check failed"
-    echo "   Response: $HEALTH_CHECK"
+    echo -e "   ${RED}✗ Backend health check failed${NC}"
+    echo -e "   ${YELLOW}Response: $HEALTH_CHECK${NC}"
 fi
 
-# Check NGINX
-if curl -s -o /dev/null -w "%{http_code}" https://maula.onelastai.co/health 2>/dev/null | grep -q "200"; then
-    echo "   ✅ NGINX proxy is working"
+# Check main site
+echo -e "   ${YELLOW}Checking main site...${NC}"
+MAIN_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/ 2>/dev/null || echo "000")
+if [ "$MAIN_STATUS" = "200" ]; then
+    echo -e "   ${GREEN}✓ Main site is accessible${NC}"
 else
-    echo "   ⚠️  NGINX may need SSL certificate setup"
+    echo -e "   ${YELLOW}⚠️  Main site returned status: $MAIN_STATUS${NC}"
 fi
 
+# Check canvas app
+echo -e "   ${YELLOW}Checking canvas app...${NC}"
+CANVAS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/canvas/ 2>/dev/null || echo "000")
+if [ "$CANVAS_STATUS" = "200" ]; then
+    echo -e "   ${GREEN}✓ Canvas app is accessible${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  Canvas app returned status: $CANVAS_STATUS${NC}"
+fi
+
+# Check editor app
+echo -e "   ${YELLOW}Checking editor app...${NC}"
+EDITOR_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/editor/ 2>/dev/null || echo "000")
+if [ "$EDITOR_STATUS" = "200" ]; then
+    echo -e "   ${GREEN}✓ Editor app is accessible${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  Editor app returned status: $EDITOR_STATUS${NC}"
+fi
+
+# =============================================================================
+# DEPLOYMENT COMPLETE
+# =============================================================================
 echo ""
-echo "═══════════════════════════════════════════════════════════"
-echo "   ✨ DEPLOYMENT COMPLETE"
-echo "═══════════════════════════════════════════════════════════"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
+echo -e "${GREEN}   ✨ DEPLOYMENT COMPLETE${NC}"
+echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo "   🌐 URL: https://maula.onelastai.co"
-echo "   📊 Health: https://maula.onelastai.co/health"
-echo "   🔗 API: https://maula.onelastai.co/api"
+echo -e "   ${CYAN}🌐 Main App:${NC}      https://$DOMAIN"
+echo -e "   ${CYAN}🎨 Canvas App:${NC}    https://$DOMAIN/canvas/"
+echo -e "   ${CYAN}💻 Editor App:${NC}    https://$DOMAIN/editor/"
+echo -e "   ${CYAN}🔗 API:${NC}           https://$DOMAIN/api/"
+echo -e "   ${CYAN}📊 Health:${NC}        https://$DOMAIN/health"
 echo ""
-echo "   📝 Next steps:"
-echo "   1. Create .env file: cp $BACKEND_DIR/.env.example $BACKEND_DIR/.env"
-echo "   2. Configure API keys and secrets"
-echo "   3. Run Stripe products: node $BACKEND_DIR/scripts/create-stripe-products.js"
-echo "   4. Test auth handoff from main app"
+echo -e "   ${PURPLE}📝 PM2 Commands:${NC}"
+echo -e "      pm2 logs onelastai-backend    ${YELLOW}# View logs${NC}"
+echo -e "      pm2 restart onelastai-backend ${YELLOW}# Restart backend${NC}"
+echo -e "      pm2 status                    ${YELLOW}# Check status${NC}"
+echo ""
+echo -e "   ${PURPLE}📁 Deployment Paths:${NC}"
+echo -e "      Main:   $WEB_ROOT/main"
+echo -e "      Canvas: $WEB_ROOT/canvas"
+echo -e "      Editor: $WEB_ROOT/editor"
 echo ""

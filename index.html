@@ -10,11 +10,19 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    body {
+    html, body {
       font-family: 'JetBrains Mono', monospace;
       margin: 0;
       background-color: #0A0A0A;
       color: #D1D5DB;
+      min-height: 100%;
+    }
+    html {
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    #root {
+      min-height: 100vh;
     }
     .matrix-bg {
       background: 
@@ -95,7 +103,7 @@
 }
 </script>
 </head>
-<body class="scanline-effect">
+<body class="scanline-effect overflow-y-auto overflow-x-hidden">
   <div id="root"></div>
 <script type="module" src="/index.tsx"></script>
 </body>
