@@ -23,6 +23,9 @@ const App: React.FC = () => {
   const [isThinking, setIsThinking] = useState(false);
   const [isRecordingSTT, setIsRecordingSTT] = useState(false);
   const [isLiveActive, setIsLiveActive] = useState(false);
+  
+  // Image attachment state
+  const [pendingImage, setPendingImage] = useState<{ data: string; name: string; mimeType: string } | null>(null);
 
   // Gemini Live & STT Refs
   const recognitionRef = useRef<any>(null);
@@ -38,13 +41,13 @@ const App: React.FC = () => {
     return [
       {
         id: '1',
-        name: "PROTOCOL_INITIAL_CONTACT",
+        name: "Welcome Chat",
         active: true,
         messages: [
           { 
             id: 'init-1', 
             sender: 'AGENT', 
-            text: 'Uplink established. Secure line verified. Neural link at 100% capacity. Workspace synchronized.', 
+            text: 'Hi there! 👋 Welcome to One LastAI Chat. I\'m your AI assistant and I\'m here to help you with anything you need. Feel free to ask questions, upload images, or just chat!', 
             timestamp: new Date().toLocaleTimeString() 
           }
         ],
@@ -63,22 +66,43 @@ const App: React.FC = () => {
     if (isThinking) return;
 
     const timestamp = new Date().toLocaleTimeString();
-    const userMsg: Message = { id: Date.now().toString(), sender: 'YOU', text, timestamp };
+    const hasImage = !!pendingImage;
+    const userMsg: Message = { 
+      id: Date.now().toString(), 
+      sender: 'YOU', 
+      text, 
+      timestamp,
+      isImage: hasImage,
+      imageData: pendingImage?.data
+    };
 
     setSessions(prev => prev.map(s => 
       s.active ? { ...s, messages: [...s.messages, userMsg] } : s
     ));
 
+    // Switch to CHAT view when sending a message (especially with image)
+    if (activeSession.settings.workspaceMode !== 'CHAT') {
+      updateActiveSettings({ ...activeSession.settings, workspaceMode: 'CHAT' });
+    }
+
     setIsThinking(true);
-    const result = await callBackendAPI(text, activeSession.settings);
+    
+    // Include image in API call if present
+    const result = await callBackendAPI(text, activeSession.settings, pendingImage || undefined);
+    
+    // Clear pending image after sending
+    setPendingImage(null);
+    
     setIsThinking(false);
 
+    // Only switch to CANVAS/PORTAL if explicitly requested (not for image analysis)
     const settingsUpdate: Partial<SettingsState> = {};
     if (result.navigationUrl) {
       settingsUpdate.portalUrl = result.navigationUrl;
       settingsUpdate.workspaceMode = 'PORTAL';
     }
-    if (result.canvasUpdate) {
+    // Don't auto-switch to CANVAS for code blocks when analyzing images
+    if (result.canvasUpdate && !hasImage) {
       settingsUpdate.canvas = { ...activeSession.settings.canvas, ...result.canvasUpdate };
       settingsUpdate.workspaceMode = 'CANVAS';
     }
@@ -108,9 +132,18 @@ const App: React.FC = () => {
       const isVideo = file.type.startsWith('video/');
       const isCode = file.name.endsWith('.js') || file.name.endsWith('.py') || file.name.endsWith('.html') || file.name.endsWith('.css');
       
+      // For images, set as pending attachment (don't auto-send)
+      if (isImage) {
+        setPendingImage({
+          data: content,
+          name: file.name,
+          mimeType: file.type
+        });
+        return; // Don't auto-send, let user add a message
+      }
+      
       let type: CanvasState['type'] = 'text';
-      if (isImage) type = 'image';
-      else if (isVideo) type = 'video';
+      if (isVideo) type = 'video';
       else if (isCode) type = 'code';
 
       updateActiveSettings({
@@ -181,7 +214,7 @@ const App: React.FC = () => {
     setSessions(prev => {
       const filtered = prev.filter(s => s.id !== id);
       if (filtered.length === 0) return [
-        { id: Date.now().toString(), name: "NEW_PROTOCOL", active: true, messages: [], settings: { ...DEFAULT_SETTINGS } }
+        { id: Date.now().toString(), name: "New Chat", active: true, messages: [], settings: { ...DEFAULT_SETTINGS } }
       ];
       if (prev.find(s => s.id === id)?.active) filtered[0].active = true;
       return filtered;
@@ -197,8 +230,8 @@ const App: React.FC = () => {
   const createNewSession = () => {
     const id = Date.now().toString();
     const newSession: ChatSession = {
-      id, name: `PROTOCOL_LOG_${id.slice(-4)}`, active: true, 
-      messages: [{ id: `init-${id}`, sender: 'AGENT', text: 'New neural channel opened. Workspace ready.', timestamp: new Date().toLocaleTimeString() }],
+      id, name: `Chat ${id.slice(-4)}`, active: true, 
+      messages: [{ id: `init-${id}`, sender: 'AGENT', text: 'Hi! How can I help you today?', timestamp: new Date().toLocaleTimeString() }],
       settings: { ...DEFAULT_SETTINGS }
     };
     setSessions(prev => prev.map(s => ({ ...s, active: false })).concat(newSession));
@@ -236,6 +269,7 @@ const App: React.FC = () => {
             onSend={handleSend} onFileUpload={handleFileUpload}
             onToggleSTT={toggleSTT} onToggleLive={toggleLive}
             agentSettings={activeSession.settings} onUpdateSettings={updateActiveSettings}
+            pendingImage={pendingImage} onClearPendingImage={() => setPendingImage(null)}
           />
           <SettingsPanel settings={activeSession.settings} onChange={updateActiveSettings} onApplyPreset={handleApplyPreset} onReset={() => updateActiveSettings({ ...activeSession.settings, ...DEFAULT_SETTINGS })} isOpen={isRightPanelOpen} />
         </div>

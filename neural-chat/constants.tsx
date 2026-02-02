@@ -3,108 +3,97 @@ import { SettingsState, NavItem } from './types';
 
 export const PROVIDER_CONFIG = [
   {
-    id: 'anthropic',
-    name: 'MAULA AI',
+    id: 'cerebras',
+    name: 'Maula AI',
     icon: '🧠',
     color: '#ec4899', // pink
     models: [
-      { id: 'claude-3-5-sonnet-20241022', name: 'ULTRA FAST' }
-    ]
-  },
-  {
-    id: 'openai',
-    name: 'ONE LAST AI',
-    icon: '⚡',
-    color: '#22c55e', // green
-    models: [
-      { id: 'gpt-4o', name: 'POWER MODE' },
-      { id: 'gpt-4o-mini', name: 'QUICK REPLY' },
-      { id: 'gpt-4-turbo', name: 'LIGHT SPEED' }
-    ]
-  },
-  {
-    id: 'gemini',
-    name: 'PLANNER',
-    icon: '📋',
-    color: '#94a3b8', // gray
-    models: [
-      { id: 'gemini-1.5-pro', name: 'MASTER PLAN' },
-      { id: 'gemini-2.0-flash', name: 'QUICK PLAN' }
-    ]
-  },
-  {
-    id: 'mistral',
-    name: 'CODE EXPERT',
-    icon: '💻',
-    color: '#f97316', // orange
-    models: [
-      { id: 'codestral-latest', name: 'PRO CODER' },
-      { id: 'mistral-large-latest', name: 'SENIOR DEV' },
-      { id: 'mistral-small-latest', name: 'QUICK FIX' }
-    ]
-  },
-  {
-    id: 'xai',
-    name: 'DESIGNER',
-    icon: '🎨',
-    color: '#06b6d4', // cyan
-    models: [
-      { id: 'grok-2', name: 'CREATIVE PRO' },
-      { id: 'grok-2-mini', name: 'FAST DESIGN' },
-      { id: 'grok-beta', name: 'QUICK SKETCH' }
+      { id: 'llama-3.3-70b', name: 'Ultra Fast' }
     ]
   },
   {
     id: 'groq',
-    name: 'WRITER',
-    icon: '✍️',
-    color: '#a855f7', // purple
+    name: 'One Last AI',
+    icon: '⚡',
+    color: '#22c55e', // green
     models: [
-      { id: 'llama-3.3-70b-versatile', name: 'BESTSELLER' },
-      { id: 'llama-3.1-70b-versatile', name: 'STORY MODE' },
-      { id: 'llama-3.1-8b-instant', name: 'QUICK DRAFT' }
+      { id: 'llama-3.3-70b-specdec', name: 'Power Mode' }
     ]
   },
   {
-    id: 'cerebras',
-    name: 'RESEARCHER',
+    id: 'xai',
+    name: 'Planner',
+    icon: '📋',
+    color: '#94a3b8', // gray
+    models: [
+      { id: 'grok-3', name: 'Master Plan' }
+    ]
+  },
+  {
+    id: 'anthropic',
+    name: 'Code Expert',
+    icon: '💻',
+    color: '#f97316', // orange
+    models: [
+      { id: 'claude-sonnet-4-20250514', name: 'Pro Coder' }
+    ]
+  },
+  {
+    id: 'openai',
+    name: 'Designer',
+    icon: '🎨',
+    color: '#06b6d4', // cyan
+    models: [
+      { id: 'gpt-4.1', name: 'Creative Pro' }
+    ]
+  },
+  {
+    id: 'mistral',
+    name: 'Writer',
+    icon: '✍️',
+    color: '#a855f7', // purple
+    models: [
+      { id: 'mistral-large-2411', name: 'Bestseller' }
+    ]
+  },
+  {
+    id: 'gemini',
+    name: 'Researcher',
     icon: '🔬',
     color: '#8b5cf6', // violet
     models: [
-      { id: 'llama3.1-70b', name: 'DEEP DIVE' },
-      { id: 'llama3.1-8b', name: 'ANALYSIS PRO' },
-      { id: 'llama-3.3-70b', name: 'QUICK SEARCH' }
+      { id: 'gemini-2.0-flash', name: 'Deep Dive' }
     ]
   }
 ];
 
 export const DEFAULT_SETTINGS: SettingsState = {
-  customPrompt: "You are a helpful AI assistant called Neural Companion. Be concise, helpful, and friendly.",
-  agentName: "Neural Companion",
+  customPrompt: "You are a friendly AI assistant for One LastAI. Be helpful, conversational, and supportive. Help users with their questions and tasks.",
+  agentName: "AI Assistant",
   temperature: 0.7,
   maxTokens: 2048,
-  provider: 'anthropic',
-  model: "claude-3-5-sonnet-20241022",
+  provider: 'cerebras',
+  model: "llama-3.3-70b",
   activeTool: 'none',
   workspaceMode: 'CHAT',
   portalUrl: 'https://www.google.com/search?igu=1',
   canvas: {
-    content: "// AGENT_DIRECTIVE: Collaborative workspace active.\n\nReady for synthesis.",
+    content: "// Welcome to your workspace!\n\nStart typing or paste content here.",
     type: 'text',
-    title: 'Neural_Canvas_01'
+    title: 'Workspace'
   }
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Create Image', icon: '🎨', tool: 'image_gen', description: 'Visual synthesis module' },
-  { label: 'Thinking', icon: '💡', tool: 'thinking', description: 'Chain-of-thought processing' },
-  { label: 'Deep Research', icon: '🔭', tool: 'deep_research', description: 'Multi-layer semantic analysis' },
-  { label: 'Web Portal', icon: '🌐', tool: 'browser', description: 'Interactive web integration' },
-  { label: 'Study and Learn', icon: '📚', tool: 'study', description: 'Pedagogical core enabled' },
-  { label: 'Web Search', icon: '🔍', tool: 'web_search', description: 'Real-time global grounding' },
-  { label: 'Canvas', icon: '🖌️', tool: 'canvas', description: 'Creative writing workspace' },
-  { label: 'Quizzes', icon: '📝', tool: 'quizzes', description: 'Knowledge testing protocol' },
-  { label: 'Canvas App', icon: '💻', tool: 'canvas_app', description: 'Full-stack code generation studio' }
+  { label: 'Create Image', icon: '🎨', tool: 'image_gen', description: 'Generate AI images' },
+  { label: 'Thinking', icon: '💡', tool: 'thinking', description: 'Deep reasoning mode' },
+  { label: 'Deep Research', icon: '🔭', tool: 'deep_research', description: 'Comprehensive research' },
+  { label: 'Web Portal', icon: '🌐', tool: 'browser', description: 'Browse the web' },
+  { label: 'Study and Learn', icon: '📚', tool: 'study', description: 'Learning assistant' },
+  { label: 'Web Search', icon: '🔍', tool: 'web_search', description: 'Search the internet' },
+  { label: 'Canvas', icon: '🖌️', tool: 'canvas', description: 'Writing workspace' },
+  { label: 'Quizzes', icon: '📝', tool: 'quizzes', description: 'Test your knowledge' },
+  { label: 'Canvas App', icon: '💻', tool: 'canvas_app', description: 'Code generation studio' }
 ];
 
 export const NEURAL_PRESETS: Record<string, { prompt: string; temp: number }> = {

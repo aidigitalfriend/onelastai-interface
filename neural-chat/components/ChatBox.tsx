@@ -24,7 +24,8 @@ import {
   RefreshCw,
   Share2,
   Volume2,
-  Pencil
+  Pencil,
+  X
 } from 'lucide-react';
 import { Message, SettingsState, WorkspaceMode } from '../types';
 
@@ -41,6 +42,8 @@ interface ChatBoxProps {
   onEditMessage?: (messageId: string, newText: string) => void;
   agentSettings: SettingsState;
   onUpdateSettings: (settings: SettingsState) => void;
+  pendingImage?: { data: string; name: string; mimeType: string } | null;
+  onClearPendingImage?: () => void;
 }
 
 const ChatBox: React.FC<ChatBoxProps> = ({ 
@@ -55,7 +58,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   onRegenerateResponse,
   onEditMessage,
   agentSettings, 
-  onUpdateSettings 
+  onUpdateSettings,
+  pendingImage,
+  onClearPendingImage
 }) => {
   const [inputText, setInputText] = useState("");
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
@@ -195,6 +200,8 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     const file = e.target.files?.[0];
     if (file) {
       onFileUpload(file);
+      // Reset input so same file can be selected again
+      e.target.value = '';
     }
   };
 
@@ -277,8 +284,15 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                     </div>
                   </div>
                 ) : msg.isImage ? (
-                  <div className="relative group/img overflow-hidden rounded-lg border border-cyan-500/30 shadow-2xl cursor-pointer" onClick={() => onUpdateSettings({ ...agentSettings, canvas: { content: msg.text, type: 'image', title: 'Asset View' }, workspaceMode: 'CANVAS'})}>
-                    <img src={msg.text} alt="Synth" className="max-w-full transition-transform duration-500 group-hover/img:scale-105" />
+                  <div className="flex flex-col gap-2">
+                    {/* Show image thumbnail */}
+                    <div className="relative group/img overflow-hidden rounded-lg border border-cyan-500/30 shadow-2xl cursor-pointer" onClick={() => onUpdateSettings({ ...agentSettings, canvas: { content: msg.imageData || msg.text, type: 'image', title: 'Asset View' }, workspaceMode: 'CANVAS'})}>
+                      <img src={msg.imageData || msg.text} alt="Uploaded" className="max-w-[200px] max-h-[200px] object-cover transition-transform duration-500 group-hover/img:scale-105" />
+                    </div>
+                    {/* Show message text if present */}
+                    {msg.text && !msg.text.startsWith('data:') && (
+                      <div className="text-gray-300 whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed">{msg.text}</div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-gray-300 whitespace-pre-wrap break-words text-xs sm:text-sm leading-relaxed">{msg.text}</div>
@@ -366,7 +380,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               )}
             </div>
           ))}
-          {isThinking && <div className="animate-pulse text-cyan-500/60 text-[10px] font-mono tracking-widest uppercase">Processing Neural Data...</div>}
+          {isThinking && <div className="animate-pulse text-cyan-500/60 text-[10px] font-mono tracking-widest">AI is thinking...</div>}
         </div>
 
         {/* PORTAL VIEW */}
@@ -399,6 +413,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                  <FileText size={18} className="text-emerald-400" />}
                 <span className="text-xs font-mono uppercase tracking-widest text-gray-400 font-bold">{agentSettings.canvas.title}</span>
               </div>
+              <button 
+                onClick={() => setWorkspace('CHAT')}
+                className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all border border-transparent hover:border-red-500/30"
+                title="Close Asset View"
+              >
+                <X size={18} />
+              </button>
             </div>
             <div className="flex-grow relative p-6 sm:p-12 overflow-y-auto custom-scrollbar">
               <div className="max-w-5xl mx-auto w-full h-full">
@@ -410,14 +431,38 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       </div>
       
       {/* Universal Input Bar - Redesigned with Send icon inside the typer */}
-      <div className="relative z-40 p-4 border-t border-gray-800/50 bg-[#0a0a0a]/90 backdrop-blur-xl flex items-center gap-3">
+      <div className="relative z-40 p-4 border-t border-gray-800/50 bg-[#0a0a0a]/90 backdrop-blur-xl flex flex-col gap-2">
         <input 
           type="file" 
           ref={fileInputRef} 
           onChange={onFileChange} 
-          className="hidden" 
+          className="hidden"
+          accept="image/*,video/*,.js,.py,.html,.css,.txt,.json,.md"
         />
         
+        {/* Pending Image Preview */}
+        {pendingImage && (
+          <div className="flex items-center gap-3 p-2 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
+            <img 
+              src={pendingImage.data} 
+              alt={pendingImage.name}
+              className="w-16 h-16 object-cover rounded border border-cyan-500/50"
+            />
+            <div className="flex-grow">
+              <p className="text-xs text-cyan-400 font-mono truncate">{pendingImage.name}</p>
+              <p className="text-[10px] text-gray-500">Image ready to send with your message</p>
+            </div>
+            <button 
+              onClick={onClearPendingImage}
+              className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all"
+              title="Remove image"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        
+        <div className="flex items-center gap-3">
         {/* typer / input field container */}
         <div className="flex-grow relative group">
           <input 
@@ -425,12 +470,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            className={`w-full bg-black/40 border border-gray-800 rounded px-4 py-3 pr-12 text-gray-200 placeholder:text-gray-700 font-mono text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/10 transition-all shadow-inner ${isRecordingSTT ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : ''}`} 
+            className={`w-full bg-black/40 border border-gray-800 rounded px-4 py-3 pr-12 text-gray-200 placeholder:text-gray-700 font-mono text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/10 transition-all shadow-inner ${isRecordingSTT ? 'border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.2)]' : ''} ${pendingImage ? 'border-cyan-500/30' : ''}`} 
             placeholder={
-              isRecordingSTT ? "Listening for neural broadcast..." :
-              agentSettings.workspaceMode === 'PORTAL' ? "Send command to portal agent..." :
-              agentSettings.workspaceMode === 'CANVAS' ? "Instruct workspace sync..." :
-              "Enter neural directive..."
+              pendingImage ? "Describe what you want to know about this image..." :
+              isRecordingSTT ? "Listening..." :
+              agentSettings.workspaceMode === 'PORTAL' ? "Ask about this page..." :
+              agentSettings.workspaceMode === 'CANVAS' ? "Ask about the workspace..." :
+              "Type your message..."
             } 
           />
           
@@ -439,7 +485,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
             onClick={handleSend}
             disabled={isThinking || !inputText.trim()}
             className="absolute right-3 top-1/2 -translate-y-1/2 text-emerald-500 hover:text-emerald-400 disabled:text-gray-800 transition-colors p-1"
-            title="Transmit Protocol"
+            title="Send message"
           >
             <Send size={18} className={!inputText.trim() ? "" : "glow-green"} />
           </button>
@@ -457,7 +503,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
           <button 
             onClick={() => fileInputRef.current?.click()}
             className="p-2.5 text-gray-500 hover:text-emerald-400 hover:bg-emerald-500/10 rounded transition-all border border-transparent hover:border-emerald-500/20"
-            title="Upload Protocol Asset"
+            title="Attach file"
           >
             <Paperclip size={20} />
           </button>
@@ -466,7 +512,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
           <button 
             onClick={onToggleSTT}
             className={`p-2.5 rounded transition-all border ${isRecordingSTT ? 'bg-red-500/20 text-red-500 border-red-500/50' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`}
-            title="Neural Audio Transcribe"
+            title="Voice input"
           >
             {isRecordingSTT ? <MicOff size={20} /> : <Mic size={20} />}
           </button>
@@ -475,10 +521,11 @@ const ChatBox: React.FC<ChatBoxProps> = ({
           <button 
             onClick={onToggleLive}
             className={`p-2.5 rounded transition-all border ${isLiveActive ? 'bg-purple-500/20 text-purple-400 border-purple-500/50' : 'text-gray-500 hover:text-purple-400 hover:bg-purple-500/10 border-transparent hover:border-purple-500/20'}`}
-            title="Live Neural Uplink"
+            title="Voice chat"
           >
             <Radio size={20} className={isLiveActive ? 'animate-pulse' : ''} />
           </button>
+        </div>
         </div>
       </div>
     </main>

@@ -40,10 +40,26 @@ const mapProviderModel = (provider: string, model: string): { provider: string; 
 
 export const callBackendAPI = async (
   prompt: string,
-  settings: SettingsState
+  settings: SettingsState,
+  image?: { data: string; name: string; mimeType: string }
 ): Promise<ChatResponse> => {
   try {
     const { provider, model } = mapProviderModel(settings.provider, settings.model);
+
+    const requestBody: any = {
+      message: prompt,
+      provider,
+      model,
+      systemPrompt: settings.customPrompt,
+    };
+
+    // Include image data if present (for vision models)
+    if (image) {
+      requestBody.image = {
+        data: image.data,
+        mimeType: image.mimeType
+      };
+    }
 
     const response = await fetch(`${API_BASE}/chat/send`, {
       method: 'POST',
@@ -51,12 +67,7 @@ export const callBackendAPI = async (
         'Content-Type': 'application/json',
       },
       credentials: 'include', // Include cookies for auth
-      body: JSON.stringify({
-        message: prompt,
-        provider,
-        model,
-        systemPrompt: settings.customPrompt,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     const data = await response.json();

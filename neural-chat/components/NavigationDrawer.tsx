@@ -1,8 +1,20 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { X, Cpu, Activity, Zap, ChevronRight, Check, TrendingUp, Clock, Server, Gauge, CreditCard, History, Coins } from 'lucide-react';
+import { X, Cpu, Activity, Zap, ChevronRight, Check, TrendingUp, Clock, Server, Gauge, CreditCard, History, Coins, Loader2 } from 'lucide-react';
 import { NAV_ITEMS } from '../constants';
 import { NavItem, SettingsState } from '../types';
+
+const API_BASE = 'https://maula.onelastai.co/api';
+
+// Get or create user ID
+const getUserId = (): string => {
+  let userId = localStorage.getItem('onelastai_user_id');
+  if (!userId) {
+    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('onelastai_user_id', userId);
+  }
+  return userId;
+};
 
 interface NavigationDrawerProps {
   isOpen: boolean;
@@ -14,15 +26,14 @@ interface NavigationDrawerProps {
 
 // AI Providers with their models - exported for use in SettingsPanel
 export const AI_PROVIDERS = [
-  { id: 'anthropic', name: 'Anthropic', icon: '🅰️', color: 'from-orange-500 to-amber-600', models: ['Claude 3.5 Sonnet', 'Claude 3 Opus', 'Claude 3 Haiku'], status: 'active' },
-  { id: 'mistral', name: 'Mistral', icon: '🌀', color: 'from-blue-500 to-indigo-600', models: ['Mistral Large', 'Mistral Medium', 'Mixtral 8x7B'], status: 'active' },
-  { id: 'xai', name: 'xAI', icon: '✖️', color: 'from-gray-400 to-gray-600', models: ['Grok-2', 'Grok-2 Mini'], status: 'active' },
-  { id: 'cerebras', name: 'Cerebras', icon: '🧠', color: 'from-purple-500 to-pink-600', models: ['Cerebras-GPT', 'Cerebras-13B'], status: 'beta' },
-  { id: 'groq', name: 'Groq', icon: '⚡', color: 'from-green-500 to-emerald-600', models: ['Llama 3.3 70B', 'Mixtral', 'Gemma 7B'], status: 'active' },
-  { id: 'openai', name: 'OpenAI', icon: '🤖', color: 'from-teal-500 to-cyan-600', models: ['GPT-4o', 'GPT-4 Turbo', 'GPT-3.5'], status: 'active' },
-  { id: 'gemini', name: 'Gemini', icon: '💎', color: 'from-blue-400 to-violet-600', models: ['Gemini 2.0 Flash', 'Gemini 1.5 Pro', 'Gemini Ultra'], status: 'active' },
+  { id: 'cerebras', name: 'Maula AI', icon: '🧠', color: 'from-purple-500 to-pink-600', models: ['Ultra Fast'], status: 'active' },
+  { id: 'groq', name: 'One Last AI', icon: '⚡', color: 'from-green-500 to-emerald-600', models: ['Power Mode'], status: 'active' },
+  { id: 'xai', name: 'Planner', icon: '📋', color: 'from-gray-400 to-gray-600', models: ['Master Plan'], status: 'active' },
+  { id: 'anthropic', name: 'Code Expert', icon: '💻', color: 'from-orange-500 to-amber-600', models: ['Pro Coder'], status: 'active' },
+  { id: 'openai', name: 'Designer', icon: '🎨', color: 'from-teal-500 to-cyan-600', models: ['Creative Pro'], status: 'active' },
+  { id: 'mistral', name: 'Writer', icon: '✍️', color: 'from-blue-500 to-indigo-600', models: ['Bestseller'], status: 'active' },
+  { id: 'gemini', name: 'Researcher', icon: '🔬', color: 'from-blue-400 to-violet-600', models: ['Deep Dive'], status: 'active' },
 ];
-
 // Dashboard types and mock data
 interface UsageRecord {
   id: string;
@@ -46,23 +57,6 @@ interface BillingRecord {
   method: string;
 }
 
-const MOCK_USAGE: UsageRecord[] = [
-  { id: '1', type: 'chat', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', credits: 3, tokens: { input: 850, output: 2100 }, timestamp: Date.now() - 180000, description: 'Neural chat conversation', duration: 3200, status: 'completed' },
-  { id: '2', type: 'chat', model: 'GPT-4o', provider: 'OpenAI', credits: 4, tokens: { input: 1200, output: 2800 }, timestamp: Date.now() - 600000, description: 'Code review discussion', duration: 4100, status: 'completed' },
-  { id: '3', type: 'voice', model: 'Gemini 2.0 Flash', provider: 'Gemini', credits: 5, tokens: { input: 500, output: 1500 }, timestamp: Date.now() - 1200000, description: 'Voice assistant query', duration: 2800, status: 'completed' },
-  { id: '4', type: 'chat', model: 'Grok-2', provider: 'xAI', credits: 3, tokens: { input: 650, output: 1800 }, timestamp: Date.now() - 2400000, description: 'Architecture planning', duration: 3600, status: 'completed' },
-  { id: '5', type: 'api_call', model: 'Llama 3.3 70B', provider: 'Groq', credits: 1, tokens: { input: 200, output: 600 }, timestamp: Date.now() - 3600000, description: 'Quick code completion', duration: 800, status: 'completed' },
-  { id: '6', type: 'chat', model: 'Claude 3 Opus', provider: 'Anthropic', credits: 6, tokens: { input: 1500, output: 4200 }, timestamp: Date.now() - 7200000, description: 'Deep research session', duration: 8200, status: 'completed' },
-  { id: '7', type: 'chat', model: 'Mistral Large', provider: 'Mistral', credits: 3, tokens: { input: 900, output: 2400 }, timestamp: Date.now() - 14400000, description: 'Debugging assistance', duration: 4500, status: 'completed' },
-  { id: '8', type: 'voice', model: 'Gemini 1.5 Pro', provider: 'Gemini', credits: 4, tokens: { input: 400, output: 1200 }, timestamp: Date.now() - 28800000, description: 'Voice brainstorming', duration: 5200, status: 'completed' },
-];
-
-const MOCK_BILLING: BillingRecord[] = [
-  { id: 'b1', amount: 9.99, credits: 100, status: 'completed', date: Date.now() - 604800000, method: 'Visa •••• 4242' },
-  { id: 'b2', amount: 29.99, credits: 350, status: 'completed', date: Date.now() - 2592000000, method: 'Visa •••• 4242' },
-  { id: 'b3', amount: 49.99, credits: 600, status: 'completed', date: Date.now() - 5184000000, method: 'PayPal' },
-];
-
 const CREDIT_PACKAGES = [
   { credits: 50, price: 5.00, popular: false, savings: null },
   { credits: 100, price: 9.99, popular: false, savings: '5% off' },
@@ -79,24 +73,111 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
   const tabContainerRef = useRef<HTMLDivElement>(null);
   
   // Initialize from currentSettings
-  const [selectedProvider, setSelectedProvider] = useState(currentSettings?.provider || 'anthropic');
-  const [selectedModel, setSelectedModel] = useState(currentSettings?.model || 'Claude 3.5 Sonnet');
+  const [selectedProvider, setSelectedProvider] = useState(currentSettings?.provider || 'cerebras');
+  const [selectedModel, setSelectedModel] = useState(currentSettings?.model || 'Ultra Fast');
   
-  // Credits state
-  const [credits, setCredits] = useState({ available: 127, used: 373, total: 500 });
+  // Credits state - fetch from API
+  const [credits, setCredits] = useState({ available: 0, used: 0, total: 500 });
+  const [isLoadingCredits, setIsLoadingCredits] = useState(true);
+  const [purchaseLoading, setPurchaseLoading] = useState<number | null>(null);
   
-  // Live stats simulation
+  // Usage data from localStorage
+  const [usageHistory, setUsageHistory] = useState<UsageRecord[]>([]);
+  
+  // Live stats 
   const [stats, setStats] = useState({
-    tokensUsed: 124500,
+    tokensUsed: 0,
     tokensLimit: 500000,
-    successRate: 98.5,
-    avgLatency: 245,
-    requestsToday: 1247,
-    activeConnections: 3,
+    successRate: 100,
+    avgLatency: 0,
+    requestsToday: 0,
+    activeConnections: 0,
     uptime: 99.9,
-    costToday: 12.45
+    costToday: 0
   });
 
+  // Fetch credits from API when drawer opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchCredits();
+      loadLocalData();
+    }
+  }, [isOpen]);
+
+  const fetchCredits = async () => {
+    setIsLoadingCredits(true);
+    try {
+      const userId = getUserId();
+      const response = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
+      if (response.ok) {
+        const data = await response.json();
+        const available = data.credits || 0;
+        setCredits({ available, used: Math.max(0, 500 - available), total: 500 });
+      }
+    } catch (error) {
+      console.error('Failed to fetch credits:', error);
+    } finally {
+      setIsLoadingCredits(false);
+    }
+  };
+
+  const loadLocalData = () => {
+    // Load usage history from localStorage
+    const savedUsage = localStorage.getItem('neural_chat_usage');
+    if (savedUsage) {
+      const parsed = JSON.parse(savedUsage);
+      setUsageHistory(parsed);
+      
+      // Calculate stats from usage
+      const today = parsed.filter((u: UsageRecord) => Date.now() - u.timestamp < 86400000);
+      const totalTokens = parsed.reduce((sum: number, u: UsageRecord) => sum + (u.tokens?.input || 0) + (u.tokens?.output || 0), 0);
+      const avgLat = parsed.length > 0 ? parsed.reduce((sum: number, u: UsageRecord) => sum + (u.duration || 0), 0) / parsed.length : 0;
+      
+      setStats(prev => ({
+        ...prev,
+        tokensUsed: totalTokens,
+        requestsToday: today.length,
+        avgLatency: Math.round(avgLat),
+        costToday: today.reduce((sum: number, u: UsageRecord) => sum + u.credits, 0) * 0.01
+      }));
+    }
+  };
+
+  // Handle purchase with real Stripe checkout
+  const handlePurchase = async (pkg: typeof CREDIT_PACKAGES[0]) => {
+    setPurchaseLoading(pkg.credits);
+    try {
+      const userId = getUserId();
+      const packageMap: Record<number, string> = {
+        50: 'starter',
+        100: 'basic',
+        350: 'popular',
+        600: 'pro',
+        1500: 'enterprise'
+      };
+      const packageId = packageMap[pkg.credits] || 'starter';
+      
+      const response = await fetch(`${API_BASE}/billing/checkout/neural-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, packageId })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      } else {
+        alert('Failed to initiate checkout. Please try again.');
+      }
+    } catch (error) {
+      console.error('Checkout error:', error);
+      alert('Failed to connect to payment service.');
+    } finally {
+      setPurchaseLoading(null);
+    }
+  };
   // Tab definitions
   const tabs: { id: DashboardTab; label: string; icon: React.ReactNode }[] = [
     { id: 'providers', label: 'Providers', icon: <Cpu size={14} /> },
@@ -117,19 +198,19 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
 
   const formatDate = (timestamp: number) => new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-  // Calculate provider stats
+  // Calculate provider stats from real usage data
   const providerStats = AI_PROVIDERS.map(p => ({
     ...p,
-    requests: MOCK_USAGE.filter(u => u.provider === p.name).length,
-    credits: MOCK_USAGE.filter(u => u.provider === p.name).reduce((sum, u) => sum + u.credits, 0),
-    tokens: MOCK_USAGE.filter(u => u.provider === p.name).reduce((sum, u) => sum + u.tokens.input + u.tokens.output, 0),
+    requests: usageHistory.filter(u => u.provider === p.name).length,
+    credits: usageHistory.filter(u => u.provider === p.name).reduce((sum, u) => sum + u.credits, 0),
+    tokens: usageHistory.filter(u => u.provider === p.name).reduce((sum, u) => sum + (u.tokens?.input || 0) + (u.tokens?.output || 0), 0),
   }));
 
   // Sync with external settings when drawer opens
   useEffect(() => {
     if (isOpen && currentSettings) {
-      setSelectedProvider(currentSettings.provider || 'anthropic');
-      setSelectedModel(currentSettings.model || 'Claude 3.5 Sonnet');
+      setSelectedProvider(currentSettings.provider || 'cerebras');
+      setSelectedModel(currentSettings.model || 'Ultra Fast');
     }
   }, [isOpen, currentSettings]);
 
@@ -165,21 +246,6 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
     });
   };
 
-  // Simulate live updates
-  useEffect(() => {
-    if (!isOpen) return;
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        ...prev,
-        tokensUsed: prev.tokensUsed + Math.floor(Math.random() * 100),
-        avgLatency: 200 + Math.floor(Math.random() * 100),
-        requestsToday: prev.requestsToday + Math.floor(Math.random() * 3),
-        successRate: 97 + Math.random() * 3
-      }));
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [isOpen]);
-
   const currentProvider = AI_PROVIDERS.find(p => p.id === selectedProvider);
 
   return (
@@ -203,7 +269,7 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
                 AI_DASHBOARD
               </h3>
               <p className="text-[9px] text-emerald-600/60 uppercase font-mono tracking-[0.3em] mt-1">
-                STATUS: <span className="text-emerald-400">ONLINE</span> | CREDITS: <span className="text-cyan-400">{credits.available}</span>
+                STATUS: <span className="text-emerald-400">ONLINE</span> | CREDITS: <span className="text-cyan-400">{isLoadingCredits ? '...' : credits.available}</span>
               </p>
             </div>
           </div>
@@ -622,12 +688,19 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
                 {CREDIT_PACKAGES.map((pkg) => (
                   <button
                     key={pkg.credits}
+                    onClick={() => handlePurchase(pkg)}
+                    disabled={purchaseLoading !== null}
                     className={`relative p-4 rounded-xl border transition-all text-left ${
                       pkg.popular
                         ? 'border-cyan-500/50 bg-cyan-500/10 hover:bg-cyan-500/20'
                         : 'border-gray-800 bg-gray-900/50 hover:border-cyan-500/30'
-                    }`}
+                    } ${purchaseLoading === pkg.credits ? 'opacity-50' : ''}`}
                   >
+                    {purchaseLoading === pkg.credits && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-xl">
+                        <Loader2 className="w-6 h-6 text-cyan-400 animate-spin" />
+                      </div>
+                    )}
                     {pkg.popular && (
                       <div className="absolute -top-2 right-2 px-2 py-0.5 bg-cyan-500 text-black text-[9px] font-bold rounded uppercase">
                         Popular

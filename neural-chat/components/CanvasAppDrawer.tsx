@@ -8,8 +8,8 @@ interface CanvasAppDrawerProps {
 const CanvasAppDrawer: React.FC<CanvasAppDrawerProps> = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   
-  // Use deployed canvas-studio URL
-  const canvasStudioUrl = '/canvas-studio/';
+  // Use neural-chat's own canvas-app
+  const canvasAppUrl = '/canvas-app/';
 
   useEffect(() => {
     if (isOpen) {
@@ -54,16 +54,16 @@ const CanvasAppDrawer: React.FC<CanvasAppDrawerProps> = ({ isOpen, onClose }) =>
               <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
               <div className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse" style={{ animationDelay: '0.4s' }}></div>
             </div>
-            <p className="text-gray-400 text-sm">Loading Canvas Studio...</p>
+            <p className="text-gray-400 text-sm">Loading Canvas App...</p>
           </div>
         </div>
       )}
       
-      {/* Iframe containing the canvas studio app */}
+      {/* Iframe containing neural-chat's canvas app */}
       <iframe
-        src={canvasStudioUrl}
+        src={canvasAppUrl}
         className="w-full h-full border-0 bg-[#0a0a0a]"
-        title="Canvas Studio"
+        title="Canvas App"
         allow="camera; microphone; clipboard-write"
         onLoad={() => setIsLoading(false)}
       />

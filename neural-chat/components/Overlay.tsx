@@ -27,11 +27,11 @@ const Overlay: React.FC<OverlayProps> = ({ active, onActivate }) => {
 --- NEURAL INTERFACE ---`}
         </pre>
         <h1 className="text-4xl sm:text-6xl font-bold text-gray-200 text-center tracking-tighter">
-          <span className="text-green-400 glow-green">Neural</span> 
-          <span className="text-cyan-400 glow-cyan ml-2">Link</span>
+          <span className="text-green-400 glow-green">One</span> 
+          <span className="text-cyan-400 glow-cyan ml-2">LastAI</span>
         </h1>
         <p className="text-gray-500 mt-6 italic font-mono text-xs sm:text-sm uppercase tracking-[0.3em] animate-pulse">
-          Standby for Core Initialization
+          AI Digital Friend Zone
         </p>
         
         <div className="mt-12 relative">
@@ -41,7 +41,7 @@ const Overlay: React.FC<OverlayProps> = ({ active, onActivate }) => {
           >
             <div className="absolute inset-0 bg-emerald-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
             <span className="relative text-emerald-400 font-bold tracking-[0.4em] group-hover:text-white transition-colors text-sm">
-              ACTIVATE SYSTEM
+              LAUNCH NEURAL CHAT
             </span>
           </button>
           

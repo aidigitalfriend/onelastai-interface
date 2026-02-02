@@ -5,12 +5,60 @@ const API_BASE = 'https://maula.onelastai.co/api';
 
 // Get or create user ID
 const getUserId = (): string => {
-  let userId = localStorage.getItem('onelastai_user_id');
-  if (!userId) {
-    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    localStorage.setItem('onelastai_user_id', userId);
+  const saved = localStorage.getItem('onelastai_user_id');
+  if (saved) return saved;
+  const newId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem('onelastai_user_id', newId);
+  return newId;
+};
+
+// Usage tracking helper
+const getCanvasUsageData = () => {
+  const saved = localStorage.getItem('canvas_studio_usage');
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch {
+      return { history: [], projects: [], chats: [] };
+    }
   }
-  return userId;
+  return { history: [], projects: [], chats: [] };
+};
+
+// Save usage to localStorage
+export const trackCanvasUsage = (record: {
+  type: 'generation' | 'edit' | 'chat';
+  model: string;
+  provider: string;
+  credits: number;
+  description: string;
+}) => {
+  const data = getCanvasUsageData();
+  const newRecord = {
+    id: Date.now().toString(),
+    ...record,
+    timestamp: Date.now(),
+    app: 'canvas' as const
+  };
+  data.history = [newRecord, ...data.history].slice(0, 100); // Keep last 100
+  localStorage.setItem('canvas_studio_usage', JSON.stringify(data));
+  return newRecord;
+};
+
+// Track project
+export const trackCanvasProject = (project: { name: string; creditsUsed: number }) => {
+  const data = getCanvasUsageData();
+  const newProject = {
+    id: 'p' + Date.now(),
+    ...project,
+    type: 'canvas' as const,
+    createdAt: Date.now(),
+    lastModified: Date.now(),
+    status: 'active' as const
+  };
+  data.projects = [newProject, ...data.projects].slice(0, 50);
+  localStorage.setItem('canvas_studio_usage', JSON.stringify(data));
+  return newProject;
 };
 
 interface UsageRecord {
@@ -77,86 +125,76 @@ interface CanvasNavDrawerProps {
   isDarkMode: boolean;
 }
 
-// LLM Providers with user-friendly names
+// LLM Providers with their models - User-friendly names
 const LLM_PROVIDERS = {
   'Maula AI': {
     icon: '🌟',
-    color: '#22d3ee',
+    color: '#ec4899',
     models: ['Nova', 'Nova Pro', 'Maula Large', 'Maula Code']
   },
   'Image Generator': {
     icon: '🎨',
-    color: '#10b981',
+    color: '#22d3ee',
     models: ['Vision Pro', 'Vision Fast']
   },
   'Designer': {
-    icon: '🎯',
+    icon: '🖌️',
     color: '#8b5cf6',
     models: ['Design Flash', 'Design Pro']
   },
   'Planner': {
-    icon: '📐',
+    icon: '📋',
     color: '#f59e0b',
     models: ['Architect', 'Architect Fast']
   },
   'Code Builder': {
     icon: '⚡',
-    color: '#ef4444',
+    color: '#10b981',
     models: ['Turbo Code', 'Turbo Instant']
   },
   'Fast Coding': {
     icon: '✨',
-    color: '#ec4899',
+    color: '#f97316',
     models: ['Lightning', 'Lightning Lite']
   }
 };
 
-// Mock data - Combined from both apps
+// Mock data - Canvas Studio only
 const MOCK_USAGE: UsageRecord[] = [
-  // Canvas App Usage
-  { id: '1', type: 'generation', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', credits: 10, timestamp: Date.now() - 1800000, description: 'Generated SaaS landing page', app: 'canvas' },
-  { id: '2', type: 'edit', model: 'GPT-4o', provider: 'OpenAI', credits: 5, timestamp: Date.now() - 3600000, description: 'Added dark mode toggle', app: 'canvas' },
-  { id: '3', type: 'generation', model: 'Gemini 1.5 Pro', provider: 'Google', credits: 12, timestamp: Date.now() - 7200000, description: 'Built analytics dashboard', app: 'canvas' },
-  { id: '4', type: 'edit', model: 'Mistral Large', provider: 'Mistral', credits: 5, timestamp: Date.now() - 14400000, description: 'Made layout responsive', app: 'canvas' },
-  // Main App Usage
-  { id: '5', type: 'chat', model: 'GPT-4o', provider: 'OpenAI', credits: 3, timestamp: Date.now() - 2700000, description: 'Neural chat conversation', app: 'main' },
-  { id: '6', type: 'api_call', model: 'Llama 3.3 70B', provider: 'Groq', credits: 2, timestamp: Date.now() - 5400000, description: 'Code completion request', app: 'main' },
-  { id: '7', type: 'chat', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', credits: 4, timestamp: Date.now() - 10800000, description: 'Project brainstorming', app: 'main' },
-  { id: '8', type: 'generation', model: 'Grok 3', provider: 'xAI', credits: 8, timestamp: Date.now() - 21600000, description: 'Generated API endpoints', app: 'main' },
-  { id: '9', type: 'edit', model: 'Gemini 1.5 Flash', provider: 'Google', credits: 3, timestamp: Date.now() - 43200000, description: 'Refactored components', app: 'canvas' },
-  { id: '10', type: 'chat', model: 'Mixtral 8x7B', provider: 'Mistral', credits: 2, timestamp: Date.now() - 86400000, description: 'Debugging assistance', app: 'main' },
-  { id: '11', type: 'generation', model: 'Claude 3 Opus', provider: 'Anthropic', credits: 15, timestamp: Date.now() - 129600000, description: 'Created e-commerce store', app: 'canvas' },
-  { id: '12', type: 'api_call', model: 'Llama 3.1 70B', provider: 'Groq', credits: 1, timestamp: Date.now() - 172800000, description: 'Quick code suggestion', app: 'main' },
-  { id: '13', type: 'generation', model: 'Gemini 2.0 Flash', provider: 'Google', credits: 10, timestamp: Date.now() - 259200000, description: 'Built portfolio site', app: 'canvas' },
-  { id: '14', type: 'chat', model: 'Grok 2', provider: 'xAI', credits: 5, timestamp: Date.now() - 345600000, description: 'Architecture planning', app: 'main' },
-  { id: '15', type: 'edit', model: 'GPT-4 Turbo', provider: 'OpenAI', credits: 4, timestamp: Date.now() - 432000000, description: 'Added animations', app: 'canvas' },
-  { id: '16', type: 'generation', model: 'Command R+', provider: 'Cohere', credits: 12, timestamp: Date.now() - 518400000, description: 'Created admin panel', app: 'canvas' },
-  { id: '17', type: 'chat', model: 'Codestral', provider: 'Mistral', credits: 3, timestamp: Date.now() - 604800000, description: 'Code review session', app: 'main' },
-  { id: '18', type: 'generation', model: 'DeepSeek V3', provider: 'Together AI', credits: 8, timestamp: Date.now() - 650000000, description: 'Built checkout flow', app: 'canvas' },
-  { id: '19', type: 'chat', model: 'Sonar Large', provider: 'Perplexity', credits: 4, timestamp: Date.now() - 700000000, description: 'Research assistance', app: 'main' },
+  { id: '1', type: 'generation', model: 'Nova Pro', provider: 'Maula AI', credits: 10, timestamp: Date.now() - 1800000, description: 'Generated SaaS landing page', app: 'canvas' },
+  { id: '2', type: 'edit', model: 'Turbo Code', provider: 'Code Builder', credits: 5, timestamp: Date.now() - 3600000, description: 'Added dark mode toggle', app: 'canvas' },
+  { id: '3', type: 'generation', model: 'Design Pro', provider: 'Designer', credits: 12, timestamp: Date.now() - 7200000, description: 'Built analytics dashboard', app: 'canvas' },
+  { id: '4', type: 'edit', model: 'Lightning', provider: 'Fast Coding', credits: 5, timestamp: Date.now() - 14400000, description: 'Made layout responsive', app: 'canvas' },
+  { id: '5', type: 'chat', model: 'Nova', provider: 'Maula AI', credits: 2, timestamp: Date.now() - 21600000, description: 'UI design discussion', app: 'canvas' },
+  { id: '6', type: 'edit', model: 'Design Flash', provider: 'Designer', credits: 3, timestamp: Date.now() - 43200000, description: 'Refactored components', app: 'canvas' },
+  { id: '7', type: 'generation', model: 'Maula Large', provider: 'Maula AI', credits: 15, timestamp: Date.now() - 129600000, description: 'Created e-commerce store', app: 'canvas' },
+  { id: '8', type: 'generation', model: 'Vision Pro', provider: 'Image Generator', credits: 10, timestamp: Date.now() - 259200000, description: 'Built portfolio site', app: 'canvas' },
+  { id: '9', type: 'edit', model: 'Turbo Instant', provider: 'Code Builder', credits: 4, timestamp: Date.now() - 432000000, description: 'Added animations', app: 'canvas' },
+  { id: '10', type: 'generation', model: 'Architect', provider: 'Planner', credits: 12, timestamp: Date.now() - 518400000, description: 'Created admin panel', app: 'canvas' },
+  { id: '11', type: 'chat', model: 'Nova Pro', provider: 'Maula AI', credits: 3, timestamp: Date.now() - 604800000, description: 'API integration help', app: 'canvas' },
+  { id: '12', type: 'generation', model: 'Vision Fast', provider: 'Image Generator', credits: 8, timestamp: Date.now() - 650000000, description: 'Built checkout flow', app: 'canvas' },
+  { id: '13', type: 'generation', model: 'Architect Fast', provider: 'Planner', credits: 8, timestamp: Date.now() - 700000000, description: 'Generated contact form', app: 'canvas' },
+  { id: '14', type: 'edit', model: 'Lightning Lite', provider: 'Fast Coding', credits: 4, timestamp: Date.now() - 800000000, description: 'Optimized performance', app: 'canvas' },
 ];
 
-// Project History
+// Project History - Canvas Studio only
 const MOCK_PROJECTS: ProjectHistory[] = [
   { id: 'p1', name: 'SaaS Landing Page', type: 'canvas', createdAt: Date.now() - 1800000, lastModified: Date.now() - 1800000, status: 'active', creditsUsed: 15 },
   { id: 'p2', name: 'Analytics Dashboard', type: 'canvas', createdAt: Date.now() - 86400000, lastModified: Date.now() - 43200000, status: 'active', creditsUsed: 25 },
   { id: 'p3', name: 'E-commerce Store', type: 'canvas', createdAt: Date.now() - 172800000, lastModified: Date.now() - 129600000, status: 'active', creditsUsed: 42 },
   { id: 'p4', name: 'Portfolio Website', type: 'canvas', createdAt: Date.now() - 345600000, lastModified: Date.now() - 259200000, status: 'archived', creditsUsed: 18 },
   { id: 'p5', name: 'Admin Panel', type: 'canvas', createdAt: Date.now() - 604800000, lastModified: Date.now() - 518400000, status: 'active', creditsUsed: 35 },
-  { id: 'p6', name: 'Neural Chat Bot', type: 'main', createdAt: Date.now() - 259200000, lastModified: Date.now() - 86400000, status: 'active', creditsUsed: 22 },
-  { id: 'p7', name: 'Code Assistant', type: 'main', createdAt: Date.now() - 432000000, lastModified: Date.now() - 172800000, status: 'active', creditsUsed: 15 },
+  { id: 'p6', name: 'Checkout Flow', type: 'canvas', createdAt: Date.now() - 700000000, lastModified: Date.now() - 650000000, status: 'active', creditsUsed: 22 },
+  { id: 'p7', name: 'Contact Form', type: 'canvas', createdAt: Date.now() - 800000000, lastModified: Date.now() - 750000000, status: 'active', creditsUsed: 12 },
 ];
 
-// Chat History
+// Chat History - Canvas Studio only
 const MOCK_CHATS: ChatHistory[] = [
-  { id: 'c1', title: 'Neural chat conversation', app: 'main', model: 'GPT-4o', provider: 'OpenAI', messages: 12, timestamp: Date.now() - 2700000, creditsUsed: 3 },
-  { id: 'c2', title: 'Project brainstorming', app: 'main', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', messages: 8, timestamp: Date.now() - 10800000, creditsUsed: 4 },
-  { id: 'c3', title: 'Debugging assistance', app: 'main', model: 'Mixtral 8x7B', provider: 'Mistral', messages: 15, timestamp: Date.now() - 86400000, creditsUsed: 2 },
-  { id: 'c4', title: 'Architecture planning', app: 'main', model: 'Grok 2', provider: 'xAI', messages: 20, timestamp: Date.now() - 345600000, creditsUsed: 5 },
-  { id: 'c5', title: 'Code review session', app: 'main', model: 'Codestral', provider: 'Mistral', messages: 6, timestamp: Date.now() - 604800000, creditsUsed: 3 },
-  { id: 'c6', title: 'Research assistance', app: 'main', model: 'Sonar Large', provider: 'Perplexity', messages: 10, timestamp: Date.now() - 700000000, creditsUsed: 4 },
-  { id: 'c7', title: 'UI Design discussion', app: 'canvas', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', messages: 5, timestamp: Date.now() - 3600000, creditsUsed: 2 },
-  { id: 'c8', title: 'API integration help', app: 'canvas', model: 'GPT-4o', provider: 'OpenAI', messages: 18, timestamp: Date.now() - 172800000, creditsUsed: 6 },
+  { id: 'c1', title: 'UI Design discussion', app: 'canvas', model: 'Nova', provider: 'Maula AI', messages: 5, timestamp: Date.now() - 3600000, creditsUsed: 2 },
+  { id: 'c2', title: 'API integration help', app: 'canvas', model: 'Turbo Code', provider: 'Code Builder', messages: 18, timestamp: Date.now() - 172800000, creditsUsed: 6 },
+  { id: 'c3', title: 'Layout improvements', app: 'canvas', model: 'Design Pro', provider: 'Designer', messages: 12, timestamp: Date.now() - 345600000, creditsUsed: 4 },
+  { id: 'c4', title: 'Animation ideas', app: 'canvas', model: 'Nova Pro', provider: 'Maula AI', messages: 8, timestamp: Date.now() - 518400000, creditsUsed: 5 },
+  { id: 'c5', title: 'Color scheme review', app: 'canvas', model: 'Vision Pro', provider: 'Image Generator', messages: 6, timestamp: Date.now() - 700000000, creditsUsed: 3 },
 ];
 
 const MOCK_BILLING: BillingRecord[] = [
@@ -174,28 +212,35 @@ const CREDIT_PACKAGES = [
   { credits: 1500, price: 99.99, popular: false, savings: '35% off' },
 ];
 
-// Model colors for charts - user-friendly names
+// Model colors for charts
 const MODEL_COLORS: Record<string, string> = {
-  // Maula AI
-  'Nova': '#22d3ee',
-  'Nova Pro': '#06b6d4',
-  'Maula Large': '#0891b2',
-  'Maula Code': '#0e7490',
-  // Image Generator
-  'Vision Pro': '#10b981',
-  'Vision Fast': '#059669',
-  // Designer
+  'Nova': '#ec4899',
+  'Nova Pro': '#f472b6',
+  'Maula Large': '#db2777',
+  'Maula Code': '#be185d',
+  'Vision Pro': '#22d3ee',
+  'Vision Fast': '#06b6d4',
   'Design Flash': '#8b5cf6',
   'Design Pro': '#7c3aed',
-  // Planner
   'Architect': '#f59e0b',
   'Architect Fast': '#d97706',
-  // Code Builder
-  'Turbo Code': '#ef4444',
-  'Turbo Instant': '#dc2626',
-  // Fast Coding
-  'Lightning': '#ec4899',
-  'Lightning Lite': '#db2777',
+  'Turbo Code': '#10b981',
+  'Turbo Instant': '#059669',
+  'Lightning': '#f97316',
+  'Lightning Lite': '#ea580c',
+  'Gemini 1.5 Pro': '#8b5cf6',
+  'Gemini 1.5 Flash': '#a78bfa',
+  'Gemini 2.0 Flash': '#7c3aed',
+  'Grok 3': '#f59e0b',
+  'Grok 2': '#d97706',
+  'Llama 3.3 70B': '#ef4444',
+  'Llama 3.1 70B': '#dc2626',
+  'Mistral Large': '#ec4899',
+  'Mixtral 8x7B': '#db2777',
+  'Codestral': '#be185d',
+  'Command R+': '#06b6d4',
+  'DeepSeek V3': '#84cc16',
+  'Sonar Large': '#6366f1',
 };
 
 type DashboardTab = 'overview' | 'analytics' | 'history' | 'usage' | 'billing' | 'credits';
@@ -205,17 +250,16 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
   const [historyTab, setHistoryTab] = useState<'projects' | 'chats'>('projects');
   const [creditBalance, setCreditBalance] = useState(0);
   const [isLoadingCredits, setIsLoadingCredits] = useState(true);
-  const [purchaseLoading, setPurchaseLoading] = useState<number | null>(null);
   const [usageHistory, setUsageHistory] = useState<UsageRecord[]>([]);
-  const [billingHistory] = useState<BillingRecord[]>([]);
+  const [billingHistory, setBillingHistory] = useState<BillingRecord[]>([]);
   const [projectHistory, setProjectHistory] = useState<ProjectHistory[]>([]);
   const [chatHistory, setChatHistory] = useState<ChatHistory[]>([]);
 
-  // Fetch credits from API
+  // Fetch real data on mount
   useEffect(() => {
     if (isOpen) {
       fetchCredits();
-      loadLocalData();
+      loadLocalUsageData();
     }
   }, [isOpen]);
 
@@ -223,9 +267,9 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
     setIsLoadingCredits(true);
     try {
       const userId = getUserId();
-      const response = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
-      if (response.ok) {
-        const data = await response.json();
+      const res = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
+      const data = await res.json();
+      if (data.success) {
         setCreditBalance(data.credits || 0);
       }
     } catch (error) {
@@ -235,23 +279,20 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
     }
   };
 
-  const loadLocalData = () => {
-    // Load usage history from localStorage
-    const savedUsage = localStorage.getItem('canvas_app_usage');
-    if (savedUsage) {
-      setUsageHistory(JSON.parse(savedUsage));
-    }
+  const loadLocalUsageData = () => {
+    const data = getCanvasUsageData();
+    setUsageHistory(data.history || []);
+    setProjectHistory(data.projects || []);
+    setChatHistory(data.chats || []);
     
-    // Load project history
-    const savedProjects = localStorage.getItem('canvas_app_projects');
-    if (savedProjects) {
-      setProjectHistory(JSON.parse(savedProjects));
-    }
-    
-    // Load chat history
-    const savedChats = localStorage.getItem('canvas_app_chats');
-    if (savedChats) {
-      setChatHistory(JSON.parse(savedChats));
+    // Load billing history from localStorage
+    const billingData = localStorage.getItem('canvas_billing_history');
+    if (billingData) {
+      try {
+        setBillingHistory(JSON.parse(billingData));
+      } catch {
+        setBillingHistory([]);
+      }
     }
   };
 
@@ -261,12 +302,18 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
     .reduce((sum, u) => sum + u.credits, 0);
   
   const totalUsedThisMonth = usageHistory.reduce((sum, u) => sum + u.credits, 0);
-
-  // App-specific stats
-  const canvasUsage = usageHistory.filter(u => u.app === 'canvas');
-  const mainAppUsage = usageHistory.filter(u => u.app === 'main');
-  const canvasCredits = canvasUsage.reduce((sum, u) => sum + u.credits, 0);
-  const mainCredits = mainAppUsage.reduce((sum, u) => sum + u.credits, 0);
+  
+  // Calculate canvas and main app credits
+  const canvasCredits = usageHistory
+    .filter(u => u.app === 'canvas')
+    .reduce((sum, u) => sum + u.credits, 0);
+  
+  const mainCredits = usageHistory
+    .filter(u => u.app === 'main')
+    .reduce((sum, u) => sum + u.credits, 0);
+  
+  // Safe percentage calculation to avoid division by zero
+  const safePercent = (value: number, total: number) => total > 0 ? (value / total) * 100 : 0;
 
   // Provider usage breakdown
   const providerUsage = Object.entries(
@@ -369,36 +416,41 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
     return date.toLocaleDateString();
   };
 
+  const [purchaseLoading, setPurchaseLoading] = useState<number | null>(null);
+
   const handlePurchase = async (pkg: typeof CREDIT_PACKAGES[0]) => {
+    const userId = getUserId();
     setPurchaseLoading(pkg.credits);
+    
     try {
-      const userId = getUserId();
+      // Map credits to package ID
       const packageMap: Record<number, string> = {
-        50: 'starter',
-        100: 'basic',
-        350: 'popular',
-        600: 'pro',
-        1500: 'enterprise'
+        50: 'cs-50',
+        100: 'cs-100',
+        350: 'cs-350',
+        600: 'cs-600',
+        1500: 'cs-1500'
       };
-      const packageId = packageMap[pkg.credits] || 'starter';
       
-      const response = await fetch(`${API_BASE}/billing/checkout/canvas-app`, {
+      const res = await fetch(`${API_BASE}/billing/checkout/canvas-studio`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, packageId })
+        body: JSON.stringify({
+          userId,
+          packageId: packageMap[pkg.credits],
+          email: localStorage.getItem('userEmail') || undefined
+        })
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.url) {
-          window.location.href = data.url;
-        }
+      const data = await res.json();
+      if (data.success && data.url) {
+        window.location.href = data.url;
       } else {
-        alert('Failed to initiate checkout. Please try again.');
+        alert(data.error || 'Failed to create checkout session');
       }
     } catch (error) {
       console.error('Checkout error:', error);
-      alert('Failed to connect to payment service.');
+      alert('Failed to process checkout');
     } finally {
       setPurchaseLoading(null);
     }
@@ -421,7 +473,7 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
           </div>
           <div>
             <h3 className="text-cyan-400 font-bold text-lg sm:text-2xl tracking-[0.15em] font-mono leading-none">
-              NEURAL_DASHBOARD
+              CANVAS_DASHBOARD
             </h3>
             <p className="text-[9px] sm:text-xs text-cyan-600/60 uppercase font-mono tracking-[0.2em] mt-1 font-bold flex items-center gap-2 sm:gap-4">
               <span className="flex items-center gap-1">
@@ -441,12 +493,7 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-emerald-400 text-xs font-bold">🎨 Canvas</span>
-              </div>
-              <div className="w-px h-4 bg-gray-700"></div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span className="text-emerald-400 text-xs font-bold">🧠 Main</span>
+                <span className="text-emerald-400 text-xs font-bold">🎨 Canvas Studio</span>
               </div>
             </div>
           </div>
@@ -456,7 +503,13 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
             <span className="text-xl">🪙</span>
             <div>
               <div className="text-[8px] text-cyan-400/60 uppercase tracking-widest font-bold">Credits</div>
-              <div className="text-lg font-black text-cyan-400">{creditBalance.toLocaleString()}</div>
+              <div className="text-lg font-black text-cyan-400">
+                {isLoadingCredits ? (
+                  <span className="animate-pulse">...</span>
+                ) : (
+                  creditBalance.toLocaleString()
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -498,51 +551,30 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 animate-fade-in">
-            {/* Connected Apps Status */}
-            <div className="grid grid-cols-2 gap-3 sm:gap-4">
-              <div className="p-4 rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-900/20 to-cyan-900/20">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">🎨</span>
-                    <span className="text-sm font-bold text-white">Canvas App</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase">Connected</span>
-                  </div>
+            {/* Canvas Studio Status - Full Width */}
+            <div className="p-4 rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-900/20 to-emerald-900/20">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-2xl">🎨</span>
+                  <span className="text-sm font-bold text-white">Canvas Studio</span>
                 </div>
-                <div className="flex items-end justify-between">
-                  <div>
-                    <div className="text-2xl font-black text-cyan-400">{canvasCredits}</div>
-                    <div className="text-[10px] text-gray-500">credits used</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-white">{canvasUsage.length}</div>
-                    <div className="text-[10px] text-gray-500">requests</div>
-                  </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <span className="text-[10px] text-emerald-400 font-bold uppercase">Active</span>
                 </div>
               </div>
-
-              <div className="p-4 rounded-xl border border-purple-500/30 bg-gradient-to-br from-purple-900/20 to-pink-900/20">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">🧠</span>
-                    <span className="text-sm font-bold text-white">Main App</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span className="text-[10px] text-emerald-400 font-bold uppercase">Connected</span>
-                  </div>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-2xl font-black text-cyan-400">{totalUsedThisMonth}</div>
+                  <div className="text-[10px] text-gray-500">total credits used</div>
                 </div>
-                <div className="flex items-end justify-between">
-                  <div>
-                    <div className="text-2xl font-black text-purple-400">{mainCredits}</div>
-                    <div className="text-[10px] text-gray-500">credits used</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-white">{mainAppUsage.length}</div>
-                    <div className="text-[10px] text-gray-500">requests</div>
-                  </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white">{usageHistory.length}</div>
+                  <div className="text-[10px] text-gray-500">requests</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold text-purple-400">{projectHistory.filter(p => p.status === 'active').length}</div>
+                  <div className="text-[10px] text-gray-500">active projects</div>
                 </div>
               </div>
             </div>
@@ -554,7 +586,9 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
                   <span className="text-xl">🪙</span>
                   <span className="text-[9px] font-bold text-gray-600 uppercase tracking-widest">Balance</span>
                 </div>
-                <div className="text-2xl font-black text-cyan-400">{creditBalance}</div>
+                <div className="text-2xl font-black text-cyan-400">
+                  {isLoadingCredits ? <span className="animate-pulse">...</span> : creditBalance}
+                </div>
                 <div className="mt-2 h-1.5 bg-gray-800 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-full" style={{ width: `${Math.min((creditBalance / 500) * 100, 100)}%` }}></div>
                 </div>
@@ -597,17 +631,11 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
                 {last7Days.map((day, i) => (
                   <div key={i} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full flex flex-col items-center justify-end h-24 gap-0.5">
-                      {/* Canvas portion */}
+                      {/* Canvas Studio credits */}
                       <div 
-                        className="w-full bg-gradient-to-t from-cyan-600 to-cyan-400 rounded-t transition-all hover:from-cyan-500 hover:to-cyan-300"
-                        style={{ height: `${(day.canvas / maxDailyCredits) * 100}%`, minHeight: day.canvas > 0 ? '4px' : '0' }}
-                        title={`Canvas: ${day.canvas} credits`}
-                      ></div>
-                      {/* Main App portion */}
-                      <div 
-                        className="w-full bg-gradient-to-t from-purple-600 to-purple-400 rounded-b transition-all hover:from-purple-500 hover:to-purple-300"
-                        style={{ height: `${(day.main / maxDailyCredits) * 100}%`, minHeight: day.main > 0 ? '4px' : '0' }}
-                        title={`Main: ${day.main} credits`}
+                        className="w-full bg-gradient-to-t from-cyan-600 to-cyan-400 rounded transition-all hover:from-cyan-500 hover:to-cyan-300"
+                        style={{ height: `${(day.total / maxDailyCredits) * 100}%`, minHeight: day.total > 0 ? '4px' : '0' }}
+                        title={`${day.total} credits`}
                       ></div>
                     </div>
                     <div className="text-[9px] text-gray-500 font-bold">{day.day}</div>
@@ -618,11 +646,7 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
               <div className="flex items-center justify-center gap-4 mt-4">
                 <div className="flex items-center gap-1.5">
                   <div className="w-3 h-3 rounded bg-gradient-to-r from-cyan-600 to-cyan-400"></div>
-                  <span className="text-[10px] text-gray-500">Canvas App</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <div className="w-3 h-3 rounded bg-gradient-to-r from-purple-600 to-purple-400"></div>
-                  <span className="text-[10px] text-gray-500">Main App</span>
+                  <span className="text-[10px] text-gray-500">Canvas Studio Credits</span>
                 </div>
               </div>
             </div>
@@ -632,19 +656,26 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
               <h4 className="text-xs font-bold text-cyan-500/80 uppercase tracking-widest mb-4 flex items-center gap-2">
                 <span>⚡</span> Recent Activity
               </h4>
-              <div className="space-y-2">
-                {usageHistory.slice(0, 5).map(record => (
-                  <div key={record.id} className="flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-gray-800/50 hover:border-cyan-500/20 transition-all">
-                    <span className="text-lg">{getAppIcon(record.app)}</span>
-                    <span className="text-lg">{getTypeIcon(record.type)}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-bold text-gray-300 truncate">{record.description}</div>
-                      <div className="text-[10px] text-gray-600">{record.model} • {formatDate(record.timestamp)}</div>
+              {usageHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <span className="text-4xl mb-3 block">🎨</span>
+                  <p className="text-gray-500 text-sm">No activity yet</p>
+                  <p className="text-gray-600 text-xs mt-1">Start generating apps to see your usage here</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {usageHistory.slice(0, 5).map(record => (
+                    <div key={record.id} className="flex items-center gap-3 p-3 rounded-lg bg-black/30 border border-gray-800/50 hover:border-cyan-500/20 transition-all">
+                      <span className="text-lg">{getTypeIcon(record.type)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-bold text-gray-300 truncate">{record.description}</div>
+                        <div className="text-[10px] text-gray-600">{record.model} • {formatDate(record.timestamp)}</div>
+                      </div>
+                      <span className="text-sm font-bold text-cyan-400 whitespace-nowrap">-{record.credits}</span>
                     </div>
-                    <span className="text-sm font-bold text-cyan-400 whitespace-nowrap">-{record.credits}</span>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -686,7 +717,7 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
                 {/* Bar Chart */}
                 <div className="space-y-3">
                   {modelUsage.slice(0, 8).map(model => {
-                    const percentage = (model.credits / totalUsedThisMonth) * 100;
+                    const percentage = safePercent(model.credits, totalUsedThisMonth);
                     const providerInfo = LLM_PROVIDERS[model.provider as keyof typeof LLM_PROVIDERS];
                     return (
                       <div key={model.model}>
@@ -718,7 +749,7 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
                       {(() => {
                         let cumulativePercent = 0;
                         return modelUsage.slice(0, 8).map((model, i) => {
-                          const percent = (model.credits / totalUsedThisMonth) * 100;
+                          const percent = safePercent(model.credits, totalUsedThisMonth);
                           const dashArray = `${percent} ${100 - percent}`;
                           const dashOffset = -cumulativePercent;
                           cumulativePercent += percent;
@@ -766,19 +797,19 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
                   <div>
                     <div className="flex justify-between mb-2">
                       <span className="text-sm font-bold text-gray-300 flex items-center gap-2">🎨 Canvas App</span>
-                      <span className="text-sm text-cyan-400">{canvasCredits} credits ({((canvasCredits / totalUsedThisMonth) * 100).toFixed(0)}%)</span>
+                      <span className="text-sm text-cyan-400">{canvasCredits} credits ({safePercent(canvasCredits, totalUsedThisMonth).toFixed(0)}%)</span>
                     </div>
                     <div className="h-4 bg-gray-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full" style={{ width: `${(canvasCredits / totalUsedThisMonth) * 100}%` }}></div>
+                      <div className="h-full bg-gradient-to-r from-cyan-600 to-cyan-400 rounded-full" style={{ width: `${safePercent(canvasCredits, totalUsedThisMonth)}%` }}></div>
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between mb-2">
                       <span className="text-sm font-bold text-gray-300 flex items-center gap-2">🧠 Main App</span>
-                      <span className="text-sm text-purple-400">{mainCredits} credits ({((mainCredits / totalUsedThisMonth) * 100).toFixed(0)}%)</span>
+                      <span className="text-sm text-purple-400">{mainCredits} credits ({safePercent(mainCredits, totalUsedThisMonth).toFixed(0)}%)</span>
                     </div>
                     <div className="h-4 bg-gray-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full" style={{ width: `${(mainCredits / totalUsedThisMonth) * 100}%` }}></div>
+                      <div className="h-full bg-gradient-to-r from-purple-600 to-purple-400 rounded-full" style={{ width: `${safePercent(mainCredits, totalUsedThisMonth)}%` }}></div>
                     </div>
                   </div>
                 </div>
@@ -1093,7 +1124,9 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
               <span className="text-3xl sm:text-4xl">🪙</span>
               <div>
                 <div className="text-[10px] text-cyan-400/60 uppercase tracking-widest font-bold">Current Balance</div>
-                <div className="text-xl sm:text-2xl font-black text-cyan-400">{creditBalance} credits</div>
+                <div className="text-xl sm:text-2xl font-black text-cyan-400">
+                  {isLoadingCredits ? <span className="animate-pulse">Loading...</span> : `${creditBalance} credits`}
+                </div>
               </div>
             </div>
 
@@ -1209,16 +1242,25 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
       <div className="p-3 sm:p-4 bg-[#080808]/80 border-t border-gray-800/50 flex justify-between items-center relative z-10">
         <div className="flex gap-4 items-center">
           <div className="hidden sm:flex items-center gap-2 text-[9px] text-gray-600">
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 🎨 Canvas</span>
-            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 🧠 Main</span>
+            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> 🎨 Canvas Studio</span>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Back to Canvas Studio Button */}
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gradient-to-r from-cyan-600/20 to-emerald-600/20 hover:from-cyan-600/40 hover:to-emerald-600/40 border border-cyan-500/50 hover:border-cyan-400 rounded-lg flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-all group"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="text-xs font-bold uppercase tracking-wider">Back</span>
+          </button>
+
           <button
             onClick={() => {
-              onClose();
-              window.parent.postMessage('close-canvas-drawer', '*');
+              window.location.href = 'https://maula.onelastai.co/';
             }}
             className="px-4 py-2 bg-gradient-to-r from-red-600/20 to-orange-600/20 hover:from-red-600/40 hover:to-orange-600/40 border border-red-500/50 hover:border-red-400 rounded-lg flex items-center gap-2 text-red-400 hover:text-red-300 transition-all group"
           >

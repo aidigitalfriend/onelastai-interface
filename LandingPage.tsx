@@ -84,7 +84,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
       gradient: 'from-cyan-500 to-blue-500',
       status: 'live',
       features: ['Live Preview', 'Code Generation', 'Export Ready', 'Multiple Frameworks'],
-      path: '/canvas-app'
+      path: '/canvas-studio'
     },
     {
       id: 'maula-editor',

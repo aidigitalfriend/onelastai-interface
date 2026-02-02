@@ -27,57 +27,58 @@ const PROVIDERS = {
   anthropic: {
     name: 'Anthropic',
     models: {
-      'claude-3-5-sonnet-20241022': { inputCost: 0.003, outputCost: 0.015 },
-      'claude-3-opus-20240229': { inputCost: 0.015, outputCost: 0.075 },
-      'claude-3-sonnet-20240229': { inputCost: 0.003, outputCost: 0.015 },
-      'claude-3-haiku-20240307': { inputCost: 0.00025, outputCost: 0.00125 },
+      'claude-sonnet-4-20250514': { inputCost: 0.003, outputCost: 0.015 },
+      'claude-opus-4-20250514': { inputCost: 0.015, outputCost: 0.075 },
+      'claude-3-5-haiku-20241022': { inputCost: 0.00025, outputCost: 0.00125 },
     },
   },
   openai: {
     name: 'OpenAI',
     models: {
+      'gpt-4.1': { inputCost: 0.005, outputCost: 0.015 },
+      'gpt-4.1-mini': { inputCost: 0.00015, outputCost: 0.0006 },
       'gpt-4o': { inputCost: 0.005, outputCost: 0.015 },
       'gpt-4o-mini': { inputCost: 0.00015, outputCost: 0.0006 },
-      'gpt-4-turbo': { inputCost: 0.01, outputCost: 0.03 },
-      'gpt-4': { inputCost: 0.03, outputCost: 0.06 },
-      'gpt-3.5-turbo': { inputCost: 0.0005, outputCost: 0.0015 },
+      'o3-mini': { inputCost: 0.01, outputCost: 0.03 },
+      'o1': { inputCost: 0.03, outputCost: 0.06 },
     },
   },
   gemini: {
     name: 'Google Gemini',
     models: {
+      'gemini-2.5-pro-preview-06-05': { inputCost: 0.00125, outputCost: 0.005 },
+      'gemini-2.5-flash-preview-05-20': { inputCost: 0.000075, outputCost: 0.0003 },
       'gemini-2.0-flash': { inputCost: 0.00, outputCost: 0.00 }, // Free tier
-      'gemini-1.5-pro': { inputCost: 0.00125, outputCost: 0.005 },
-      'gemini-1.5-flash': { inputCost: 0.000075, outputCost: 0.0003 },
     },
   },
   mistral: {
     name: 'Mistral',
     models: {
-      'mistral-large-latest': { inputCost: 0.002, outputCost: 0.006 },
-      'mistral-medium-latest': { inputCost: 0.0027, outputCost: 0.0081 },
+      'mistral-large-2501': { inputCost: 0.002, outputCost: 0.006 },
+      'codestral-latest': { inputCost: 0.0027, outputCost: 0.0081 },
       'mistral-small-latest': { inputCost: 0.0002, outputCost: 0.0006 },
     },
   },
   xai: {
     name: 'xAI',
     models: {
-      'grok-2': { inputCost: 0.002, outputCost: 0.01 },
-      'grok-2-mini': { inputCost: 0.0002, outputCost: 0.001 },
+      'grok-3': { inputCost: 0.002, outputCost: 0.01 },
+      'grok-3-fast': { inputCost: 0.001, outputCost: 0.005 },
+      'grok-3-mini': { inputCost: 0.0002, outputCost: 0.001 },
     },
   },
   groq: {
     name: 'Groq',
     models: {
       'llama-3.3-70b-versatile': { inputCost: 0.00059, outputCost: 0.00079 },
+      'llama-3.3-70b-specdec': { inputCost: 0.00059, outputCost: 0.00079 },
       'llama-3.1-8b-instant': { inputCost: 0.00005, outputCost: 0.00008 },
-      'mixtral-8x7b-32768': { inputCost: 0.00024, outputCost: 0.00024 },
     },
   },
   cerebras: {
     name: 'Cerebras',
     models: {
-      'llama3.1-70b': { inputCost: 0.0006, outputCost: 0.0006 },
+      'llama-3.3-70b': { inputCost: 0.0006, outputCost: 0.0006 },
       'llama3.1-8b': { inputCost: 0.0001, outputCost: 0.0001 },
     },
   },
@@ -240,21 +241,50 @@ export class AIService {
   }
 
   /**
-   * Chat with Anthropic Claude
+   * Chat with Anthropic Claude (supports vision)
    */
-  async chatAnthropic(messages, model = 'claude-3-5-sonnet-20241022', options = {}) {
+  async chatAnthropic(messages, model = 'claude-sonnet-4-20250514', options = {}) {
     if (!anthropicClient) throw new Error('Anthropic not configured');
 
     const startTime = Date.now();
     
+    // Format messages, handling image in the last user message if present
+    const formattedMessages = messages.map((m, idx) => {
+      const isLastMessage = idx === messages.length - 1;
+      const hasImage = isLastMessage && options.image;
+      
+      if (hasImage && m.role === 'user') {
+        // Multimodal message with image
+        return {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: options.image.mimeType,
+                data: options.image.data.replace(/^data:[^;]+;base64,/, ''), // Strip prefix if present
+              },
+            },
+            {
+              type: 'text',
+              text: m.content,
+            },
+          ],
+        };
+      }
+      
+      return {
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content,
+      };
+    });
+
     const response = await anthropicClient.messages.create({
       model,
       max_tokens: options.maxTokens || 4096,
       system: options.systemPrompt || 'You are a helpful AI assistant.',
-      messages: messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'assistant',
-        content: m.content,
-      })),
+      messages: formattedMessages,
     });
 
     const inputTokens = response.usage.input_tokens;
@@ -277,20 +307,49 @@ export class AIService {
   }
 
   /**
-   * Chat with OpenAI
+   * Chat with OpenAI (supports vision for gpt-4.1 and gpt-4o)
    */
-  async chatOpenAI(messages, model = 'gpt-4o', options = {}) {
+  async chatOpenAI(messages, model = 'gpt-4.1', options = {}) {
     if (!openaiClient) throw new Error('OpenAI not configured');
 
     const startTime = Date.now();
 
+    // Format messages, handling image in the last user message if present
+    const formattedMessages = [
+      { role: 'system', content: options.systemPrompt || 'You are a helpful AI assistant.' },
+      ...messages.map((m, idx) => {
+        const isLastMessage = idx === messages.length - 1;
+        const hasImage = isLastMessage && options.image;
+        
+        if (hasImage && m.role === 'user') {
+          // Multimodal message with image
+          const imageData = options.image.data.includes('base64,') 
+            ? options.image.data 
+            : `data:${options.image.mimeType};base64,${options.image.data}`;
+          
+          return {
+            role: 'user',
+            content: [
+              {
+                type: 'image_url',
+                image_url: { url: imageData },
+              },
+              {
+                type: 'text',
+                text: m.content,
+              },
+            ],
+          };
+        }
+        
+        return { role: m.role, content: m.content };
+      }),
+    ];
+
     const response = await openaiClient.chat.completions.create({
       model,
       max_tokens: options.maxTokens || 4096,
-      messages: [
-        { role: 'system', content: options.systemPrompt || 'You are a helpful AI assistant.' },
-        ...messages.map(m => ({ role: m.role, content: m.content })),
-      ],
+      messages: formattedMessages,
     });
 
     const inputTokens = response.usage.prompt_tokens;
@@ -313,7 +372,7 @@ export class AIService {
   }
 
   /**
-   * Chat with Google Gemini
+   * Chat with Google Gemini (supports vision)
    */
   async chatGemini(messages, model = 'gemini-2.0-flash', options = {}) {
     if (!geminiClient) throw new Error('Gemini not configured');
@@ -333,7 +392,25 @@ export class AIService {
 
     const chat = genModel.startChat({ history });
     const lastMessage = messages[messages.length - 1];
-    const result = await chat.sendMessage(lastMessage.content);
+    
+    // Build parts array for the last message
+    const parts = [];
+    
+    // Add image if present
+    if (options.image) {
+      const imageData = options.image.data.replace(/^data:[^;]+;base64,/, '');
+      parts.push({
+        inlineData: {
+          mimeType: options.image.mimeType,
+          data: imageData,
+        },
+      });
+    }
+    
+    // Add text
+    parts.push({ text: lastMessage.content });
+    
+    const result = await chat.sendMessage(parts);
 
     const response = await result.response;
     const text = response.text();

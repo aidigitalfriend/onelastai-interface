@@ -7,6 +7,7 @@ export interface Message {
   text: string;
   timestamp: string;
   isImage?: boolean;
+  imageData?: string;
   groundingUrls?: string[];
 }
 

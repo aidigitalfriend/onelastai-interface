@@ -21,17 +21,16 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
 
     switch (action) {
       case 'share':
-        navigator.clipboard.writeText(`NEURAL_UPLINK_PROTOCOL_VERIFY_${id}`);
-        alert("Encrypted Uplink ID copied.");
+        navigator.clipboard.writeText(`https://maula.onelastai.co/neural-chat/?chat=${id}`);
+        alert("Chat link copied!");
         break;
       case 'copy':
         navigator.clipboard.writeText(JSON.stringify(session, null, 2));
-        alert("Session Manifest copied to clipboard.");
+        alert("Chat data copied to clipboard.");
         break;
       case 'download':
-        // Simulating ZIP by creating a JSON bundle with all assets
         const data = {
-          protocol: "NEURAL_LINK_V3",
+          chatId: id,
           session: session,
           timestamp: new Date().toISOString()
         };
@@ -39,11 +38,11 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `PROTOCOL_BUNDLE_${session.name.replace(/\s+/g, '_')}.json`;
+        a.download = `chat_${session.name.replace(/\s+/g, '_')}.json`;
         a.click();
         break;
       case 'delete':
-        if (confirm(`PURGE_AUTHORIZATION: Delete [${session.name}]?`)) {
+        if (confirm(`Delete chat "${session.name}"?`)) {
           onDelete(id);
         }
         break;
@@ -55,8 +54,8 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
     <aside className={`absolute top-0 left-0 h-full w-[85%] sm:w-64 md:w-72 bg-[#0a0a0a]/98 backdrop-blur-xl border-r border-gray-800/50 p-4 sm:p-6 transition-transform duration-500 ease-out z-[100] flex flex-col shadow-[20px_0_60px_rgba(0,0,0,0.5)] ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
       <div className="flex items-center gap-3 mb-6">
         <Terminal size={18} className="text-green-500" />
-        <h2 className="text-green-400 font-bold glow-green uppercase tracking-tighter text-sm font-mono">
-          VAULT_0xFF
+        <h2 className="text-green-400 font-bold text-sm">
+          Chat History
         </h2>
       </div>
       
@@ -66,7 +65,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
         </button>
         <div className="relative flex-grow">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-600" />
-          <input type="text" placeholder="Search logs..." className="w-full pl-9 pr-3 py-2 text-xs bg-black/60 text-gray-400 border border-gray-800 rounded focus:outline-none focus:border-green-500/50 font-mono transition-all" />
+          <input type="text" placeholder="Search chats..." className="w-full pl-9 pr-3 py-2 text-xs bg-black/60 text-gray-400 border border-gray-800 rounded focus:outline-none focus:border-green-500/50 transition-all" />
         </div>
       </div>
 
@@ -78,8 +77,8 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
               className={`w-full text-left flex items-center justify-between p-4 rounded-lg border transition-all duration-300 ${s.active ? 'bg-green-500/10 border-green-500/40 text-white shadow-[inset_0_0_20px_rgba(34,197,94,0.1)]' : 'border-gray-900 text-gray-600 hover:border-gray-800 hover:bg-gray-800/20 hover:text-gray-400'}`}
             >
               <div className="flex flex-col gap-1 overflow-hidden">
-                <span className="text-[11px] font-bold font-mono truncate uppercase tracking-wider">{s.name}</span>
-                <span className="text-[8px] opacity-60 uppercase font-mono">{s.messages.length} data pkts</span>
+                <span className="text-[11px] font-bold truncate">{s.name}</span>
+                <span className="text-[8px] opacity-60">{s.messages.length} messages</span>
               </div>
               <div onClick={(e) => { e.stopPropagation(); setActiveMenu(activeMenu === s.id ? null : s.id); }} className="p-1 hover:bg-white/5 rounded transition-colors">
                 <MoreVertical size={14} className="text-gray-700 hover:text-gray-400" />
@@ -89,22 +88,22 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
             {activeMenu === s.id && (
               <div className="absolute right-0 top-full mt-1 w-52 bg-[#0d0d0d] border border-gray-800 rounded shadow-2xl z-[110] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 <div className="p-2 border-b border-gray-800 flex justify-between items-center bg-black/60">
-                  <span className="text-[8px] text-gray-500 font-mono tracking-widest uppercase">Protocol Actions</span>
+                  <span className="text-[8px] text-gray-500">Chat Options</span>
                   <button onClick={() => setActiveMenu(null)} className="text-gray-600 hover:text-white"><X size={10}/></button>
                 </div>
                 <div className="p-1">
-                  <button onClick={(e) => handleAction(e, s.id, 'share')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400 rounded transition-colors uppercase font-mono">
-                    <Share2 size={12} /> Share Uplink
+                  <button onClick={(e) => handleAction(e, s.id, 'share')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-gray-400 hover:bg-emerald-500/10 hover:text-emerald-400 rounded transition-colors">
+                    <Share2 size={12} /> Share Chat
                   </button>
-                  <button onClick={(e) => handleAction(e, s.id, 'copy')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-gray-400 hover:bg-cyan-500/10 hover:text-cyan-400 rounded transition-colors uppercase font-mono">
-                    <Copy size={12} /> Copy Manifest
+                  <button onClick={(e) => handleAction(e, s.id, 'copy')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-gray-400 hover:bg-cyan-500/10 hover:text-cyan-400 rounded transition-colors">
+                    <Copy size={12} /> Copy Data
                   </button>
-                  <button onClick={(e) => handleAction(e, s.id, 'download')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-gray-400 hover:bg-purple-500/10 hover:text-purple-400 rounded transition-colors uppercase font-mono">
-                    <Archive size={12} /> Sync Bundle (.JSON)
+                  <button onClick={(e) => handleAction(e, s.id, 'download')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-gray-400 hover:bg-purple-500/10 hover:text-purple-400 rounded transition-colors">
+                    <Archive size={12} /> Download Chat
                   </button>
                   <div className="my-1 border-t border-gray-800/50"></div>
-                  <button onClick={(e) => handleAction(e, s.id, 'delete')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-red-900 hover:bg-red-500/10 hover:text-red-500 rounded transition-colors uppercase font-mono">
-                    <Trash2 size={12} /> Purge Session
+                  <button onClick={(e) => handleAction(e, s.id, 'delete')} className="w-full flex items-center gap-3 px-3 py-2 text-[10px] text-red-900 hover:bg-red-500/10 hover:text-red-500 rounded transition-colors">
+                    <Trash2 size={12} /> Delete Chat
                   </button>
                 </div>
               </div>
@@ -114,9 +113,9 @@ const Sidebar: React.FC<SidebarProps> = ({ sessions, onSelect, onCreate, onDelet
       </div>
       
       <div className="mt-6 pt-4 border-t border-gray-900">
-        <div className="flex justify-between items-center opacity-30 text-[8px] font-mono uppercase tracking-widest">
-            <span>Sec_Layer_v3</span>
-            <span>FS_CRYPT_ACTIVE</span>
+        <div className="flex justify-between items-center opacity-30 text-[8px]">
+            <span>One LastAI</span>
+            <span>v1.0</span>
         </div>
       </div>
     </aside>

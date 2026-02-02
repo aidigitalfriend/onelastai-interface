@@ -191,6 +191,7 @@ router.post('/send', requireAuth, async (req, res) => {
       provider = 'anthropic', 
       model = 'claude-3-5-sonnet-20241022',
       systemPrompt,
+      image, // { data: base64, name: string, mimeType: string }
     } = req.body;
 
     // Check credits
@@ -242,11 +243,12 @@ router.post('/send', requireAuth, async (req, res) => {
       { role: 'user', content: message },
     ];
 
-    // Call AI
+    // Call AI (with optional image for vision)
     const aiService = new AIService(req.user);
     const response = await aiService.chat(messageHistory, provider, model, {
       sessionId: session.id,
       systemPrompt: systemPrompt || session.settings?.systemPrompt,
+      image, // Pass image for vision models
     });
 
     // Save assistant message

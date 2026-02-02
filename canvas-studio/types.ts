@@ -6,12 +6,6 @@ export interface ChatMessage {
 }
 
 export type ModelProvider =
-  | 'Maula AI'
-  | 'Image Generator'
-  | 'Designer'
-  | 'Planner'
-  | 'Code Builder'
-  | 'Fast Coding'
   | 'OpenAI'
   | 'Anthropic'
   | 'Groq'
@@ -31,7 +25,6 @@ export interface ModelOption {
   provider: ModelProvider;
   description: string;
   isThinking?: boolean;
-  icon?: string;
 }
 
 export interface GeneratedApp {

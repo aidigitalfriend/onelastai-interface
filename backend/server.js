@@ -95,17 +95,19 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
     
-    // Only process neural-link payments
-    if (session.metadata?.source !== 'neural-link') {
-      console.log('[Webhook] Skipping non-neural-link payment');
+    // Process OneLast AI payments (both 'onelastai' and 'neural-link' sources)
+    if (session.metadata?.source !== 'neural-link' && session.metadata?.source !== 'onelastai') {
+      console.log('[Webhook] Skipping non-onelastai payment');
       return res.json({ received: true });
     }
 
     const userId = session.metadata?.userId || session.client_reference_id;
     const credits = parseInt(session.metadata?.credits || '0', 10);
     const packageId = session.metadata?.packageId;
+    const appId = session.metadata?.appId || 'neural-chat';
+    const appName = session.metadata?.appName || 'Neural Chat';
 
-    console.log(`[Webhook] Payment completed: user=${userId}, credits=${credits}`);
+    console.log(`[Webhook] Payment completed: user=${userId}, app=${appId}, credits=${credits}`);
 
     if (userId && credits > 0) {
       try {
@@ -122,13 +124,13 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
               type: 'PURCHASE',
               amount: credits,
               balanceAfter: userCredits.balance,
-              description: `Purchased ${credits} credits (${packageId})`,
+              description: `${appName}: Purchased ${credits} credits (${packageId})`,
               referenceId: session.id,
               referenceType: 'stripe_checkout',
             },
           });
 
-          console.log(`[Webhook] Credits added: ${credits} to user ${userId}`);
+          console.log(`[Webhook] Credits added: ${credits} to user ${userId} for ${appName}`);
         });
       } catch (error) {
         console.error('[Webhook] Failed to add credits:', error);
@@ -1673,8 +1675,140 @@ app.get('/api/usage/stats', requireAuth, async (req, res) => {
 });
 
 // ============================================================================
-// BILLING ROUTES - Handled by routes/billing.js
+// BILLING ROUTES - Multi-App Credit System
 // ============================================================================
+
+// App-specific credit packages
+const APP_CONFIGS = {
+  'neural-chat': {
+    name: 'Neural Chat',
+    description: 'AI Chat Assistant',
+    icon: '💬',
+    packages: [
+      { id: 'nc-50', name: '50 Credits', credits: 50, price: 500, priceDisplay: '$5.00', description: 'Starter pack' },
+      { id: 'nc-100', name: '100 Credits', credits: 100, price: 999, priceDisplay: '$9.99', savings: '5% off', description: 'Regular usage' },
+      { id: 'nc-350', name: '350 Credits', credits: 350, price: 2999, priceDisplay: '$29.99', savings: '15% off', popular: true, description: 'Best value' },
+      { id: 'nc-600', name: '600 Credits', credits: 600, price: 4999, priceDisplay: '$49.99', savings: '20% off', description: 'Heavy usage' },
+      { id: 'nc-1500', name: '1,500 Credits', credits: 1500, price: 9999, priceDisplay: '$99.99', savings: '35% off', description: 'Enterprise' },
+    ]
+  },
+  'canvas-studio': {
+    name: 'Canvas Studio',
+    description: 'AI Code Generator',
+    icon: '🎨',
+    packages: [
+      { id: 'cs-50', name: '50 Credits', credits: 50, price: 500, priceDisplay: '$5.00', description: 'Starter pack' },
+      { id: 'cs-100', name: '100 Credits', credits: 100, price: 999, priceDisplay: '$9.99', savings: '5% off', description: 'Regular usage' },
+      { id: 'cs-350', name: '350 Credits', credits: 350, price: 2999, priceDisplay: '$29.99', savings: '15% off', popular: true, description: 'Best value' },
+      { id: 'cs-600', name: '600 Credits', credits: 600, price: 4999, priceDisplay: '$49.99', savings: '20% off', description: 'Heavy usage' },
+      { id: 'cs-1500', name: '1,500 Credits', credits: 1500, price: 9999, priceDisplay: '$99.99', savings: '35% off', description: 'Enterprise' },
+    ]
+  },
+  'maula-editor': {
+    name: 'Maula Editor',
+    description: 'AI Code Editor',
+    icon: '💻',
+    packages: [
+      { id: 'me-50', name: '50 Credits', credits: 50, price: 500, priceDisplay: '$5.00', description: 'Starter pack' },
+      { id: 'me-100', name: '100 Credits', credits: 100, price: 999, priceDisplay: '$9.99', savings: '5% off', description: 'Regular usage' },
+      { id: 'me-350', name: '350 Credits', credits: 350, price: 2999, priceDisplay: '$29.99', savings: '15% off', popular: true, description: 'Best value' },
+      { id: 'me-600', name: '600 Credits', credits: 600, price: 4999, priceDisplay: '$49.99', savings: '20% off', description: 'Heavy usage' },
+      { id: 'me-1500', name: '1,500 Credits', credits: 1500, price: 9999, priceDisplay: '$99.99', savings: '35% off', description: 'Enterprise' },
+    ]
+  }
+};
+
+const VALID_APPS = Object.keys(APP_CONFIGS);
+
+// Get all apps info
+app.get('/api/billing/apps', (req, res) => {
+  const apps = Object.entries(APP_CONFIGS).map(([id, config]) => ({
+    id,
+    name: config.name,
+    description: config.description,
+    icon: config.icon
+  }));
+  res.json({ success: true, apps });
+});
+
+// Get billing plans for all apps
+app.get('/api/billing/plans', (req, res) => {
+  const plans = Object.entries(APP_CONFIGS).map(([appId, config]) => ({
+    appId,
+    appName: config.name,
+    appDescription: config.description,
+    appIcon: config.icon,
+    packages: config.packages
+  }));
+  res.json({ 
+    success: true, 
+    plans,
+    stripeMode: process.env.STRIPE_MODE || 'test'
+  });
+});
+
+// Get packages for a specific app
+app.get('/api/billing/packages/:appId', (req, res) => {
+  const { appId } = req.params;
+  if (!VALID_APPS.includes(appId)) {
+    return res.status(400).json({ success: false, error: 'Invalid app ID' });
+  }
+  const appConfig = APP_CONFIGS[appId];
+  res.json({ 
+    success: true,
+    app: { id: appId, name: appConfig.name, description: appConfig.description, icon: appConfig.icon },
+    packages: appConfig.packages,
+    stripeMode: process.env.STRIPE_MODE || 'test',
+  });
+});
+
+// Legacy packages endpoint
+app.get('/api/billing/packages', (req, res) => {
+  const appId = req.query.app || 'neural-chat';
+  const appConfig = APP_CONFIGS[appId] || APP_CONFIGS['neural-chat'];
+  res.json({ 
+    success: true,
+    packages: appConfig.packages,
+    stripeMode: process.env.STRIPE_MODE || 'test',
+  });
+});
+
+// Get user credits
+app.get('/api/billing/credits', requireAuth, async (req, res) => {
+  try {
+    const credits = await prisma.userCredits.findUnique({
+      where: { userId: req.user.id },
+    });
+    res.json({ 
+      success: true, 
+      credits: credits?.balance || 0,
+      lifetimeSpent: credits?.lifetimeSpent || 0,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get credits' });
+  }
+});
+
+// Get all credits info
+app.get('/api/billing/credits-all', requireAuth, async (req, res) => {
+  try {
+    const credits = await prisma.userCredits.findUnique({
+      where: { userId: req.user.id },
+    });
+    const allCredits = {};
+    for (const appId of VALID_APPS) {
+      allCredits[appId] = credits?.balance || 0;
+    }
+    res.json({ 
+      success: true,
+      credits: allCredits,
+      totalBalance: credits?.balance || 0,
+      lifetimeSpent: credits?.lifetimeSpent || 0,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get credits' });
+  }
+});
 
 // Get billing history
 app.get('/api/billing/history', requireAuth, async (req, res) => {
@@ -1691,55 +1825,185 @@ app.get('/api/billing/history', requireAuth, async (req, res) => {
   }
 });
 
-// Create checkout session for credit purchase
-app.post('/api/billing/checkout', requireAuth, async (req, res) => {
+// Get transactions
+app.get('/api/billing/transactions', requireAuth, async (req, res) => {
   try {
+    const userCredits = await prisma.userCredits.findUnique({
+      where: { userId: req.user.id },
+    });
+    if (!userCredits) {
+      return res.json({ success: true, transactions: [] });
+    }
+    const transactions = await prisma.creditTransaction.findMany({
+      where: { userCreditsId: userCredits.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+    res.json({ success: true, transactions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get transactions' });
+  }
+});
+
+// Create checkout session for specific app
+app.post('/api/billing/checkout/:appId', requireAuth, async (req, res) => {
+  try {
+    const { appId } = req.params;
     const { packageId } = req.body;
     
     if (!stripeClient) {
       return res.status(500).json({ success: false, error: 'Stripe not configured' });
     }
     
-    // Find the package
-    const pkg = await prisma.creditPackage.findUnique({
-      where: { id: packageId },
-    });
+    if (!VALID_APPS.includes(appId)) {
+      return res.status(400).json({ success: false, error: 'Invalid app ID' });
+    }
+
+    const appConfig = APP_CONFIGS[appId];
+    const creditPackage = appConfig.packages.find(p => p.id === packageId);
     
-    if (!pkg) {
+    if (!creditPackage) {
+      return res.status(400).json({ success: false, error: 'Invalid package' });
+    }
+
+    const appUrls = {
+      'neural-chat': '/neural-chat/',
+      'canvas-studio': '/canvas-studio/',
+      'maula-editor': '/maula-editor/'
+    };
+    const baseUrl = process.env.FRONTEND_URL || 'https://maula.onelastai.co';
+    const appPath = appUrls[appId] || '/';
+
+    const session = await stripeClient.checkout.sessions.create({
+      payment_method_types: ['card'],
+      mode: 'payment',
+      customer_email: req.user.email,
+      client_reference_id: req.user.id,
+      metadata: {
+        userId: req.user.id,
+        appId: appId,
+        packageId: creditPackage.id,
+        credits: creditPackage.credits.toString(),
+        source: 'onelastai',
+        appName: appConfig.name
+      },
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: `${appConfig.name} - ${creditPackage.name}`,
+            description: `${creditPackage.credits} AI Credits for ${appConfig.name}`,
+            images: ['https://onelastai.co/logo.png'],
+          },
+          unit_amount: creditPackage.price,
+        },
+        quantity: 1,
+      }],
+      success_url: `${baseUrl}${appPath}?payment=success&credits=${creditPackage.credits}`,
+      cancel_url: `${baseUrl}${appPath}?payment=cancelled`,
+    });
+
+    console.log(`[Billing] Checkout: ${session.id} | App: ${appId} | User: ${req.user.id} | Credits: ${creditPackage.credits}`);
+    res.json({ success: true, sessionId: session.id, url: session.url });
+  } catch (error) {
+    console.error('[Billing] Checkout error:', error);
+    res.status(500).json({ success: false, error: 'Failed to create checkout session' });
+  }
+});
+
+// Legacy checkout endpoint
+app.post('/api/billing/checkout', requireAuth, async (req, res) => {
+  try {
+    const { packageId, appId = 'neural-chat' } = req.body;
+    
+    if (!stripeClient) {
+      return res.status(500).json({ success: false, error: 'Stripe not configured' });
+    }
+    
+    const appConfig = APP_CONFIGS[appId] || APP_CONFIGS['neural-chat'];
+    let creditPackage = appConfig.packages.find(p => p.id === packageId);
+    
+    // Try all apps if not found
+    if (!creditPackage) {
+      for (const [aid, config] of Object.entries(APP_CONFIGS)) {
+        const pkg = config.packages.find(p => p.id === packageId);
+        if (pkg) {
+          creditPackage = pkg;
+          break;
+        }
+      }
+    }
+    
+    if (!creditPackage) {
       return res.status(404).json({ success: false, error: 'Package not found' });
     }
     
-    // Create Stripe checkout session
+    const baseUrl = process.env.FRONTEND_URL || 'https://maula.onelastai.co';
+
     const session = await stripeClient.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
         price_data: {
           currency: 'usd',
           product_data: {
-            name: pkg.name,
-            description: `${pkg.credits} AI Credits for Neural Link`,
+            name: `${appConfig.name} - ${creditPackage.name}`,
+            description: `${creditPackage.credits} AI Credits`,
           },
-          unit_amount: Math.round(Number(pkg.price) * 100), // Convert to cents
+          unit_amount: creditPackage.price,
         },
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: `${process.env.FRONTEND_URL || 'https://maula.onelastai.co'}/canvas?payment=success`,
-      cancel_url: `${process.env.FRONTEND_URL || 'https://maula.onelastai.co'}/canvas?payment=cancelled`,
+      success_url: `${baseUrl}/neural-chat/?payment=success&credits=${creditPackage.credits}`,
+      cancel_url: `${baseUrl}/neural-chat/?payment=cancelled`,
       client_reference_id: req.user.id,
       metadata: {
         userId: req.user.id,
-        packageId: pkg.id,
-        credits: pkg.credits.toString(),
-        source: 'neural_link',
+        packageId: creditPackage.id,
+        credits: creditPackage.credits.toString(),
+        source: 'onelastai',
+        appId: appId,
       },
     });
     
     res.json({ success: true, url: session.url, sessionId: session.id });
-    
   } catch (error) {
     console.error('[Billing] Checkout error:', error);
     res.status(500).json({ success: false, error: 'Failed to create checkout' });
+  }
+});
+
+// Add free credits (testing)
+app.post('/api/billing/add-free-credits', requireAuth, async (req, res) => {
+  try {
+    const { amount = 10, appId = 'neural-chat' } = req.body;
+    
+    if (amount > 50) {
+      return res.status(400).json({ success: false, error: 'Maximum 50 free credits allowed' });
+    }
+
+    const userCredits = await prisma.userCredits.upsert({
+      where: { userId: req.user.id },
+      create: { userId: req.user.id, balance: amount, lifetimeSpent: 0 },
+      update: { balance: { increment: amount } },
+    });
+
+    await prisma.creditTransaction.create({
+      data: {
+        userCreditsId: userCredits.id,
+        type: 'BONUS',
+        amount: amount,
+        balanceAfter: userCredits.balance,
+        description: `${APP_CONFIGS[appId]?.name || appId}: Free trial credits`,
+        referenceType: 'demo',
+      },
+    });
+
+    console.log(`[Billing] Added ${amount} free credits to user ${req.user.id}`);
+    res.json({ success: true, credits: userCredits.balance, message: `Added ${amount} free credits!` });
+  } catch (error) {
+    console.error('[Billing] Add free credits error:', error);
+    res.status(500).json({ success: false, error: 'Failed to add credits' });
   }
 });
 

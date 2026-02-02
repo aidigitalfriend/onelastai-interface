@@ -9,116 +9,67 @@ import {
 import Preview from './components/Preview';
 import CodeView from './components/CodeView';
 import ChatBox from './components/ChatBox';
-import CanvasNavDrawer from './components/CanvasNavDrawer';
+import CanvasNavDrawer, { trackCanvasUsage, trackCanvasProject } from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
+import Overlay from './components/Overlay';
+import { BillingPanel } from './components/BillingPanel';
 
-// AI Models - 7 Providers, 14 Models with friendly names
+// AI Models - 5 Providers, 8 Models
 const MODELS: ModelOption[] = [
-  // Maula AI (Anthropic)
+  // Anthropic
   {
-    id: 'claude-sonnet-4-20250514',
-    name: 'Nova',
-    provider: 'Maula AI',
+    id: 'claude-sonnet-4',
+    name: 'Claude Sonnet 4',
+    provider: 'Anthropic',
     description: 'Best for coding - highly recommended.',
-    icon: '🌟',
   },
   {
-    id: 'claude-opus-4-20250514',
-    name: 'Nova Pro',
-    provider: 'Maula AI',
+    id: 'claude-opus-4',
+    name: 'Claude Opus 4',
+    provider: 'Anthropic',
     description: 'Most powerful reasoning model.',
     isThinking: true,
-    icon: '💫',
   },
+  // OpenAI
   {
-    id: 'mistral-large-2501',
-    name: 'Maula Large',
-    provider: 'Maula AI',
-    description: 'Advanced multilingual model.',
-    icon: '🔮',
-  },
-  {
-    id: 'codestral-latest',
-    name: 'Maula Code',
-    provider: 'Maula AI',
-    description: 'Specialized for code generation.',
-    icon: '💻',
-  },
-  // Image Generator (OpenAI)
-  {
-    id: 'gpt-4o',
-    name: 'Vision Pro',
-    provider: 'Image Generator',
-    description: 'Best for visual tasks and images.',
-    icon: '🎨',
+    id: 'gpt-4.1',
+    name: 'GPT-4.1',
+    provider: 'OpenAI',
+    description: 'Most capable OpenAI model.',
   },
   {
     id: 'gpt-4o-mini',
-    name: 'Vision Fast',
-    provider: 'Image Generator',
-    description: 'Quick image understanding.',
-    icon: '⚡',
+    name: 'GPT-4o Mini',
+    provider: 'OpenAI',
+    description: 'Fast and efficient.',
   },
-  // Designer (Gemini)
+  // Gemini
   {
-    id: 'gemini-2.0-flash',
-    name: 'Design Flash',
-    provider: 'Designer',
-    description: 'Fast multimodal design.',
-    icon: '🎯',
+    id: 'gemini-2.5-flash',
+    name: 'Gemini 2.5 Flash',
+    provider: 'Gemini',
+    description: 'Fast multimodal model.',
   },
   {
-    id: 'gemini-2.5-pro-preview',
-    name: 'Design Pro',
-    provider: 'Designer',
-    description: 'Advanced design capabilities.',
+    id: 'gemini-2.5-pro',
+    name: 'Gemini 2.5 Pro',
+    provider: 'Gemini',
+    description: 'Advanced reasoning capabilities.',
     isThinking: true,
-    icon: '🧠',
   },
-  // Planner (xAI)
+  // xAI
   {
     id: 'grok-3',
-    name: 'Architect',
-    provider: 'Planner',
-    description: 'Strategic planning and reasoning.',
-    icon: '📐',
+    name: 'Grok 3',
+    provider: 'xAI',
+    description: 'Strong reasoning and coding.',
   },
-  {
-    id: 'grok-3-fast',
-    name: 'Architect Fast',
-    provider: 'Planner',
-    description: 'Quick planning assistance.',
-    icon: '🚀',
-  },
-  // Code Builder (Groq)
-  {
-    id: 'llama-3.3-70b-versatile',
-    name: 'Turbo Code',
-    provider: 'Code Builder',
-    description: 'Ultra-fast code generation.',
-    icon: '⚡',
-  },
-  {
-    id: 'llama-3.1-8b-instant',
-    name: 'Turbo Instant',
-    provider: 'Code Builder',
-    description: 'Lightning fast responses.',
-    icon: '💨',
-  },
-  // Fast Coding (Cerebras)
+  // Groq
   {
     id: 'llama-3.3-70b',
-    name: 'Lightning',
-    provider: 'Fast Coding',
-    description: 'Fastest inference speed.',
-    icon: '⚡',
-  },
-  {
-    id: 'llama3.1-8b',
-    name: 'Lightning Lite',
-    provider: 'Fast Coding',
-    description: 'Quick lightweight coding.',
-    icon: '✨',
+    name: 'Llama 3.3 70B',
+    provider: 'Groq',
+    description: 'Ultra-fast inference.',
   },
 ];
 
@@ -144,6 +95,559 @@ const QUICK_ACTIONS = [
   { id: 'validation', label: 'Validation', icon: '✅', description: 'Add form validation' },
 ];
 
+// Project file structure type
+interface ProjectFile {
+  name: string;
+  type: 'file' | 'folder';
+  language?: string;
+  content?: string;
+  children?: ProjectFile[];
+}
+
+// Complete Project Templates with multiple files
+const PROJECT_TEMPLATES = [
+  {
+    id: 'python-flask-project',
+    name: 'Python Flask API',
+    icon: '🐍',
+    language: 'Python',
+    description: 'Complete Flask REST API with database',
+    mainFile: 'app.py',
+    files: [
+      { name: 'app.py', type: 'file' as const, language: 'python', content: `from flask import Flask, jsonify, request
+from flask_cors import CORS
+from models import db, User, Item
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+CORS(app)
+db.init_app(app)
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy', 'message': 'API is running'})
+
+@app.route('/api/items', methods=['GET'])
+def get_items():
+    items = Item.query.all()
+    return jsonify([item.to_dict() for item in items])
+
+@app.route('/api/items', methods=['POST'])
+def create_item():
+    data = request.json
+    item = Item(name=data['name'], price=data['price'])
+    db.session.add(item)
+    db.session.commit()
+    return jsonify(item.to_dict()), 201
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=5000)` },
+      { name: 'models.py', type: 'file' as const, language: 'python', content: `from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+db = SQLAlchemy()
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'id': self.id, 'email': self.email, 'name': self.name}
+
+class Item(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name, 'price': self.price}` },
+      { name: 'requirements.txt', type: 'file' as const, language: 'text', content: `flask==2.3.0
+flask-cors==4.0.0
+flask-sqlalchemy==3.1.0
+python-dotenv==1.0.0` },
+      { name: 'templates', type: 'folder' as const, children: [
+        { name: 'index.html', type: 'file' as const, language: 'html', content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Flask API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <h1 class="text-3xl font-bold text-cyan-400">Flask API Dashboard</h1>
+    <div id="items" class="mt-8 grid grid-cols-3 gap-4"></div>
+    <script>
+        fetch('/api/items')
+            .then(r => r.json())
+            .then(items => {
+                document.getElementById('items').innerHTML = items.map(i => 
+                    \`<div class="bg-gray-800 p-4 rounded">\${i.name} - $\${i.price}</div>\`
+                ).join('');
+            });
+    </script>
+</body>
+</html>` }
+      ]},
+      { name: 'static', type: 'folder' as const, children: [
+        { name: 'styles.css', type: 'file' as const, language: 'css', content: `body { font-family: system-ui, sans-serif; }
+.container { max-width: 1200px; margin: 0 auto; }` }
+      ]}
+    ]
+  },
+  {
+    id: 'react-typescript-project',
+    name: 'React TypeScript App',
+    icon: '⚛️',
+    language: 'TypeScript',
+    description: 'Full React app with components',
+    mainFile: 'src/App.tsx',
+    files: [
+      { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "react-typescript-app",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "typescript": "^5.0.0",
+    "vite": "^5.0.0",
+    "@vitejs/plugin-react": "^4.0.0"
+  }
+}` },
+      { name: 'index.html', type: 'file' as const, language: 'html', content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>React App</title>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>` },
+      { name: 'src', type: 'folder' as const, children: [
+        { name: 'main.tsx', type: 'file' as const, language: 'typescript', content: `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);` },
+        { name: 'App.tsx', type: 'file' as const, language: 'typescript', content: `import React, { useState, useEffect } from 'react';
+import Header from './components/Header';
+import ItemList from './components/ItemList';
+import { Item } from './types';
+
+function App() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate API call
+    setTimeout(() => {
+      setItems([
+        { id: 1, name: 'Product 1', price: 29.99, description: 'Amazing product' },
+        { id: 2, name: 'Product 2', price: 49.99, description: 'Great value' },
+        { id: 3, name: 'Product 3', price: 19.99, description: 'Best seller' },
+      ]);
+      setLoading(false);
+    }, 1000);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <Header title="My React App" />
+      <main className="container mx-auto p-8">
+        {loading ? (
+          <p className="text-center text-gray-400">Loading...</p>
+        ) : (
+          <ItemList items={items} />
+        )}
+      </main>
+    </div>
+  );
+}
+
+export default App;` },
+        { name: 'index.css', type: 'file' as const, language: 'css', content: `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+}` },
+        { name: 'types.ts', type: 'file' as const, language: 'typescript', content: `export interface Item {
+  id: number;
+  name: string;
+  price: number;
+  description: string;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  avatar?: string;
+}` }
+      ]},
+      { name: 'src/components', type: 'folder' as const, children: [
+        { name: 'Header.tsx', type: 'file' as const, language: 'typescript', content: `import React from 'react';
+
+interface HeaderProps {
+  title: string;
+}
+
+const Header: React.FC<HeaderProps> = ({ title }) => {
+  return (
+    <header className="bg-gray-800 border-b border-gray-700">
+      <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+        <h1 className="text-2xl font-bold text-cyan-400">{title}</h1>
+        <nav className="space-x-4">
+          <a href="#" className="hover:text-cyan-400 transition">Home</a>
+          <a href="#" className="hover:text-cyan-400 transition">About</a>
+          <a href="#" className="hover:text-cyan-400 transition">Contact</a>
+        </nav>
+      </div>
+    </header>
+  );
+};
+
+export default Header;` },
+        { name: 'ItemList.tsx', type: 'file' as const, language: 'typescript', content: `import React from 'react';
+import { Item } from '../types';
+
+interface ItemListProps {
+  items: Item[];
+}
+
+const ItemList: React.FC<ItemListProps> = ({ items }) => {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {items.map(item => (
+        <div key={item.id} className="bg-gray-800 rounded-lg p-6 hover:bg-gray-750 transition">
+          <h3 className="text-xl font-bold text-white mb-2">{item.name}</h3>
+          <p className="text-gray-400 mb-4">{item.description}</p>
+          <p className="text-2xl font-bold text-cyan-400">\${item.price}</p>
+          <button className="mt-4 w-full bg-cyan-600 hover:bg-cyan-500 py-2 rounded font-bold transition">
+            Add to Cart
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export default ItemList;` }
+      ]}
+    ]
+  },
+  {
+    id: 'nodejs-express-project',
+    name: 'Node.js Express API',
+    icon: '🟢',
+    language: 'JavaScript',
+    description: 'Express server with routes & middleware',
+    mainFile: 'server.js',
+    files: [
+      { name: 'server.js', type: 'file' as const, language: 'javascript', content: `import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import itemRoutes from './routes/items.js';
+import userRoutes from './routes/users.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use('/api/items', itemRoutes);
+app.use('/api/users', userRoutes);
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.listen(PORT, () => {
+  console.log(\`🚀 Server running on http://localhost:\${PORT}\`);
+});` },
+      { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "nodejs-express-api",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}` },
+      { name: '.env', type: 'file' as const, language: 'text', content: `PORT=3000
+NODE_ENV=development` },
+      { name: 'routes', type: 'folder' as const, children: [
+        { name: 'items.js', type: 'file' as const, language: 'javascript', content: `import express from 'express';
+const router = express.Router();
+
+let items = [
+  { id: 1, name: 'Item 1', price: 29.99 },
+  { id: 2, name: 'Item 2', price: 49.99 },
+];
+
+router.get('/', (req, res) => {
+  res.json(items);
+});
+
+router.get('/:id', (req, res) => {
+  const item = items.find(i => i.id === parseInt(req.params.id));
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  res.json(item);
+});
+
+router.post('/', (req, res) => {
+  const item = { id: Date.now(), ...req.body };
+  items.push(item);
+  res.status(201).json(item);
+});
+
+export default router;` },
+        { name: 'users.js', type: 'file' as const, language: 'javascript', content: `import express from 'express';
+const router = express.Router();
+
+let users = [
+  { id: 1, name: 'John', email: 'john@example.com' },
+];
+
+router.get('/', (req, res) => res.json(users));
+
+router.post('/', (req, res) => {
+  const user = { id: Date.now(), ...req.body };
+  users.push(user);
+  res.status(201).json(user);
+});
+
+export default router;` }
+      ]},
+      { name: 'middleware', type: 'folder' as const, children: [
+        { name: 'auth.js', type: 'file' as const, language: 'javascript', content: `export const authMiddleware = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'No token provided' });
+  }
+  // Verify token here
+  next();
+};` }
+      ]}
+    ]
+  },
+  {
+    id: 'html-landing-page',
+    name: 'HTML Landing Page',
+    icon: '🌐',
+    language: 'HTML',
+    description: 'Complete landing page with CSS & JS',
+    mainFile: 'index.html',
+    files: [
+      { name: 'index.html', type: 'file' as const, language: 'html', content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Landing Page</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white">
+    <nav class="fixed w-full bg-gray-900/90 backdrop-blur border-b border-gray-800 z-50">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-cyan-400">Brand</h1>
+            <div class="space-x-6">
+                <a href="#features" class="hover:text-cyan-400">Features</a>
+                <a href="#pricing" class="hover:text-cyan-400">Pricing</a>
+                <a href="#contact" class="hover:text-cyan-400">Contact</a>
+                <button class="bg-cyan-500 hover:bg-cyan-600 px-4 py-2 rounded-lg">Get Started</button>
+            </div>
+        </div>
+    </nav>
+    
+    <section class="min-h-screen flex items-center justify-center pt-20">
+        <div class="text-center max-w-4xl px-4">
+            <h2 class="text-6xl font-bold mb-6">Build Something <span class="text-cyan-400">Amazing</span></h2>
+            <p class="text-xl text-gray-400 mb-8">Create beautiful, responsive websites with ease using our powerful platform.</p>
+            <button class="bg-cyan-500 hover:bg-cyan-600 px-8 py-4 rounded-lg text-lg font-bold">Start Free Trial</button>
+        </div>
+    </section>
+    
+    <script src="js/main.js"></script>
+</body>
+</html>` },
+      { name: 'css', type: 'folder' as const, children: [
+        { name: 'styles.css', type: 'file' as const, language: 'css', content: `* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+}
+
+.container { max-width: 1200px; margin: 0 auto; }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in { animation: fadeIn 0.6s ease-out forwards; }
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #1f2937; }
+::-webkit-scrollbar-thumb { background: #22d3ee; border-radius: 4px; }` }
+      ]},
+      { name: 'js', type: 'folder' as const, children: [
+        { name: 'main.js', type: 'file' as const, language: 'javascript', content: `// Smooth scroll
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', function(e) {
+    e.preventDefault();
+    document.querySelector(this.getAttribute('href')).scrollIntoView({
+      behavior: 'smooth'
+    });
+  });
+});
+
+// Intersection Observer for animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('fade-in');
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('section').forEach(el => observer.observe(el));
+
+console.log('Landing page loaded!');` }
+      ]},
+      { name: 'images', type: 'folder' as const, children: [] }
+    ]
+  },
+  {
+    id: 'nextjs-project',
+    name: 'Next.js Full Stack',
+    icon: '▲',
+    language: 'TypeScript',
+    description: 'Next.js app with API routes',
+    mainFile: 'app/page.tsx',
+    files: [
+      { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "nextjs-app",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "next": "^14.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "@types/react": "^18.2.0"
+  }
+}` },
+      { name: 'app', type: 'folder' as const, children: [
+        { name: 'layout.tsx', type: 'file' as const, language: 'typescript', content: `import './globals.css';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="bg-gray-900 text-white">{children}</body>
+    </html>
+  );
+}` },
+        { name: 'page.tsx', type: 'file' as const, language: 'typescript', content: `export default function Home() {
+  return (
+    <main className="min-h-screen p-8">
+      <h1 className="text-4xl font-bold text-cyan-400 mb-8">Next.js App</h1>
+      <p className="text-gray-400">Welcome to your Next.js application!</p>
+    </main>
+  );
+}` },
+        { name: 'globals.css', type: 'file' as const, language: 'css', content: `@tailwind base;
+@tailwind components;
+@tailwind utilities;` }
+      ]},
+      { name: 'app/api', type: 'folder' as const, children: [
+        { name: 'items/route.ts', type: 'file' as const, language: 'typescript', content: `import { NextResponse } from 'next/server';
+
+const items = [
+  { id: 1, name: 'Item 1', price: 29.99 },
+  { id: 2, name: 'Item 2', price: 49.99 },
+];
+
+export async function GET() {
+  return NextResponse.json(items);
+}
+
+export async function POST(request: Request) {
+  const data = await request.json();
+  const item = { id: Date.now(), ...data };
+  items.push(item);
+  return NextResponse.json(item, { status: 201 });
+}` }
+      ]},
+      { name: 'components', type: 'folder' as const, children: [
+        { name: 'Button.tsx', type: 'file' as const, language: 'typescript', content: `interface ButtonProps {
+  children: React.ReactNode;
+  onClick?: () => void;
+  variant?: 'primary' | 'secondary';
+}
+
+export default function Button({ children, onClick, variant = 'primary' }: ButtonProps) {
+  const base = 'px-4 py-2 rounded-lg font-bold transition';
+  const variants = {
+    primary: 'bg-cyan-500 hover:bg-cyan-600 text-white',
+    secondary: 'bg-gray-700 hover:bg-gray-600 text-gray-200'
+  };
+  
+  return (
+    <button onClick={onClick} className={\`\${base} \${variants[variant]}\`}>
+      {children}
+    </button>
+  );
+}` }
+      ]}
+    ]
+  }
+];
+
 // Device preview sizes
 const DEVICE_SIZES = {
   desktop: { width: '100%', height: '100%', label: 'Desktop' },
@@ -151,11 +655,20 @@ const DEVICE_SIZES = {
   mobile: { width: '375px', height: '812px', label: 'Mobile' },
 };
 
-type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | null;
+type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | 'templates' | null;
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 type ConversationPhase = 'initial' | 'gathering' | 'confirming' | 'building' | 'editing';
 
 const App: React.FC = () => {
+  const [isOverlayActive, setIsOverlayActive] = useState(true);
+  const [isBillingOpen, setIsBillingOpen] = useState(false);
+  const [userId] = useState(() => {
+    const saved = localStorage.getItem('onelastai_user_id');
+    if (saved) return saved;
+    const newId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('onelastai_user_id', newId);
+    return newId;
+  });
   const [prompt, setPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState<ModelOption>(MODELS[0]);
   const [selectedProvider, setSelectedProvider] = useState('Anthropic');
@@ -168,6 +681,10 @@ const App: React.FC = () => {
   const [isStreaming, setIsStreaming] = useState(true);
   const [conversationPhase, setConversationPhase] = useState<ConversationPhase>('initial');
   const [showTemplatesModal, setShowTemplatesModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<typeof PROJECT_TEMPLATES[0] | null>(null);
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [selectedFile, setSelectedFile] = useState<ProjectFile | null>(null);
+  const [templatePreviewMode, setTemplatePreviewMode] = useState<'list' | 'preview' | 'code'>('list');
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [isVoiceActive, setIsVoiceActive] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
@@ -196,8 +713,11 @@ const App: React.FC = () => {
     localStorage.setItem('canvas_dark_mode', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
-  // Auto-scroll sidebar animation on page load to show users all options
+  // Auto-scroll sidebar animation AFTER overlay closes to show users all options
   useEffect(() => {
+    // Only run when overlay closes
+    if (isOverlayActive) return;
+    
     const sidebar = sidebarRef.current;
     if (!sidebar) return;
 
@@ -205,7 +725,7 @@ const App: React.FC = () => {
     const hasSeenAnimation = sessionStorage.getItem('sidebar_intro_seen');
     if (hasSeenAnimation) return;
 
-    // Delay start for page to load
+    // Delay start after overlay animation completes
     const startDelay = setTimeout(() => {
       setSidebarHighlight(true);
       
@@ -214,35 +734,35 @@ const App: React.FC = () => {
       const maxScroll = scrollHeight - clientHeight;
 
       if (maxScroll > 0) {
-        // Smooth scroll down
+        // Smooth scroll down with slower, more visible animation
         let scrollPos = 0;
         const scrollDown = setInterval(() => {
-          scrollPos += 3;
+          scrollPos += 2; // Slower scroll
           sidebar.scrollTop = scrollPos;
           if (scrollPos >= maxScroll) {
             clearInterval(scrollDown);
-            // Pause at bottom
+            // Pause at bottom longer
             setTimeout(() => {
               // Smooth scroll back up
               const scrollUp = setInterval(() => {
-                scrollPos -= 3;
+                scrollPos -= 2;
                 sidebar.scrollTop = scrollPos;
                 if (scrollPos <= 0) {
                   clearInterval(scrollUp);
                   setSidebarHighlight(false);
                   sessionStorage.setItem('sidebar_intro_seen', 'true');
                 }
-              }, 15);
-            }, 500);
+              }, 20);
+            }, 800);
           }
-        }, 15);
+        }, 20);
       } else {
         setSidebarHighlight(false);
       }
-    }, 1000);
+    }, 1500); // Wait for overlay animation to complete
 
     return () => clearTimeout(startDelay);
-  }, []);
+  }, [isOverlayActive]);
 
   // Filter models by selected provider
   const filteredModels = MODELS.filter(m => m.provider.toLowerCase() === selectedProvider.toLowerCase() || 
@@ -323,6 +843,16 @@ const App: React.FC = () => {
         };
         setCurrentApp(newApp);
         saveHistory([newApp, ...history].slice(0, 10));
+        
+        // Track usage for dashboard
+        trackCanvasUsage({
+          type: 'generation',
+          model: selectedModel.name,
+          provider: selectedModel.provider,
+          credits: selectedModel.costPer1k || 1,
+          description: instruction.substring(0, 50)
+        });
+        trackCanvasProject({ name: newApp.name, creditsUsed: selectedModel.costPer1k || 1 });
       } else if (currentApp) {
         const updatedApp = {
           ...currentApp,
@@ -333,6 +863,15 @@ const App: React.FC = () => {
         saveHistory(
           history.map((a) => (a.id === updatedApp.id ? updatedApp : a))
         );
+        
+        // Track edit usage for dashboard
+        trackCanvasUsage({
+          type: 'edit',
+          model: selectedModel.name,
+          provider: selectedModel.provider,
+          credits: selectedModel.costPer1k || 1,
+          description: 'Edit: ' + instruction.substring(0, 40)
+        });
       }
 
       setGenState({ isGenerating: false, error: null, progressMessage: '' });
@@ -557,8 +1096,11 @@ const App: React.FC = () => {
 
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'bg-[#0a0a0a] text-gray-300 matrix-bg' : 'bg-gray-100 text-gray-800'}`}>
+      {/* Activation Overlay */}
+      <Overlay active={isOverlayActive} onActivate={() => setIsOverlayActive(false)} />
+      
       {/* Main Content Area */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className={`flex flex-1 overflow-hidden transition-opacity duration-300 ${isOverlayActive ? 'opacity-0' : 'opacity-100'}`}>
         {/* 1. Left Vertical Nav Bar - Neural Style */}
         <nav className={`w-16 ${isDarkMode ? 'bg-[#111]/95 border-gray-800/50' : 'bg-white border-gray-200'} backdrop-blur-md flex flex-col items-center shrink-0 z-[60] border-r relative`}>
           {/* Hamburger Menu Button */}
@@ -579,9 +1121,14 @@ const App: React.FC = () => {
           <div className={`py-3 border-b ${isDarkMode ? 'border-gray-800/50' : 'border-gray-200'} w-full flex justify-center`}>
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-cyan-900/30">
               <img 
-                src="/logo.png" 
+                src="/canvas-studio/logo.png" 
                 alt="OneLast.AI" 
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  // Fallback to text logo if image fails
+                  (e.target as HTMLImageElement).style.display = 'none';
+                  (e.target as HTMLImageElement).parentElement!.innerHTML = '<div class="w-full h-full bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-white font-bold text-lg">O</div>';
+                }}
               />
             </div>
           </div>
@@ -734,7 +1281,7 @@ const App: React.FC = () => {
             </button>
 
             {/* Templates */}
-            <button onClick={() => setShowTemplatesModal(true)} className="p-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all w-full flex justify-center" title="Templates">
+            <button onClick={() => togglePanel('templates')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'templates' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="Code Templates">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z" />
               </svg>
@@ -810,11 +1357,12 @@ const App: React.FC = () => {
 
           {/* 3. Right Toggleable Panels (Drawer-style) - Neural Style */}
           <div
-            className={`h-full ${isDarkMode ? 'bg-[#111]/95 border-gray-800/50' : 'bg-white border-gray-200'} backdrop-blur-md border-l transition-all duration-300 ease-in-out flex shrink-0 shadow-2xl ${
+            className={`h-full max-h-full ${isDarkMode ? 'bg-[#111]/95 border-gray-800/50' : 'bg-white border-gray-200'} backdrop-blur-md border-l transition-all duration-300 ease-in-out flex shrink-0 shadow-2xl ${
               activePanel ? 'w-80' : 'w-0 border-l-0 opacity-0'
             }`}
+            style={{ height: '100%', maxHeight: '100vh' }}
           >
-            <div className="w-80 h-full max-h-full flex flex-col overflow-hidden">
+            <div className="w-80 flex flex-col" style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
               {activePanel === 'workspace' && (
                 <div className={`h-full flex flex-col ${isDarkMode ? 'bg-[#111]/95' : 'bg-white'}`}>
                   {/* Fixed Header */}
@@ -970,7 +1518,7 @@ const App: React.FC = () => {
               )}
 
               {activePanel === 'dashboard' && (
-                <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+                <div className="flex-1 flex flex-col min-h-0" style={{ height: '100%', overflow: 'hidden' }}>
                   <Dashboard 
                     isDarkMode={isDarkMode} 
                     onClose={() => setActivePanel(null)} 
@@ -982,9 +1530,9 @@ const App: React.FC = () => {
               {activePanel === 'files' && (
                 <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#111]/95">
                   {/* Fixed Header */}
-                  <div className="p-6 pb-4 border-b border-gray-800/50 flex items-center justify-between shrink-0">
+                  <div className="p-4 pb-3 border-b border-gray-800/50 flex items-center justify-between shrink-0">
                     <h3 className="text-xs font-bold text-cyan-500/80 uppercase tracking-widest">
-                      Files
+                      Project Files
                     </h3>
                     <button onClick={() => setActivePanel(null)} className="text-gray-600 hover:text-cyan-400 transition-colors" title="Close">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -993,86 +1541,165 @@ const App: React.FC = () => {
                     </button>
                   </div>
                   {/* Scrollable Content */}
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6">
-                    {/* Project Files */}
-                    <div className="mb-4">
-                      <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Project Files</h4>
-                      <div className="space-y-1">
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group" onClick={() => setViewMode(ViewMode.CODE)}>
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">index.html</span>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-4 min-h-0">
+                    {projectFiles.length > 0 ? (
+                      <>
+                        {/* Project File Tree */}
+                        <div className="mb-4">
+                          <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                            {selectedTemplate?.name || 'Current Project'}
+                          </h4>
+                          <div className="space-y-1">
+                            {projectFiles.map((file, idx) => (
+                              <div key={idx}>
+                                <button
+                                  onClick={() => {
+                                    if (file.type === 'file' && file.content) {
+                                      setSelectedFile(file);
+                                      setCurrentApp(prev => prev ? { ...prev, code: file.content || '' } : {
+                                        id: Date.now().toString(),
+                                        name: file.name,
+                                        code: file.content || '',
+                                        prompt: 'Viewing file',
+                                        timestamp: Date.now(),
+                                        history: []
+                                      });
+                                      setViewMode(ViewMode.CODE);
+                                    }
+                                  }}
+                                  className={`w-full text-left px-3 py-2 rounded-lg flex items-center gap-2 transition-all border ${
+                                    selectedFile?.name === file.name 
+                                      ? 'bg-cyan-500/20 border-cyan-500/30 text-cyan-400' 
+                                      : 'bg-black/30 border-gray-800 hover:border-cyan-500/30 text-gray-400 hover:text-cyan-400'
+                                  }`}
+                                >
+                                  {file.type === 'folder' ? (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                    </svg>
+                                  ) : (
+                                    <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${
+                                      file.language === 'python' ? 'text-green-500' :
+                                      file.language === 'javascript' ? 'text-yellow-500' :
+                                      file.language === 'typescript' ? 'text-blue-500' :
+                                      file.language === 'html' ? 'text-orange-500' :
+                                      file.language === 'css' ? 'text-purple-500' :
+                                      'text-gray-500'
+                                    }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                  )}
+                                  <span className="text-xs font-mono">{file.name}</span>
+                                  {file.language && <span className="text-[9px] text-gray-600 ml-auto">{file.language}</span>}
+                                </button>
+                                {/* Show children for folders */}
+                                {file.children && file.children.length > 0 && (
+                                  <div className="ml-4 mt-1 pl-3 border-l border-gray-800/50 space-y-1">
+                                    {file.children.map((child, cidx) => (
+                                      <button
+                                        key={cidx}
+                                        onClick={() => {
+                                          if (child.type === 'file' && child.content) {
+                                            setSelectedFile(child);
+                                            setCurrentApp(prev => prev ? { ...prev, code: child.content || '' } : {
+                                              id: Date.now().toString(),
+                                              name: child.name,
+                                              code: child.content || '',
+                                              prompt: 'Viewing file',
+                                              timestamp: Date.now(),
+                                              history: []
+                                            });
+                                            setViewMode(ViewMode.CODE);
+                                          }
+                                        }}
+                                        className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 transition-all ${
+                                          selectedFile?.name === child.name 
+                                            ? 'bg-cyan-500/20 text-cyan-400' 
+                                            : 'hover:bg-gray-800/50 text-gray-400 hover:text-cyan-400'
+                                        }`}
+                                      >
+                                        {child.type === 'folder' ? (
+                                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-cyan-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                                          </svg>
+                                        ) : (
+                                          <svg xmlns="http://www.w3.org/2000/svg" className={`h-3 w-3 ${
+                                            child.language === 'python' ? 'text-green-500' :
+                                            child.language === 'javascript' ? 'text-yellow-500' :
+                                            child.language === 'typescript' ? 'text-blue-500' :
+                                            child.language === 'html' ? 'text-orange-500' :
+                                            child.language === 'css' ? 'text-purple-500' :
+                                            'text-gray-500'
+                                          }`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                          </svg>
+                                        )}
+                                        <span className="text-[10px] font-mono">{child.name}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         </div>
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group" onClick={() => setViewMode(ViewMode.CODE)}>
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">app.js</span>
-                          </div>
-                        </div>
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group" onClick={() => setViewMode(ViewMode.CODE)}>
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">styles.css</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Folders */}
-                    <div className="mb-4">
-                      <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Folders</h4>
-                      <div className="space-y-1">
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group">
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        
+                        {/* Clear Project Button */}
+                        <button 
+                          onClick={() => {
+                            setProjectFiles([]);
+                            setSelectedFile(null);
+                            setSelectedTemplate(null);
+                          }}
+                          className="w-full py-2 text-[10px] font-bold bg-black/30 text-gray-500 hover:bg-red-500/10 hover:text-red-400 border border-gray-800 hover:border-red-500/30 rounded-lg transition-all uppercase tracking-widest"
+                        >
+                          Clear Project
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {/* Empty State */}
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                          <div className="w-14 h-14 bg-cyan-500/10 border border-cyan-500/30 rounded-lg flex items-center justify-center text-cyan-400 mb-4">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                             </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">components/</span>
                           </div>
-                        </div>
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group">
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">assets/</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Template Files */}
-                    <div className="mb-4">
-                      <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Templates</h4>
-                      <div className="space-y-1">
-                        {PRESET_TEMPLATES.slice(0, 4).map((tpl) => (
-                          <div 
-                            key={tpl.name}
-                            className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group"
-                            onClick={() => {
-                              setPrompt(tpl.prompt);
-                              handleGenerate(tpl.prompt, true);
-                            }}
+                          <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">No Project Files</p>
+                          <p className="text-[10px] text-gray-600 mb-4">Choose a template to get started</p>
+                          <button 
+                            onClick={() => setActivePanel('templates')}
+                            className="px-4 py-2 text-[10px] font-bold bg-gradient-to-r from-cyan-600 to-emerald-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all uppercase tracking-wider"
                           >
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm">{tpl.icon}</span>
-                              <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">{tpl.name}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                            Browse Templates
+                          </button>
+                        </div>
 
-                    <button className="w-full py-2 text-xs font-bold bg-black/30 text-gray-500 hover:bg-cyan-500/10 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-widest">
-                      + Add File
-                    </button>
+                        {/* Quick Templates */}
+                        <div className="mt-6">
+                          <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Quick Start</h4>
+                          <div className="space-y-1">
+                            {PROJECT_TEMPLATES.slice(0, 3).map((tpl) => (
+                              <button 
+                                key={tpl.id}
+                                className="w-full text-left px-3 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all group"
+                                onClick={() => {
+                                  setSelectedTemplate(tpl);
+                                  setProjectFiles(tpl.files);
+                                  setActivePanel('files');
+                                }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm">{tpl.icon}</span>
+                                  <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">{tpl.name}</span>
+                                  <span className="text-[9px] text-gray-600 ml-auto">{tpl.files.length} files</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
@@ -1373,6 +2000,326 @@ const App: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Code Templates Panel */}
+              {activePanel === 'templates' && (
+                <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#111]/95" style={{ height: '100%' }}>
+                  {/* Fixed Header with Search */}
+                  <div className="p-3 border-b border-gray-800/50 shrink-0">
+                    <div className="flex items-center gap-2 px-3 py-2 bg-black/40 border border-gray-800 rounded-lg">
+                      <span className="text-cyan-500">▶</span>
+                      <input 
+                        type="text" 
+                        placeholder="Search templates..." 
+                        className="flex-1 bg-transparent text-xs text-gray-300 placeholder-gray-600 outline-none"
+                      />
+                    </div>
+                    
+                    {/* Category Tabs */}
+                    <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+                      <button className="px-3 py-1.5 text-[10px] font-bold bg-gray-700/50 text-white rounded-md whitespace-nowrap">All</button>
+                      <button className="px-3 py-1.5 text-[10px] font-bold text-gray-400 hover:bg-gray-800/50 rounded-md whitespace-nowrap flex items-center gap-1">
+                        <span>🚀</span> Landing Pages
+                      </button>
+                      <button className="px-3 py-1.5 text-[10px] font-bold text-gray-400 hover:bg-gray-800/50 rounded-md whitespace-nowrap flex items-center gap-1">
+                        <span>💼</span> Business
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Content Area */}
+                  <div className="flex-1 overflow-hidden min-h-0" style={{ minHeight: 0 }}>
+                    {templatePreviewMode === 'list' ? (
+                      /* Templates List */
+                      <div className="h-full overflow-y-auto custom-scrollbar p-3">
+                        <div className="space-y-3">
+                          {PROJECT_TEMPLATES.map((template) => (
+                            <div
+                              key={template.id}
+                              className="p-4 rounded-xl bg-black/30 border border-gray-800 hover:border-cyan-500/30 transition-all"
+                            >
+                              <div className="flex items-start gap-3 mb-3">
+                                <span className="text-3xl">{template.icon}</span>
+                                <div className="flex-1 min-w-0">
+                                  <h4 className="text-sm font-bold text-white">{template.name}</h4>
+                                  <p className="text-[10px] text-gray-500 mt-0.5">{template.description}</p>
+                                </div>
+                              </div>
+                              
+                              {/* Tech Tags */}
+                              <div className="flex flex-wrap gap-1.5 mb-3">
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-gray-800 text-gray-400 rounded">{template.language}</span>
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-gray-800 text-gray-400 rounded">Tailwind CSS</span>
+                                <span className="px-2 py-0.5 text-[9px] font-bold bg-gray-800 text-gray-400 rounded">Responsive</span>
+                              </div>
+                              
+                              {/* Action Buttons */}
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setSelectedTemplate(template);
+                                    setTemplatePreviewMode('preview');
+                                  }}
+                                  className="flex-1 py-2 text-[10px] font-bold text-cyan-400 bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                                >
+                                  View
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    // Get main file content
+                                    let mainContent = '';
+                                    const mainFileName = template.mainFile.split('/').pop() || '';
+                                    const searchFiles = (files: ProjectFile[]): string => {
+                                      for (const f of files) {
+                                        if (f.type === 'file' && f.name === mainFileName && f.content) {
+                                          return f.content;
+                                        }
+                                        if (f.children) {
+                                          const found = searchFiles(f.children);
+                                          if (found) return found;
+                                        }
+                                      }
+                                      return '';
+                                    };
+                                    mainContent = searchFiles(template.files) || template.files[0]?.content || '';
+                                    
+                                    // Create app with the template
+                                    const newApp: GeneratedApp = {
+                                      id: Date.now().toString(),
+                                      name: template.name,
+                                      code: mainContent,
+                                      prompt: `Using ${template.name} template`,
+                                      timestamp: Date.now(),
+                                      history: [],
+                                    };
+                                    setCurrentApp(newApp);
+                                    setProjectFiles(template.files);
+                                    saveHistory([newApp, ...history].slice(0, 10));
+                                    setActivePanel('workspace');
+                                    setViewMode(ViewMode.CODE);
+                                  }}
+                                  className="flex-1 py-2 text-[10px] font-bold text-white bg-gray-700/50 hover:bg-gray-600/50 rounded-lg transition-all uppercase tracking-wider"
+                                >
+                                  Use
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      /* Preview Mode */
+                      <div className="h-full flex flex-col" style={{ height: '100%' }}>
+                        {/* Preview Header */}
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800/50 shrink-0">
+                          <button 
+                            onClick={() => {
+                              setTemplatePreviewMode('list');
+                              setSelectedTemplate(null);
+                            }}
+                            className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-cyan-400 transition-colors"
+                          >
+                            ◀ Back
+                          </button>
+                          <div className="flex gap-2">
+                            <button 
+                              onClick={() => setTemplatePreviewMode('preview')}
+                              className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${templatePreviewMode === 'preview' ? 'text-cyan-400' : 'text-gray-500 hover:text-gray-300'}`}
+                            >
+                              Preview
+                            </button>
+                            <button 
+                              onClick={() => setTemplatePreviewMode('code')}
+                              className={`px-3 py-1 text-[10px] font-bold rounded transition-all ${templatePreviewMode === 'code' ? 'text-cyan-400' : 'text-gray-500 hover:text-gray-300'}`}
+                            >
+                              Code
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {/* Preview/Code Content */}
+                        <div className="flex-1 overflow-y-auto custom-scrollbar" style={{ minHeight: 0 }}>
+                          {templatePreviewMode === 'preview' && selectedTemplate && (
+                            <div className="p-2">
+                              {/* Live Preview iframe */}
+                              <div className="bg-gray-900 rounded-lg overflow-hidden border border-gray-800">
+                                <iframe
+                                  srcDoc={(() => {
+                                    // Find HTML file
+                                    const findHtmlContent = (files: ProjectFile[]): string => {
+                                      for (const f of files) {
+                                        if (f.type === 'file' && f.name.endsWith('.html') && f.content) {
+                                          return f.content;
+                                        }
+                                        if (f.children) {
+                                          const found = findHtmlContent(f.children);
+                                          if (found) return found;
+                                        }
+                                      }
+                                      return '';
+                                    };
+                                    let html = findHtmlContent(selectedTemplate.files);
+                                    
+                                    // If no HTML, generate preview from code
+                                    if (!html) {
+                                      const mainFileName = selectedTemplate.mainFile.split('/').pop() || '';
+                                      const searchFiles = (files: ProjectFile[]): string => {
+                                        for (const f of files) {
+                                          if (f.type === 'file' && f.name === mainFileName && f.content) {
+                                            return f.content;
+                                          }
+                                          if (f.children) {
+                                            const found = searchFiles(f.children);
+                                            if (found) return found;
+                                          }
+                                        }
+                                        return '';
+                                      };
+                                      const code = searchFiles(selectedTemplate.files);
+                                      html = `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{background:#0a0a0f;color:#fff;font-family:system-ui;padding:20px;}</style>
+</head><body>
+<div class="p-6 bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-cyan-500/20">
+  <div class="flex items-center gap-3 mb-4">
+    <span class="text-4xl">${selectedTemplate.icon}</span>
+    <div>
+      <h1 class="text-2xl font-bold text-cyan-400">${selectedTemplate.name}</h1>
+      <p class="text-gray-400 text-sm">${selectedTemplate.description}</p>
+    </div>
+  </div>
+  <div class="bg-black/50 rounded-lg p-4 mt-4">
+    <p class="text-[10px] text-gray-500 uppercase tracking-widest mb-2">Main File: ${selectedTemplate.mainFile}</p>
+    <pre class="text-xs text-gray-300 overflow-auto"><code>${code.slice(0, 500)}${code.length > 500 ? '...' : ''}</code></pre>
+  </div>
+</div>
+</body></html>`;
+                                    }
+                                    return html;
+                                  })()}
+                                  className="w-full bg-white"
+                                  style={{ height: '400px' }}
+                                  sandbox="allow-scripts"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          
+                          {templatePreviewMode === 'code' && selectedTemplate && (
+                            <div className="p-3">
+                              {/* File Tree */}
+                              <div className="mb-4">
+                                <p className="text-[9px] text-gray-500 uppercase tracking-widest mb-2">Project Files</p>
+                                <div className="space-y-1">
+                                  {selectedTemplate.files.map((file, idx) => (
+                                    <div key={idx}>
+                                      <button
+                                        onClick={() => file.type === 'file' && setSelectedFile(file)}
+                                        className={`w-full text-left px-2 py-1.5 rounded flex items-center gap-2 transition-all ${
+                                          selectedFile?.name === file.name 
+                                            ? 'bg-cyan-500/20 text-cyan-400' 
+                                            : 'hover:bg-gray-800/50 text-gray-400'
+                                        }`}
+                                      >
+                                        {file.type === 'folder' ? '📁' : '📄'}
+                                        <span className="text-[11px] font-mono">{file.name}</span>
+                                      </button>
+                                      {file.children && (
+                                        <div className="ml-4 pl-2 border-l border-gray-800">
+                                          {file.children.map((child, cidx) => (
+                                            <button
+                                              key={cidx}
+                                              onClick={() => child.type === 'file' && setSelectedFile(child)}
+                                              className={`w-full text-left px-2 py-1 rounded flex items-center gap-2 transition-all text-[10px] ${
+                                                selectedFile?.name === child.name 
+                                                  ? 'bg-cyan-500/20 text-cyan-400' 
+                                                  : 'hover:bg-gray-800/50 text-gray-400'
+                                              }`}
+                                            >
+                                              {child.type === 'folder' ? '📁' : '📄'}
+                                              <span className="font-mono">{child.name}</span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                              
+                              {/* Code Preview */}
+                              {selectedFile && selectedFile.content && (
+                                <div className="bg-black/50 rounded-lg p-3 border border-gray-800">
+                                  <p className="text-[9px] text-cyan-400 font-bold uppercase tracking-widest mb-2">{selectedFile.name}</p>
+                                  <pre className="text-[10px] text-gray-300 font-mono leading-relaxed whitespace-pre-wrap overflow-x-auto">
+                                    <code>{selectedFile.content}</code>
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Bottom Bar with Template Info & Use Button */}
+                        {selectedTemplate && (
+                          <div className="p-3 border-t border-gray-800/50 bg-black/40 shrink-0">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xl">{selectedTemplate.icon}</span>
+                                <div>
+                                  <p className="text-xs font-bold text-white">{selectedTemplate.name}</p>
+                                  <p className="text-[9px] text-gray-500">{selectedTemplate.description}</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  // Get main file content
+                                  let mainContent = '';
+                                  const mainFileName = selectedTemplate.mainFile.split('/').pop() || '';
+                                  const searchFiles = (files: ProjectFile[]): string => {
+                                    for (const f of files) {
+                                      if (f.type === 'file' && f.name === mainFileName && f.content) {
+                                        return f.content;
+                                      }
+                                      if (f.children) {
+                                        const found = searchFiles(f.children);
+                                        if (found) return found;
+                                      }
+                                    }
+                                    return '';
+                                  };
+                                  mainContent = searchFiles(selectedTemplate.files) || selectedTemplate.files[0]?.content || '';
+                                  
+                                  // Create app with the template
+                                  const newApp: GeneratedApp = {
+                                    id: Date.now().toString(),
+                                    name: selectedTemplate.name,
+                                    code: mainContent,
+                                    prompt: `Using ${selectedTemplate.name} template`,
+                                    timestamp: Date.now(),
+                                    history: [],
+                                  };
+                                  setCurrentApp(newApp);
+                                  setProjectFiles(selectedTemplate.files);
+                                  saveHistory([newApp, ...history].slice(0, 10));
+                                  setActivePanel('workspace');
+                                  setViewMode(ViewMode.CODE);
+                                  setTemplatePreviewMode('list');
+                                }}
+                                className="px-4 py-2 text-[10px] font-bold bg-gray-600 hover:bg-gray-500 text-white rounded-lg transition-all uppercase tracking-wider"
+                              >
+                                Use
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </main>
@@ -1544,6 +2491,20 @@ const App: React.FC = () => {
         onNavigate={handleNavigate}
         isDarkMode={isDarkMode}
       />
+
+      {/* Floating Credits Button */}
+      <button
+        onClick={() => setIsBillingOpen(true)}
+        className="fixed bottom-12 right-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-purple-500/50 hover:scale-105 transition-all duration-300 flex items-center gap-2 z-40"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+        <span className="text-sm font-medium">Credits</span>
+      </button>
+
+      {/* Billing Panel */}
+      <BillingPanel isOpen={isBillingOpen} onClose={() => setIsBillingOpen(false)} userId={userId} />
 
       {/* Neural Link Footer */}
       <footer className={`fixed bottom-0 left-0 right-0 h-8 ${isDarkMode ? 'bg-[#0a0a0a]/95 border-gray-800/50' : 'bg-white/95 border-gray-200'} backdrop-blur-sm border-t flex items-center justify-between px-4 z-50`}>
