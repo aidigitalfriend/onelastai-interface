@@ -2008,16 +2008,234 @@ app.post('/api/billing/add-free-credits', requireAuth, async (req, res) => {
 });
 
 // ============================================================================
+// DASHBOARD API - Comprehensive data for all apps
+// ============================================================================
+
+// Get complete dashboard data
+app.get('/api/dashboard', requireAuth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const thisWeek = new Date();
+    thisWeek.setDate(thisWeek.getDate() - 7);
+    
+    const thisMonth = new Date();
+    thisMonth.setDate(1);
+    thisMonth.setHours(0, 0, 0, 0);
+    
+    const lastMonth = new Date(thisMonth);
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+
+    // Get all data in parallel
+    const [
+      userCredits,
+      todayUsage,
+      weekUsage,
+      monthUsage,
+      lastMonthUsage,
+      appUsage,
+      recentTransactions,
+      recentActivity
+    ] = await Promise.all([
+      // Credit balance
+      prisma.userCredits.findUnique({
+        where: { userId },
+      }),
+      
+      // Today's usage
+      prisma.usageLog.aggregate({
+        where: { userId, createdAt: { gte: today } },
+        _sum: { creditsCost: true, totalTokens: true },
+        _count: true,
+      }),
+      
+      // This week's usage
+      prisma.usageLog.aggregate({
+        where: { userId, createdAt: { gte: thisWeek } },
+        _sum: { creditsCost: true, totalTokens: true },
+        _count: true,
+      }),
+      
+      // This month's usage
+      prisma.usageLog.aggregate({
+        where: { userId, createdAt: { gte: thisMonth } },
+        _sum: { creditsCost: true, totalTokens: true },
+        _count: true,
+      }),
+      
+      // Last month's usage (for comparison)
+      prisma.usageLog.aggregate({
+        where: { userId, createdAt: { gte: lastMonth, lt: thisMonth } },
+        _sum: { creditsCost: true, totalTokens: true },
+        _count: true,
+      }),
+      
+      // Usage by app (endpoint)
+      prisma.usageLog.groupBy({
+        by: ['endpoint'],
+        where: { userId, createdAt: { gte: thisMonth } },
+        _sum: { creditsCost: true, totalTokens: true },
+        _count: true,
+      }),
+      
+      // Recent transactions
+      prisma.creditTransaction.findMany({
+        where: { userCredits: { userId } },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+      
+      // Recent activity
+      prisma.usageLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+        select: {
+          id: true,
+          provider: true,
+          model: true,
+          endpoint: true,
+          creditsCost: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    // Calculate percentages and changes
+    const creditsUsedToday = Number(todayUsage._sum.creditsCost || 0);
+    const creditsUsedWeek = Number(weekUsage._sum.creditsCost || 0);
+    const creditsUsedMonth = Number(monthUsage._sum.creditsCost || 0);
+    const creditsUsedLastMonth = Number(lastMonthUsage._sum.creditsCost || 0);
+    const creditBalance = Number(userCredits?.balance || 0);
+    
+    // Calculate change percentages
+    const weeklyChange = lastMonthUsage._count > 0 
+      ? Math.round(((weekUsage._count - lastMonthUsage._count / 4) / (lastMonthUsage._count / 4)) * 100)
+      : 0;
+
+    // Process app usage - map endpoints to app names
+    const endpointToApp = {
+      'chat': 'neural-chat',
+      'canvas': 'canvas-studio',
+      'image': 'canvas-studio',
+      'audio': 'neural-chat',
+      'code': 'maula-editor',
+    };
+    
+    const appUsageData = {
+      'neural-chat': { credits: 0, requests: 0, percent: 0 },
+      'canvas-studio': { credits: 0, requests: 0, percent: 0 },
+      'maula-editor': { credits: 0, requests: 0, percent: 0 },
+    };
+    
+    let totalAppCredits = 0;
+    for (const usage of appUsage) {
+      const appId = endpointToApp[usage.endpoint] || 'neural-chat';
+      const credits = Number(usage._sum.creditsCost || 0);
+      totalAppCredits += credits;
+      if (appUsageData[appId]) {
+        appUsageData[appId].credits += credits;
+        appUsageData[appId].requests += usage._count || 0;
+      }
+    }
+    
+    // Calculate percentages
+    for (const appId of Object.keys(appUsageData)) {
+      appUsageData[appId].percent = totalAppCredits > 0 
+        ? Math.round((appUsageData[appId].credits / totalAppCredits) * 100)
+        : 0;
+    }
+
+    // Format recent activity
+    const formattedActivity = recentActivity.map(log => {
+      const endpointToApp = {
+        'chat': 'neural-chat',
+        'canvas': 'canvas-studio',
+        'image': 'canvas-studio',
+        'audio': 'neural-chat',
+        'code': 'maula-editor',
+      };
+      const appNames = {
+        'neural-chat': 'Neural Chat',
+        'canvas-studio': 'Canvas Studio',
+        'maula-editor': 'Maula Editor',
+      };
+      const appIcons = {
+        'neural-chat': '🧠',
+        'canvas-studio': '🎨',
+        'maula-editor': '⚡',
+      };
+      const appId = endpointToApp[log.endpoint] || 'neural-chat';
+      return {
+        id: log.id,
+        app: appNames[appId] || appId,
+        icon: appIcons[appId] || '🤖',
+        action: `${log.provider} - ${log.model}`,
+        credits: Number(log.creditsCost || 0),
+        time: log.createdAt,
+      };
+    });
+
+    res.json({
+      success: true,
+      dashboard: {
+        user: {
+          id: req.user.id,
+          email: req.user.email,
+          name: req.user.name,
+        },
+        credits: {
+          balance: creditBalance,
+          lifetimeSpent: Number(userCredits?.lifetimeSpent || 0),
+        },
+        stats: {
+          creditsUsedToday,
+          creditsUsedWeek,
+          creditsUsedMonth,
+          requestsToday: todayUsage._count || 0,
+          requestsWeek: weekUsage._count || 0,
+          requestsMonth: monthUsage._count || 0,
+          weeklyChange,
+        },
+        apps: {
+          active: Object.values(appUsageData).filter(a => a.requests > 0).length || 3,
+          total: 3,
+          usage: appUsageData,
+        },
+        recentActivity: formattedActivity,
+        transactions: recentTransactions.map(t => ({
+          id: t.id,
+          type: t.type,
+          amount: Number(t.amount),
+          description: t.description,
+          createdAt: t.createdAt,
+        })),
+      },
+    });
+  } catch (error) {
+    console.error('[Dashboard] Error:', error);
+    res.status(500).json({ success: false, error: 'Failed to load dashboard' });
+  }
+});
+
+// ============================================================================
 // CHAT ROUTES (placeholder - will be expanded)
 // ============================================================================
 
-// Note: Routes are defined inline above. Separate route files commented out
-// due to missing dependencies on the server.
+// Import and mount canvas routes for /api/canvas endpoints
+import canvasRoutes from './routes/canvas.js';
+app.use('/api/canvas', canvasRoutes);
+
+// Import and mount files routes for /api/files endpoints (PDF extraction, etc.)
+import filesRoutes from './routes/files.js';
+app.use('/api/files', filesRoutes);
+
+// Note: Other routes are defined inline above. Separate route files available:
 // import chatRoutes from './routes/chat.js';
-// import canvasRoutes from './routes/canvas.js';
 // import billingRoutes from './routes/billing.js';
 // app.use('/api/chat', chatRoutes);
-// app.use('/api/canvas', canvasRoutes);
 // app.use('/api/billing', billingRoutes);
 
 // ============================================================================

@@ -12,14 +12,17 @@ const Footer: React.FC = () => {
   }, []);
 
   return (
-    <footer className="bg-[#111]/95 backdrop-blur-md border-t border-gray-800 p-2 text-[10px] flex justify-between items-center z-50 px-4 font-mono">
-      <div className="text-gray-600 tracking-wider">One LastAI Chat</div>
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-1.5">
-          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(34,197,94,0.8)]"></span>
-          <span className="text-green-500/80">Connected</span>
-        </div>
-        <span className="text-cyan-600/80 tabular-nums">{currentTime}</span>
+    <footer className="bg-[#0a0a0a]/95 backdrop-blur-md border-t border-gray-800/50 px-4 py-1.5 text-[10px] flex justify-between items-center z-50 font-mono">
+      <div className="flex items-center gap-2">
+        <img src="/logo.png" alt="" className="w-4 h-4 opacity-60" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        <span className="text-gray-500">One Last AI</span>
+      </div>
+      <div className="flex items-center gap-3">
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+          <span className="text-emerald-500/70">Connected</span>
+        </span>
+        <span className="text-gray-600 tabular-nums">{currentTime}</span>
       </div>
     </footer>
   );

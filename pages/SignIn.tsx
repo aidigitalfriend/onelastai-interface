@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  credits: number;
+}
+
 interface SignInProps {
   onClose: () => void;
-  onSignIn: (email: string) => void;
+  onSignIn: (email: string, user?: User) => void;
   onSwitchToSignUp: () => void;
   onSwitchToResetPassword: () => void;
   showSuccessMessage?: boolean;
@@ -26,11 +33,28 @@ const SignIn: React.FC<SignInProps> = ({ onClose, onSignIn, onSwitchToSignUp, on
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.error || 'Login failed');
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(false);
-      onSignIn(email);
-    }, 1500);
+      onSignIn(data.user.email, data.user);
+    } catch (err) {
+      setError('Network error. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   return (

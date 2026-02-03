@@ -84,8 +84,13 @@ const PROVIDERS = {
   },
 };
 
-// Credit multiplier (1 credit = $1 worth of tokens)
-const CREDIT_MULTIPLIER = 1.0;
+// Credit multiplier - adds markup to actual API cost
+// 1 credit = $0.10 (so we charge 10 credits per $1 of API cost, which is ~10x markup)
+// This means users pay roughly 10x the actual API cost
+const CREDIT_MULTIPLIER = 10.0;
+
+// Minimum charge per request (to cover overhead costs)
+const MIN_COST_PER_REQUEST = 0.01; // 0.01 credits minimum
 
 // ============================================================================
 // PROVIDER CLIENTS
@@ -171,18 +176,33 @@ export class AIService {
 
   /**
    * Calculate credit cost for a message
+   * Cost = (input_tokens/1000 * input_cost + output_tokens/1000 * output_cost) * MULTIPLIER
+   * Minimum cost applies to prevent free usage
    */
   static calculateCost(provider, model, inputTokens, outputTokens) {
     const providerConfig = PROVIDERS[provider];
-    if (!providerConfig) return 0;
+    if (!providerConfig) {
+      console.log(`[Credit] Unknown provider: ${provider}, using minimum cost`);
+      return MIN_COST_PER_REQUEST;
+    }
     
     const modelConfig = providerConfig.models[model];
-    if (!modelConfig) return 0;
+    if (!modelConfig) {
+      console.log(`[Credit] Unknown model: ${model} for ${provider}, using minimum cost`);
+      return MIN_COST_PER_REQUEST;
+    }
     
+    // Calculate raw API cost
     const inputCost = (inputTokens / 1000) * modelConfig.inputCost;
     const outputCost = (outputTokens / 1000) * modelConfig.outputCost;
+    const rawCost = inputCost + outputCost;
     
-    return (inputCost + outputCost) * CREDIT_MULTIPLIER;
+    // Apply multiplier and ensure minimum
+    const finalCost = Math.max(rawCost * CREDIT_MULTIPLIER, MIN_COST_PER_REQUEST);
+    
+    console.log(`[Credit] ${provider}/${model}: ${inputTokens} in + ${outputTokens} out = $${rawCost.toFixed(6)} * ${CREDIT_MULTIPLIER}x = ${finalCost.toFixed(4)} credits`);
+    
+    return finalCost;
   }
 
   /**
@@ -196,48 +216,81 @@ export class AIService {
   /**
    * Deduct credits after usage
    */
-  async deductCredits(cost, provider, model, inputTokens, outputTokens, sessionId = null) {
-    if (cost <= 0) return;
+  async deductCredits(cost, provider, model, inputTokens, outputTokens, sessionId = null, endpoint = 'chat') {
+    if (cost <= 0) {
+      console.log(`[Credit] Skipping deduction - cost is ${cost}`);
+      return 0;
+    }
 
-    await prisma.$transaction(async (tx) => {
-      // Update balance
-      const updatedCredits = await tx.userCredits.update({
-        where: { userId: this.user.id },
-        data: {
-          balance: { decrement: cost },
-          lifetimeSpent: { increment: cost },
-        },
+    // Skip for demo users
+    if (this.user.id === 'demo-user') {
+      console.log(`[Credit] Skipping deduction for demo user`);
+      return cost;
+    }
+
+    try {
+      const result = await prisma.$transaction(async (tx) => {
+        // Get current balance first
+        const currentCredits = await tx.userCredits.findUnique({
+          where: { userId: this.user.id },
+        });
+        
+        if (!currentCredits) {
+          console.log(`[Credit] No credits record for user ${this.user.id}`);
+          return null;
+        }
+
+        const balanceBefore = Number(currentCredits.balance);
+        
+        // Update balance
+        const updatedCredits = await tx.userCredits.update({
+          where: { userId: this.user.id },
+          data: {
+            balance: { decrement: cost },
+            lifetimeSpent: { increment: cost },
+          },
+        });
+
+        const balanceAfter = Number(updatedCredits.balance);
+
+        // Record transaction
+        await tx.creditTransaction.create({
+          data: {
+            userCreditsId: updatedCredits.id,
+            type: 'USAGE',
+            amount: -cost,
+            balanceAfter: balanceAfter,
+            description: `${provider}/${model} - ${inputTokens + outputTokens} tokens (${endpoint})`,
+            referenceId: sessionId,
+            referenceType: endpoint,
+          },
+        });
+
+        // Log usage
+        await tx.usageLog.create({
+          data: {
+            userId: this.user.id,
+            sessionId,
+            provider,
+            model,
+            endpoint: endpoint,
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            creditsCost: cost,
+          },
+        });
+
+        console.log(`[Credit] Deducted ${cost.toFixed(4)} credits from user ${this.user.id}: ${balanceBefore.toFixed(2)} -> ${balanceAfter.toFixed(2)}`);
+        
+        return { balanceBefore, balanceAfter, cost };
       });
-
-      // Record transaction
-      await tx.creditTransaction.create({
-        data: {
-          userCreditsId: updatedCredits.id,
-          type: 'USAGE',
-          amount: -cost,
-          balanceAfter: updatedCredits.balance,
-          description: `${provider}/${model} - ${inputTokens + outputTokens} tokens`,
-          referenceId: sessionId,
-          referenceType: 'chat',
-        },
-      });
-
-      // Log usage
-      await tx.usageLog.create({
-        data: {
-          userId: this.user.id,
-          sessionId,
-          provider,
-          model,
-          inputTokens,
-          outputTokens,
-          totalTokens: inputTokens + outputTokens,
-          creditsCost: cost,
-        },
-      });
-    });
-
-    return cost;
+      
+      return cost;
+    } catch (error) {
+      console.error(`[Credit] Error deducting credits:`, error);
+      throw error;
+    }
   }
 
   /**
@@ -292,7 +345,7 @@ export class AIService {
     const cost = AIService.calculateCost('anthropic', model, inputTokens, outputTokens);
     const latency = Date.now() - startTime;
 
-    await this.deductCredits(cost, 'anthropic', model, inputTokens, outputTokens, options.sessionId);
+    await this.deductCredits(cost, 'anthropic', model, inputTokens, outputTokens, options.sessionId, options.endpoint || 'chat');
 
     return {
       content: response.content[0].text,
@@ -357,7 +410,7 @@ export class AIService {
     const cost = AIService.calculateCost('openai', model, inputTokens, outputTokens);
     const latency = Date.now() - startTime;
 
-    await this.deductCredits(cost, 'openai', model, inputTokens, outputTokens, options.sessionId);
+    await this.deductCredits(cost, 'openai', model, inputTokens, outputTokens, options.sessionId, options.endpoint || 'chat');
 
     return {
       content: response.choices[0].message.content,
@@ -424,7 +477,7 @@ export class AIService {
     const cost = AIService.calculateCost('gemini', model, inputTokens, outputTokens);
     const latency = Date.now() - startTime;
 
-    await this.deductCredits(cost, 'gemini', model, inputTokens, outputTokens, options.sessionId);
+    await this.deductCredits(cost, 'gemini', model, inputTokens, outputTokens, options.sessionId, options.endpoint || 'chat');
 
     return {
       content: text,
@@ -460,7 +513,7 @@ export class AIService {
     const cost = AIService.calculateCost(providerName, model, inputTokens, outputTokens);
     const latency = Date.now() - startTime;
 
-    await this.deductCredits(cost, providerName, model, inputTokens, outputTokens, options.sessionId);
+    await this.deductCredits(cost, providerName, model, inputTokens, outputTokens, options.sessionId, options.endpoint || 'chat');
 
     return {
       content: response.choices[0].message.content,
@@ -605,7 +658,7 @@ export class AIService {
     const cost = AIService.calculateCost(provider, model, inputTokens, outputTokens);
     const latency = Date.now() - startTime;
 
-    await this.deductCredits(cost, provider, model, inputTokens, outputTokens, options.sessionId);
+    await this.deductCredits(cost, provider, model, inputTokens, outputTokens, options.sessionId, options.endpoint || 'chat');
 
     yield {
       type: 'done',

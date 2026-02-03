@@ -65,6 +65,19 @@ const CREDIT_PACKAGES = [
   { credits: 1500, price: 99.99, popular: false, savings: '35% off' },
 ];
 
+// Mock usage data for Requests and Usage tabs
+const MOCK_USAGE: UsageRecord[] = [
+  { id: '1', type: 'chat', model: 'Power Mode', provider: 'One Last AI', credits: 2, tokens: { input: 450, output: 1200 }, timestamp: Date.now() - 300000, description: 'Chat conversation', duration: 2100, status: 'completed' },
+  { id: '2', type: 'chat', model: 'Ultra Fast', provider: 'Maula AI', credits: 3, tokens: { input: 680, output: 1850 }, timestamp: Date.now() - 900000, description: 'Code assistance', duration: 3400, status: 'completed' },
+  { id: '3', type: 'chat', model: 'Deep Dive', provider: 'Researcher', credits: 4, tokens: { input: 1100, output: 2800 }, timestamp: Date.now() - 1800000, description: 'Research query', duration: 4800, status: 'completed' },
+];
+
+// Mock billing data for Billing tab
+const MOCK_BILLING: BillingRecord[] = [
+  { id: 'b1', amount: 9.99, credits: 100, status: 'completed', date: Date.now() - 604800000, method: 'Card •••• 4242' },
+  { id: 'b2', amount: 29.99, credits: 350, status: 'completed', date: Date.now() - 2592000000, method: 'Card •••• 4242' },
+];
+
 type DashboardTab = 'providers' | 'requests' | 'usage' | 'billing' | 'credits';
 
 const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, onModuleSelect, currentSettings, onSettingsChange }) => {

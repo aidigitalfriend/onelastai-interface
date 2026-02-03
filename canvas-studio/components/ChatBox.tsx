@@ -24,7 +24,18 @@ interface ChatBoxProps {
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (modelId: string) => void;
+  selectedLanguage?: string;
+  onLanguageChange?: (language: string) => void;
 }
+
+const LANGUAGE_OPTIONS = [
+  { id: 'auto', name: 'Auto-Detect', icon: '🔍' },
+  { id: 'html', name: 'HTML', icon: '🌐' },
+  { id: 'react', name: 'React/TSX', icon: '⚛️' },
+  { id: 'typescript', name: 'TypeScript', icon: '🔷' },
+  { id: 'javascript', name: 'JavaScript', icon: '📜' },
+  { id: 'python', name: 'Python', icon: '🐍' },
+];
 
 const ChatBox: React.FC<ChatBoxProps> = ({ 
   messages, 
@@ -33,7 +44,9 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   onNewChat,
   models = [],
   selectedModel = '',
-  onModelChange
+  onModelChange,
+  selectedLanguage = 'auto',
+  onLanguageChange
 }) => {
   const [input, setInput] = useState('');
   const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
@@ -227,15 +240,40 @@ const ChatBox: React.FC<ChatBoxProps> = ({
                   ))}
                 </select>
               </div>
+
+              {/* Language Dropdown */}
+              <div className="flex-1">
+                <label className="block text-[9px] font-bold text-gray-600 uppercase tracking-widest mb-1.5">Language</label>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => onLanguageChange?.(e.target.value)}
+                  title="Select Output Language"
+                  className="w-full bg-black/60 border border-gray-700 hover:border-purple-500/40 text-xs text-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-purple-500/60 focus:ring-1 focus:ring-purple-500/20 cursor-pointer transition-all"
+                >
+                  {LANGUAGE_OPTIONS.map(lang => (
+                    <option key={lang.id} value={lang.id} className="bg-[#111] text-gray-300">
+                      {lang.icon} {lang.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             
-            {/* Selected Model Badge */}
+            {/* Selected Model & Language Badge */}
             {selectedModel && (
-              <div className="mt-2 flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className="text-[10px] text-gray-500">
-                  Active: <span className="text-emerald-400 font-medium">{models.find(m => m.id === selectedModel)?.name}</span>
-                </span>
+              <div className="mt-2 flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
+                  <span className="text-[10px] text-gray-500">
+                    Model: <span className="text-emerald-400 font-medium">{models.find(m => m.id === selectedModel)?.name}</span>
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-purple-500"></div>
+                  <span className="text-[10px] text-gray-500">
+                    Output: <span className="text-purple-400 font-medium">{LANGUAGE_OPTIONS.find(l => l.id === selectedLanguage)?.name || 'Auto'}</span>
+                  </span>
+                </div>
               </div>
             )}
           </div>

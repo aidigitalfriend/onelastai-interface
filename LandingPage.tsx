@@ -22,6 +22,13 @@ interface LandingPageProps {
 type AuthModal = 'none' | 'signin' | 'signup' | 'reset-password' | 'new-password';
 type PageView = 'landing' | 'dashboard';
 
+interface User {
+  id: string;
+  email: string;
+  name: string;
+  credits: number;
+}
+
 const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
   const [scrollY, setScrollY] = useState(0);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -30,7 +37,37 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
   const [authModal, setAuthModal] = useState<AuthModal>('none');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userEmail, setUserEmail] = useState('');
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [signUpSuccess, setSignUpSuccess] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+  // Check for existing session on page load
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/me', {
+          credentials: 'include',
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.user) {
+            setCurrentUser(data.user);
+            setUserEmail(data.user.email);
+            setIsLoggedIn(true);
+            setCurrentPage('dashboard');
+          }
+        }
+      } catch (err) {
+        // Session check failed, user remains logged out
+        console.log('No active session');
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
@@ -38,8 +75,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSignIn = (email: string) => {
+  const handleSignIn = (email: string, user?: User) => {
     setUserEmail(email);
+    if (user) {
+      setCurrentUser(user);
+    }
     setIsLoggedIn(true);
     setAuthModal('none');
     setCurrentPage('dashboard'); // Redirect to dashboard after sign in
@@ -51,9 +91,18 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
     setAuthModal('signin');
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (err) {
+      // Logout locally even if API fails
+    }
     setIsLoggedIn(false);
     setUserEmail('');
+    setCurrentUser(null);
     setCurrentPage('landing');
   };
 
@@ -731,9 +780,96 @@ interface FullPageDashboardProps {
   onBackToHome?: () => void;
 }
 
+interface DashboardData {
+  user: { id: string; email: string; name: string };
+  credits: { balance: number; lifetimeSpent: number };
+  stats: {
+    creditsUsedToday: number;
+    creditsUsedWeek: number;
+    creditsUsedMonth: number;
+    requestsToday: number;
+    requestsWeek: number;
+    requestsMonth: number;
+    weeklyChange: number;
+  };
+  apps: {
+    active: number;
+    total: number;
+    usage: {
+      'neural-chat': { credits: number; requests: number; percent: number };
+      'canvas-studio': { credits: number; requests: number; percent: number };
+      'maula-editor': { credits: number; requests: number; percent: number };
+    };
+  };
+  recentActivity: Array<{ id: string; app: string; icon: string; action: string; credits: number; time: Date }>;
+  transactions: Array<{ id: string; type: string; amount: number; description: string; createdAt: Date }>;
+}
+
+const API_BASE = 'https://maula.onelastai.co/api';
+
 const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user@example.com', onLogout, onBackToHome }) => {
   const [activeTab, setActiveTab] = useState<'overview' | 'apps' | 'credits' | 'usage' | 'billing' | 'security' | 'settings'>('overview');
-  const creditBalance = 247;
+  const [loading, setLoading] = useState(true);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  
+  // Fetch dashboard data on mount
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/dashboard`, { credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setDashboardData(data.dashboard);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchDashboard();
+  }, []);
+
+  // Handle credit purchase
+  const handleBuyCredits = async (packageId: string, appId: string = 'neural-chat') => {
+    setCheckoutLoading(packageId);
+    try {
+      const res = await fetch(`${API_BASE}/billing/checkout/${appId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ packageId }),
+      });
+      const data = await res.json();
+      if (data.success && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || 'Failed to start checkout');
+      }
+    } catch (error) {
+      alert('Failed to start checkout');
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
+
+  // Format time ago
+  const timeAgo = (date: Date) => {
+    const now = new Date();
+    const diff = now.getTime() - new Date(date).getTime();
+    const minutes = Math.floor(diff / 60000);
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
+    const days = Math.floor(hours / 24);
+    return `${days} day${days > 1 ? 's' : ''} ago`;
+  };
+
+  const creditBalance = dashboardData?.credits.balance || 0;
   
   const tabs = [
     { id: 'overview', label: 'Overview', icon: '📊' },
@@ -745,11 +881,10 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
     { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
 
-  const recentActivity = [
-    { app: 'Neural Chat', action: 'Chat conversation', credits: 5, time: '2 min ago', icon: '🧠' },
-    { app: 'Canvas Studio', action: 'Generated landing page', credits: 12, time: '15 min ago', icon: '🎨' },
-    { app: 'Maula Editor', action: 'Code completion', credits: 3, time: '1 hour ago', icon: '⚡' },
-    { app: 'Neural Chat', action: 'Voice conversation', credits: 8, time: '3 hours ago', icon: '🧠' },
+  const creditPackages = [
+    { id: 'nc-50', credits: 50, price: 5, savings: null, popular: false },
+    { id: 'nc-350', credits: 350, price: 30, savings: '15%', popular: true },
+    { id: 'nc-1500', credits: 1500, price: 100, savings: '35%', popular: false },
   ];
 
   return (
@@ -832,7 +967,11 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
         </div>
 
         {/* Tab Content */}
-        {activeTab === 'overview' && (
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin w-10 h-10 border-2 border-green-500 border-t-transparent rounded-full" />
+          </div>
+        ) : activeTab === 'overview' && (
           <div className="space-y-8">
             {/* Welcome Banner */}
             <div className="p-8 rounded-3xl bg-gradient-to-r from-green-500/10 via-cyan-500/5 to-purple-500/10 border border-green-500/20 relative overflow-hidden">
@@ -846,10 +985,10 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             {/* Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: 'Credits Used Today', value: '28', icon: '⚡', color: 'cyan', change: '+12%' },
-                { label: 'Total Requests', value: '156', icon: '📊', color: 'purple', change: '+23%' },
-                { label: 'Apps Used', value: '3', icon: '🚀', color: 'pink', change: 'All Active' },
-                { label: 'Credits Remaining', value: creditBalance.toString(), icon: '🪙', color: 'green', change: '49%' },
+                { label: 'Credits Used Today', value: Math.round(dashboardData?.stats.creditsUsedToday || 0).toString(), icon: '⚡', color: 'cyan', change: `${dashboardData?.stats.requestsToday || 0} requests` },
+                { label: 'Total Requests', value: (dashboardData?.stats.requestsMonth || 0).toString(), icon: '📊', color: 'purple', change: `${dashboardData?.stats.weeklyChange > 0 ? '+' : ''}${dashboardData?.stats.weeklyChange || 0}% this week` },
+                { label: 'Apps Used', value: (dashboardData?.apps.active || 3).toString(), icon: '🚀', color: 'pink', change: 'All Active' },
+                { label: 'Credits Remaining', value: Math.round(creditBalance).toString(), icon: '🪙', color: 'green', change: creditBalance > 0 ? 'Available' : 'Add credits' },
               ].map((stat, i) => (
                 <div key={i} className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group">
                   <div className="flex items-center gap-3 mb-3">
@@ -891,21 +1030,28 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             <div>
               <h3 className="text-xl font-bold mb-4 text-white">Recent Activity</h3>
               <div className="space-y-3">
-                {recentActivity.map((activity, i) => (
-                  <div key={i} className="flex items-center gap-4 p-5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all">
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center text-2xl">
-                      {activity.icon}
+                {(dashboardData?.recentActivity && dashboardData.recentActivity.length > 0) ? (
+                  dashboardData.recentActivity.map((activity, i) => (
+                    <div key={activity.id || i} className="flex items-center gap-4 p-5 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all">
+                      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center text-2xl">
+                        {activity.icon}
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-white text-lg">{activity.action}</div>
+                        <div className="text-sm text-gray-500">{activity.app} • {timeAgo(activity.time)}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-cyan-400">-{Math.round(activity.credits)}</div>
+                        <div className="text-xs text-gray-500">credits</div>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <div className="font-medium text-white text-lg">{activity.action}</div>
-                      <div className="text-sm text-gray-500">{activity.app} • {activity.time}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-cyan-400">-{activity.credits}</div>
-                      <div className="text-xs text-gray-500">credits</div>
-                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-gray-500">
+                    <div className="text-4xl mb-3">🚀</div>
+                    <p>No activity yet. Start using an app to see your usage here!</p>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           </div>
@@ -944,12 +1090,12 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Current Balance</div>
-                  <div className="text-5xl font-black text-green-400">{creditBalance}</div>
+                  <div className="text-5xl font-black text-green-400">{Math.round(creditBalance)}</div>
                 </div>
                 <span className="text-7xl">🪙</span>
               </div>
               <div className="h-3 rounded-full bg-gray-800 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full" style={{ width: '49%' }} />
+                <div className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full transition-all" style={{ width: `${Math.min(creditBalance / 5, 100)}%` }} />
               </div>
               <div className="flex justify-between mt-2 text-sm text-gray-500">
                 <span>0</span>
@@ -960,12 +1106,13 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             <div>
               <h3 className="text-2xl font-bold mb-6 text-white">Buy Credits</h3>
               <div className="grid md:grid-cols-3 gap-6">
-                {[
-                  { credits: 50, price: 5, savings: null, popular: false },
-                  { credits: 350, price: 30, savings: '15%', popular: true },
-                  { credits: 1500, price: 100, savings: '35%', popular: false },
-                ].map((pkg, i) => (
-                  <button key={i} className={`p-8 rounded-2xl border transition-all text-left relative ${pkg.popular ? 'bg-gradient-to-br from-green-500/10 to-cyan-500/10 border-green-500/30 scale-105' : 'bg-white/[0.02] border-white/10 hover:border-white/20'}`}>
+                {creditPackages.map((pkg, i) => (
+                  <button 
+                    key={pkg.id}
+                    onClick={() => handleBuyCredits(pkg.id)}
+                    disabled={checkoutLoading !== null}
+                    className={`p-8 rounded-2xl border transition-all text-left relative ${pkg.popular ? 'bg-gradient-to-br from-green-500/10 to-cyan-500/10 border-green-500/30 scale-105' : 'bg-white/[0.02] border-white/10 hover:border-white/20'} ${checkoutLoading === pkg.id ? 'opacity-75' : ''}`}
+                  >
                     {pkg.popular && (
                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-green-500 to-cyan-500 rounded-full text-xs font-bold">
                         MOST POPULAR
@@ -977,7 +1124,10 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
                     </div>
                     {pkg.savings && <span className="inline-block px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold mb-4">{pkg.savings} OFF</span>}
                     <div className="text-4xl font-black text-cyan-400 mb-2">${pkg.price}</div>
-                    <div className="text-sm text-gray-500">${(pkg.price / pkg.credits).toFixed(2)} per credit</div>
+                    <div className="text-sm text-gray-500 mb-4">${(pkg.price / pkg.credits).toFixed(2)} per credit</div>
+                    <div className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-cyan-500 text-center font-bold text-sm hover:shadow-lg hover:shadow-green-500/25 transition-all">
+                      {checkoutLoading === pkg.id ? 'Processing...' : 'Buy Now'}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -990,13 +1140,13 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             <div className="grid md:grid-cols-2 gap-6">
               <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10">
                 <h4 className="text-sm text-gray-500 uppercase tracking-wider mb-4">This Week</h4>
-                <div className="text-4xl font-black text-white mb-2">156</div>
-                <div className="text-lg text-green-400">+23% from last week</div>
+                <div className="text-4xl font-black text-white mb-2">{dashboardData?.stats.requestsWeek || 0}</div>
+                <div className="text-lg text-green-400">{dashboardData?.stats.weeklyChange >= 0 ? '+' : ''}{dashboardData?.stats.weeklyChange || 0}% from last week</div>
               </div>
               <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/10">
-                <h4 className="text-sm text-gray-500 uppercase tracking-wider mb-4">Credits Used</h4>
-                <div className="text-4xl font-black text-white mb-2">89</div>
-                <div className="text-lg text-cyan-400">Avg 12.7 per day</div>
+                <h4 className="text-sm text-gray-500 uppercase tracking-wider mb-4">Credits Used This Month</h4>
+                <div className="text-4xl font-black text-white mb-2">{Math.round(dashboardData?.stats.creditsUsedMonth || 0)}</div>
+                <div className="text-lg text-cyan-400">Avg {((dashboardData?.stats.creditsUsedMonth || 0) / 30).toFixed(1)} per day</div>
               </div>
             </div>
             
@@ -1004,20 +1154,27 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
               <h4 className="text-xl font-bold mb-6 text-white">Usage by App</h4>
               <div className="space-y-6">
                 {[
-                  { name: 'Neural Chat', percent: 45, color: 'purple' },
-                  { name: 'Canvas Studio', percent: 35, color: 'cyan' },
-                  { name: 'Maula Editor', percent: 20, color: 'green' },
-                ].map((app, i) => (
-                  <div key={i}>
-                    <div className="flex justify-between mb-2">
-                      <span className="text-white font-medium">{app.name}</span>
-                      <span className="text-gray-400">{app.percent}%</span>
+                  { name: 'Neural Chat', key: 'neural-chat' as const, color: 'purple', icon: '🧠' },
+                  { name: 'Canvas Studio', key: 'canvas-studio' as const, color: 'cyan', icon: '🎨' },
+                  { name: 'Maula Editor', key: 'maula-editor' as const, color: 'green', icon: '⚡' },
+                ].map((app, i) => {
+                  const usage = dashboardData?.apps.usage[app.key];
+                  const percent = usage?.percent || 0;
+                  return (
+                    <div key={i}>
+                      <div className="flex justify-between mb-2">
+                        <span className="text-white font-medium flex items-center gap-2">
+                          <span>{app.icon}</span>
+                          {app.name}
+                        </span>
+                        <span className="text-gray-400">{percent}% ({usage?.requests || 0} requests)</span>
+                      </div>
+                      <div className="h-3 rounded-full bg-gray-800 overflow-hidden">
+                        <div className={`h-full bg-${app.color}-500 rounded-full transition-all`} style={{ width: `${percent}%` }} />
+                      </div>
                     </div>
-                    <div className="h-3 rounded-full bg-gray-800 overflow-hidden">
-                      <div className={`h-full bg-${app.color}-500 rounded-full transition-all`} style={{ width: `${app.percent}%` }} />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1028,54 +1185,50 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             <div>
               <h3 className="text-2xl font-bold mb-6 text-white">Payment Methods</h3>
               <div className="space-y-4">
-                <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-10 rounded-lg bg-gradient-to-r from-blue-600 to-blue-400 flex items-center justify-center text-white font-bold">
-                      VISA
-                    </div>
-                    <div>
-                      <div className="text-white font-medium">•••• •••• •••• 4242</div>
-                      <div className="text-sm text-gray-500">Expires 12/27</div>
-                    </div>
+                <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 text-center">
+                  <p className="text-gray-400 mb-4">Payments are processed securely through Stripe</p>
+                  <div className="flex items-center justify-center gap-4">
+                    <span className="px-4 py-2 rounded-lg bg-blue-600/20 text-blue-400 font-bold">VISA</span>
+                    <span className="px-4 py-2 rounded-lg bg-red-600/20 text-red-400 font-bold">Mastercard</span>
+                    <span className="px-4 py-2 rounded-lg bg-purple-600/20 text-purple-400 font-bold">AMEX</span>
                   </div>
-                  <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-medium">Default</span>
                 </div>
-                <button className="w-full p-6 rounded-2xl border border-dashed border-white/20 text-gray-500 hover:text-white hover:border-green-500/50 transition-all flex items-center justify-center gap-2">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  Add Payment Method
-                </button>
               </div>
             </div>
 
             <div>
-              <h3 className="text-2xl font-bold mb-6 text-white">Billing History</h3>
+              <h3 className="text-2xl font-bold mb-6 text-white">Transaction History</h3>
               <div className="rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden">
                 <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/10">
                       <th className="text-left p-5 text-sm font-medium text-gray-500">Date</th>
                       <th className="text-left p-5 text-sm font-medium text-gray-500">Description</th>
-                      <th className="text-left p-5 text-sm font-medium text-gray-500">Amount</th>
-                      <th className="text-left p-5 text-sm font-medium text-gray-500">Status</th>
+                      <th className="text-left p-5 text-sm font-medium text-gray-500">Credits</th>
+                      <th className="text-left p-5 text-sm font-medium text-gray-500">Type</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      { date: 'Jan 15, 2026', desc: '350 Credits - Pro Package', amount: '$30.00', status: 'Paid' },
-                      { date: 'Dec 20, 2025', desc: '50 Credits - Starter Package', amount: '$5.00', status: 'Paid' },
-                      { date: 'Dec 01, 2025', desc: '350 Credits - Pro Package', amount: '$30.00', status: 'Paid' },
-                    ].map((item, i) => (
-                      <tr key={i} className="border-b border-white/5 last:border-0">
-                        <td className="p-5 text-gray-400">{item.date}</td>
-                        <td className="p-5 text-white">{item.desc}</td>
-                        <td className="p-5 text-cyan-400 font-medium">{item.amount}</td>
-                        <td className="p-5">
-                          <span className="px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm">{item.status}</span>
+                    {(dashboardData?.transactions && dashboardData.transactions.length > 0) ? (
+                      dashboardData.transactions.map((item, i) => (
+                        <tr key={item.id || i} className="border-b border-white/5 last:border-0">
+                          <td className="p-5 text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</td>
+                          <td className="p-5 text-white">{item.description || `${item.type} - ${Math.round(item.amount)} credits`}</td>
+                          <td className="p-5 text-cyan-400 font-medium">{item.type === 'USAGE' ? '-' : '+'}{Math.round(item.amount)}</td>
+                          <td className="p-5">
+                            <span className={`px-3 py-1 rounded-full text-sm ${item.type === 'PURCHASE' ? 'bg-green-500/20 text-green-400' : item.type === 'BONUS' ? 'bg-purple-500/20 text-purple-400' : 'bg-cyan-500/20 text-cyan-400'}`}>
+                              {item.type}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-gray-500">
+                          No transactions yet. Buy credits to get started!
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>

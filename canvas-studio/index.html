@@ -98,6 +98,27 @@
     .border-flow {
       animation: border-flow 3s ease-in-out infinite;
     }
+
+    /* Fun commentary animations for generation */
+    @keyframes fadeSlide {
+      0%, 10% { opacity: 0; transform: translateY(10px); }
+      20%, 80% { opacity: 1; transform: translateY(0); }
+      90%, 100% { opacity: 0; transform: translateY(-10px); }
+    }
+    
+    @keyframes bounceDot {
+      0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
   </style>
 <script type="importmap">
 {
@@ -109,7 +130,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
 <body class="bg-[#0A0A0A] text-gray-300 matrix-bg">
   <div id="root"></div>

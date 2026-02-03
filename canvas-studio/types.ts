@@ -31,6 +31,7 @@ export interface GeneratedApp {
   id: string;
   name: string;
   code: string;
+  language?: string; // Detected code language (html, react, typescript, javascript, python, etc.)
   prompt: string;
   timestamp: number;
   history: ChatMessage[];

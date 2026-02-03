@@ -173,3 +173,172 @@ export const getCredits = async (): Promise<number> => {
     return 0;
   }
 };
+
+// Streaming chat API
+export interface StreamCallbacks {
+  onText: (text: string) => void;
+  onDone: (data: { tokens: number; credits: number; balance: number }) => void;
+  onError: (error: string) => void;
+  onSession?: (sessionId: string) => void;
+}
+
+export const streamChat = async (
+  prompt: string,
+  settings: SettingsState,
+  callbacks: StreamCallbacks,
+  image?: { data: string; name: string; mimeType: string },
+  abortSignal?: AbortSignal
+): Promise<void> => {
+  try {
+    const { provider, model } = mapProviderModel(settings.provider, settings.model);
+
+    const requestBody: any = {
+      message: prompt,
+      provider,
+      model,
+      systemPrompt: settings.customPrompt,
+    };
+
+    // Include image data if present (for vision models)
+    if (image) {
+      requestBody.image = {
+        data: image.data,
+        mimeType: image.mimeType
+      };
+    }
+
+    const response = await fetch(`${API_BASE}/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify(requestBody),
+      signal: abortSignal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        callbacks.onError('auth');
+        return;
+      }
+      if (response.status === 402) {
+        callbacks.onError('credits');
+        return;
+      }
+      callbacks.onError('api');
+      return;
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+
+    if (!reader) {
+      callbacks.onError('No response body');
+      return;
+    }
+
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) break;
+      
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Process complete SSE messages
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            
+            switch (data.type) {
+              case 'text':
+                callbacks.onText(data.content);
+                break;
+              case 'done':
+                callbacks.onDone({
+                  tokens: data.tokens,
+                  credits: data.credits,
+                  balance: data.balance,
+                });
+                break;
+              case 'session':
+                callbacks.onSession?.(data.sessionId);
+                break;
+              case 'error':
+                callbacks.onError(data.error);
+                break;
+            }
+          } catch (e) {
+            // Ignore JSON parse errors for incomplete data
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      // User cancelled - not an error
+      return;
+    }
+    console.error('[API Service] Stream error:', error);
+    callbacks.onError(error.message || 'Network error');
+  }
+};
+
+// Extract text from files (PDF, DOCX, etc.)
+export interface FileExtractionResult {
+  success: boolean;
+  text?: string;
+  metadata?: {
+    pages?: number;
+    info?: any;
+  };
+  fileName?: string;
+  type?: string;
+  error?: string;
+}
+
+export const extractFileText = async (
+  fileData: string,
+  fileName: string,
+  mimeType: string
+): Promise<FileExtractionResult> => {
+  try {
+    const response = await fetch(`${API_BASE}/files/extract`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({ fileData, fileName, mimeType }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.error || 'Failed to extract file content',
+      };
+    }
+
+    return {
+      success: true,
+      text: data.text,
+      metadata: data.metadata,
+      fileName: data.fileName,
+      type: data.type,
+    };
+  } catch (error: any) {
+    console.error('[API Service] File extraction error:', error);
+    return {
+      success: false,
+      error: error.message || 'Network error during file extraction',
+    };
+  }
+};

@@ -1,6 +1,16 @@
 
 export type Sender = 'YOU' | 'AGENT' | 'SYSTEM';
 
+export interface FileAttachment {
+  id: string;
+  name: string;
+  type: string; // MIME type
+  size: number;
+  content?: string; // For text files - actual content
+  dataUrl?: string; // For images/binary - base64 data URL
+  downloadUrl?: string; // For agent-created files
+}
+
 export interface Message {
   id: string;
   sender: Sender;
@@ -9,6 +19,8 @@ export interface Message {
   isImage?: boolean;
   imageData?: string;
   groundingUrls?: string[];
+  files?: FileAttachment[]; // Attached files
+  codeBlocks?: { language: string; code: string; filename?: string }[];
 }
 
 export interface ChatSession {

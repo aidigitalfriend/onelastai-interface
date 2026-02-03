@@ -42,11 +42,28 @@ const SignUp: React.FC<SignUpProps> = ({ onClose, onSignUp, onSwitchToSignIn }) 
 
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password, name }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setError(data.error || 'Sign up failed');
+        setIsLoading(false);
+        return;
+      }
+
       setIsLoading(false);
       onSignUp(email);
-    }, 1500);
+    } catch (err) {
+      setError('Network error. Please try again.');
+      setIsLoading(false);
+    }
   };
 
   return (

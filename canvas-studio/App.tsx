@@ -12,7 +12,6 @@ import ChatBox from './components/ChatBox';
 import CanvasNavDrawer, { trackCanvasUsage, trackCanvasProject } from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
 import Overlay from './components/Overlay';
-import { BillingPanel } from './components/BillingPanel';
 
 // AI Models - 5 Providers, 8 Models
 const MODELS: ModelOption[] = [
@@ -93,6 +92,40 @@ const QUICK_ACTIONS = [
   { id: 'accessibility', label: 'Accessibility', icon: '♿', description: 'Improve accessibility' },
   { id: 'loading', label: 'Loading', icon: '⏳', description: 'Add loading states' },
   { id: 'validation', label: 'Validation', icon: '✅', description: 'Add form validation' },
+];
+
+// 🎭 Fun Commentary Messages - Rotate during generation for entertainment!
+const GENERATION_COMMENTARY = [
+  { text: "🧠 AI neurons are firing up...", emoji: "🧠" },
+  { text: "⚡ Charging the creativity capacitors...", emoji: "⚡" },
+  { text: "🎨 Mixing the perfect color palette...", emoji: "🎨" },
+  { text: "🔮 Consulting the coding crystal ball...", emoji: "🔮" },
+  { text: "🚀 Launching code rockets into orbit...", emoji: "🚀" },
+  { text: "🎯 Targeting pixel-perfect precision...", emoji: "🎯" },
+  { text: "🌟 Sprinkling some UI magic dust...", emoji: "🌟" },
+  { text: "🔧 Tightening the digital bolts...", emoji: "🔧" },
+  { text: "☕ AI is caffeinating for peak performance...", emoji: "☕" },
+  { text: "🎪 The code circus is in town!", emoji: "🎪" },
+  { text: "🏗️ Building your dream, brick by brick...", emoji: "🏗️" },
+  { text: "🎸 Rocking some sick code riffs...", emoji: "🎸" },
+  { text: "🧪 Mixing the secret sauce...", emoji: "🧪" },
+  { text: "🦾 Flexing those AI muscles...", emoji: "🦾" },
+  { text: "🎲 Rolling for critical success...", emoji: "🎲" },
+  { text: "🌈 Weaving rainbows into your UI...", emoji: "🌈" },
+  { text: "🔥 Code is heating up nicely...", emoji: "🔥" },
+  { text: "🎵 Composing a symphony of components...", emoji: "🎵" },
+  { text: "🧩 Solving the puzzle pieces...", emoji: "🧩" },
+  { text: "⏳ Good things come to those who wait...", emoji: "⏳" },
+  { text: "🎁 Wrapping up something special...", emoji: "🎁" },
+  { text: "🏆 Crafting award-winning code...", emoji: "🏆" },
+  { text: "🎬 Directing your digital masterpiece...", emoji: "🎬" },
+  { text: "🌙 Channeling late-night dev energy...", emoji: "🌙" },
+  { text: "💎 Polishing every pixel to perfection...", emoji: "💎" },
+  { text: "🤖 Beep boop... processing awesomeness...", emoji: "🤖" },
+  { text: "🎢 Riding the code roller coaster!", emoji: "🎢" },
+  { text: "🍕 Almost done... just ordering pizza...", emoji: "🍕" },
+  { text: "🦄 Summoning unicorn-level quality...", emoji: "🦄" },
+  { text: "🎯 Locking onto target... almost there!", emoji: "🎯" },
 ];
 
 // Project file structure type
@@ -661,7 +694,6 @@ type ConversationPhase = 'initial' | 'gathering' | 'confirming' | 'building' | '
 
 const App: React.FC = () => {
   const [isOverlayActive, setIsOverlayActive] = useState(true);
-  const [isBillingOpen, setIsBillingOpen] = useState(false);
   const [userId] = useState(() => {
     const saved = localStorage.getItem('onelastai_user_id');
     if (saved) return saved;
@@ -672,6 +704,7 @@ const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState<ModelOption>(MODELS[0]);
   const [selectedProvider, setSelectedProvider] = useState('Anthropic');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('auto'); // auto, html, react, typescript, javascript, python
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.PREVIEW);
   const [currentApp, setCurrentApp] = useState<GeneratedApp | null>(null);
   const [history, setHistory] = useState<GeneratedApp[]>([]);
@@ -701,6 +734,27 @@ const App: React.FC = () => {
     error: null,
     progressMessage: '',
   });
+  const [commentary, setCommentary] = useState(GENERATION_COMMENTARY[0]);
+  const [commentaryIndex, setCommentaryIndex] = useState(0);
+
+  // 🎭 Rotate fun commentary messages during generation
+  useEffect(() => {
+    if (!genState.isGenerating) {
+      setCommentaryIndex(0);
+      setCommentary(GENERATION_COMMENTARY[0]);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setCommentaryIndex(prev => {
+        const nextIndex = (prev + 1) % GENERATION_COMMENTARY.length;
+        setCommentary(GENERATION_COMMENTARY[nextIndex]);
+        return nextIndex;
+      });
+    }, 2000); // Change message every 2 seconds
+
+    return () => clearInterval(interval);
+  }, [genState.isGenerating]);
 
   // Load dark mode preference
   useEffect(() => {
@@ -810,6 +864,7 @@ const App: React.FC = () => {
           isThinking: selectedModel.isThinking || false,
           currentCode: isInitial ? undefined : currentApp?.code,
           history: isInitial ? [] : currentApp?.history,
+          targetLanguage: selectedLanguage === 'auto' ? undefined : selectedLanguage, // Pass language if explicitly set
         }),
       });
 
@@ -820,6 +875,7 @@ const App: React.FC = () => {
       }
 
       const code = data.code;
+      const detectedLanguage = data.language || 'html'; // Get language from backend
 
       const userMsg: ChatMessage = {
         role: 'user',
@@ -837,6 +893,7 @@ const App: React.FC = () => {
           id: Date.now().toString(),
           name: instruction.substring(0, 30) + '...',
           code,
+          language: detectedLanguage, // Store the detected language
           prompt: instruction,
           timestamp: Date.now(),
           history: [modelMsg],
@@ -857,6 +914,7 @@ const App: React.FC = () => {
         const updatedApp = {
           ...currentApp,
           code,
+          language: detectedLanguage || currentApp.language, // Preserve/update language
           history: [...currentApp.history, userMsg, modelMsg],
         };
         setCurrentApp(updatedApp);
@@ -1099,8 +1157,8 @@ const App: React.FC = () => {
       {/* Activation Overlay */}
       <Overlay active={isOverlayActive} onActivate={() => setIsOverlayActive(false)} />
       
-      {/* Main Content Area */}
-      <div className={`flex flex-1 overflow-hidden transition-opacity duration-300 ${isOverlayActive ? 'opacity-0' : 'opacity-100'}`}>
+      {/* Main Content Area - subtract footer height (32px) */}
+      <div className={`flex flex-1 overflow-hidden transition-opacity duration-300 ${isOverlayActive ? 'opacity-0' : 'opacity-100'}`} style={{ height: 'calc(100vh - 32px)', marginBottom: '32px' }}>
         {/* 1. Left Vertical Nav Bar - Neural Style */}
         <nav className={`w-16 ${isDarkMode ? 'bg-[#111]/95 border-gray-800/50' : 'bg-white border-gray-200'} backdrop-blur-md flex flex-col items-center shrink-0 z-[60] border-r relative`}>
           {/* Hamburger Menu Button */}
@@ -1318,37 +1376,69 @@ const App: React.FC = () => {
       </nav>
 
       {/* 2. Main Content Area - Neural Style */}
-      <div className={`flex-1 flex flex-col relative overflow-hidden ${isDarkMode ? 'bg-[#0a0a0a]' : 'bg-gray-50'}`}>
+      <div className={`flex-1 flex flex-col relative overflow-hidden ${isDarkMode ? 'bg-[#0a0a0a]' : 'bg-gray-50'}`} style={{ minHeight: 0 }}>
         {/* Workspace Content (Preview/Code) - Full Height */}
-        <main className="flex-1 relative flex">
-          <div className={`flex-1 relative overflow-hidden ${isDarkMode ? 'bg-black/20 border-gray-800/50' : 'bg-gray-100 border-gray-200'} m-2 rounded-lg border shadow-[0_0_40px_rgba(0,0,0,0.3)]`}>
+        <main className="flex-1 relative flex" style={{ minHeight: 0 }}>
+          <div className={`flex-1 relative overflow-hidden flex flex-col ${isDarkMode ? 'bg-black/20 border-gray-800/50' : 'bg-gray-100 border-gray-200'} m-2 rounded-lg border shadow-[0_0_40px_rgba(0,0,0,0.3)]`} style={{ minHeight: 0 }}>
             {genState.isGenerating && (
-              <div className={`absolute inset-0 z-40 ${isDarkMode ? 'bg-black/80' : 'bg-white/80'} backdrop-blur-md flex flex-col items-center justify-center animate-fade-in`}>
-                <div className="w-16 h-16 border-4 border-cyan-900 border-t-cyan-400 rounded-full animate-spin mb-6 shadow-xl shadow-cyan-500/20"></div>
-                <div className="text-center">
+              <div className={`absolute inset-0 z-40 ${isDarkMode ? 'bg-black/90' : 'bg-white/90'} backdrop-blur-md flex flex-col items-center justify-center animate-fade-in`}>
+                {/* Animated spinner with glow */}
+                <div className="relative mb-8">
+                  <div className="w-20 h-20 border-4 border-cyan-900/50 border-t-cyan-400 rounded-full animate-spin shadow-xl shadow-cyan-500/30"></div>
+                  <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-b-purple-500/50 rounded-full animate-spin" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+                  <div className="absolute inset-2 w-16 h-16 flex items-center justify-center">
+                    <span className="text-3xl animate-pulse">{commentary.emoji}</span>
+                  </div>
+                </div>
+                
+                {/* Model info */}
+                <div className="text-center mb-4">
                   <p className="text-lg font-bold text-cyan-400 tracking-tight glow-cyan">
                     {genState.progressMessage}
                   </p>
-                  <p className={`text-sm ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} mt-1 uppercase tracking-widest`}>
-                    Synthesizing components...
+                </div>
+                
+                {/* Fun rotating commentary */}
+                <div className="text-center max-w-md px-4">
+                  <p 
+                    className={`text-base font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'} transition-all duration-500 ease-in-out`}
+                    style={{ animation: 'fadeSlide 2s ease-in-out infinite' }}
+                  >
+                    {commentary.text}
                   </p>
+                </div>
+                
+                {/* Progress dots animation */}
+                <div className="flex gap-2 mt-6">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div 
+                      key={i}
+                      className="w-2 h-2 rounded-full bg-cyan-500/50"
+                      style={{ 
+                        animation: 'pulse 1.5s ease-in-out infinite',
+                        animationDelay: `${i * 0.2}s`
+                      }}
+                    ></div>
+                  ))}
                 </div>
               </div>
             )}
             {/* Device Frame Preview */}
-            <div className="h-full flex items-center justify-center p-4">
+            <div className="h-full w-full flex items-center justify-center p-4" style={{ minHeight: 0 }}>
               <div 
-                className={`${isDarkMode ? 'bg-[#0d0d0d] border-gray-800/50' : 'bg-white border-gray-200'} rounded-lg shadow-2xl overflow-hidden transition-all duration-300 border ${deviceMode === 'desktop' ? 'w-full h-full' : ''}`}
-                style={deviceMode !== 'desktop' ? { width: DEVICE_SIZES[deviceMode].width, height: DEVICE_SIZES[deviceMode].height } : {}}
+                className={`${isDarkMode ? 'bg-[#0d0d0d] border-gray-800/50' : 'bg-white border-gray-200'} rounded-lg shadow-2xl overflow-hidden transition-all duration-300 border flex flex-col ${deviceMode === 'desktop' ? 'w-full h-full' : ''}`}
+                style={deviceMode !== 'desktop' ? { width: DEVICE_SIZES[deviceMode].width, height: DEVICE_SIZES[deviceMode].height } : { height: '100%', width: '100%' }}
               >
                 {viewMode === ViewMode.PREVIEW ? (
-                  <Preview code={currentApp?.code || ''} />
+                  <div className="w-full h-full flex-1" style={{ minHeight: 0 }}>
+                    <Preview code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'html'} />
+                  </div>
                 ) : viewMode === ViewMode.CODE ? (
-                  <CodeView code={currentApp?.code || ''} />
+                  <CodeView code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'javascript'} />
                 ) : (
                   <div className="flex h-full">
-                    <div className={`w-1/2 border-r ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}><Preview code={currentApp?.code || ''} /></div>
-                    <div className="w-1/2"><CodeView code={currentApp?.code || ''} /></div>
+                    <div className={`w-1/2 border-r ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}><Preview code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'html'} /></div>
+                    <div className="w-1/2"><CodeView code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'javascript'} /></div>
                   </div>
                 )}
               </div>
@@ -1360,9 +1450,9 @@ const App: React.FC = () => {
             className={`h-full max-h-full ${isDarkMode ? 'bg-[#111]/95 border-gray-800/50' : 'bg-white border-gray-200'} backdrop-blur-md border-l transition-all duration-300 ease-in-out flex shrink-0 shadow-2xl ${
               activePanel ? 'w-80' : 'w-0 border-l-0 opacity-0'
             }`}
-            style={{ height: '100%', maxHeight: '100vh' }}
+            style={{ height: 'calc(100% - 32px)', maxHeight: 'calc(100vh - 32px)' }}
           >
-            <div className="w-80 flex flex-col" style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
+            <div className="w-80 flex flex-col" style={{ height: '100%', maxHeight: '100%', overflow: 'hidden', paddingBottom: '0' }}>
               {activePanel === 'workspace' && (
                 <div className={`h-full flex flex-col ${isDarkMode ? 'bg-[#111]/95' : 'bg-white'}`}>
                   {/* Fixed Header */}
@@ -1500,11 +1590,18 @@ const App: React.FC = () => {
                       onSendMessage={(text) => handleGenerate(text, false)}
                       isGenerating={genState.isGenerating}
                       onNewChat={() => {
-                        if (currentApp) {
-                          setHistory(prev => prev.map(app => 
-                            app.id === currentApp.id ? { ...app, history: [] } : app
-                          ));
-                        }
+                        // Create a completely new chat session
+                        const newApp = {
+                          id: Date.now().toString(),
+                          name: 'New App',
+                          code: '',
+                          prompt: '',
+                          timestamp: Date.now(),
+                          history: [],
+                          language: 'html'
+                        };
+                        setCurrentApp(newApp);
+                        setHistory(prev => [newApp, ...prev]);
                       }}
                       models={MODELS}
                       selectedModel={selectedModel.id}
@@ -1512,6 +1609,8 @@ const App: React.FC = () => {
                         const model = MODELS.find(m => m.id === modelId);
                         if (model) setSelectedModel(model);
                       }}
+                      selectedLanguage={selectedLanguage}
+                      onLanguageChange={setSelectedLanguage}
                     />
                   </div>
                 </div>
@@ -2491,20 +2590,6 @@ const App: React.FC = () => {
         onNavigate={handleNavigate}
         isDarkMode={isDarkMode}
       />
-
-      {/* Floating Credits Button */}
-      <button
-        onClick={() => setIsBillingOpen(true)}
-        className="fixed bottom-12 right-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded-full shadow-lg hover:shadow-purple-500/50 hover:scale-105 transition-all duration-300 flex items-center gap-2 z-40"
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <span className="text-sm font-medium">Credits</span>
-      </button>
-
-      {/* Billing Panel */}
-      <BillingPanel isOpen={isBillingOpen} onClose={() => setIsBillingOpen(false)} userId={userId} />
 
       {/* Neural Link Footer */}
       <footer className={`fixed bottom-0 left-0 right-0 h-8 ${isDarkMode ? 'bg-[#0a0a0a]/95 border-gray-800/50' : 'bg-white/95 border-gray-200'} backdrop-blur-sm border-t flex items-center justify-between px-4 z-50`}>

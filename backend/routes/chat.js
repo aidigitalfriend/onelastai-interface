@@ -249,6 +249,7 @@ router.post('/send', requireAuth, async (req, res) => {
       sessionId: session.id,
       systemPrompt: systemPrompt || session.settings?.systemPrompt,
       image, // Pass image for vision models
+      endpoint: 'chat', // Track as chat usage
     });
 
     // Save assistant message
