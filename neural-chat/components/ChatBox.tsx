@@ -719,37 +719,75 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     const end = textarea.selectionEnd;
     const selectedText = inputText.substring(start, end);
     
-    let formattedText = '';
+    let prefix = '';
+    let suffix = '';
+    let placeholder = '';
+    
     switch (format) {
       case 'bold':
-        formattedText = `**${selectedText || 'bold text'}**`;
+        prefix = '**';
+        suffix = '**';
+        placeholder = 'bold text';
         break;
       case 'italic':
-        formattedText = `*${selectedText || 'italic text'}*`;
+        prefix = '*';
+        suffix = '*';
+        placeholder = 'italic text';
         break;
       case 'code':
-        formattedText = selectedText.includes('\n') 
-          ? `\`\`\`\n${selectedText || 'code'}\n\`\`\``
-          : `\`${selectedText || 'code'}\``;
+        if (selectedText.includes('\n')) {
+          prefix = '```\n';
+          suffix = '\n```';
+          placeholder = 'code';
+        } else {
+          prefix = '`';
+          suffix = '`';
+          placeholder = 'code';
+        }
         break;
       case 'link':
-        formattedText = `[${selectedText || 'link text'}](url)`;
+        prefix = '[';
+        suffix = '](url)';
+        placeholder = 'link text';
         break;
       case 'list':
-        formattedText = selectedText 
-          ? selectedText.split('\n').map(line => `- ${line}`).join('\n')
-          : '- item';
+        prefix = '- ';
+        suffix = '';
+        placeholder = 'item';
         break;
       case 'quote':
-        formattedText = selectedText 
-          ? selectedText.split('\n').map(line => `> ${line}`).join('\n')
-          : '> quote';
+        prefix = '> ';
+        suffix = '';
+        placeholder = 'quote';
         break;
     }
     
+    const textToInsert = selectedText || placeholder;
+    const formattedText = prefix + textToInsert + suffix;
     const newText = inputText.substring(0, start) + formattedText + inputText.substring(end);
     setInputText(newText);
+    
+    // Focus back and select the text for easy replacement
+    setTimeout(() => {
+      textarea.focus();
+      if (!selectedText) {
+        // Select the placeholder text so user can type over it
+        const newStart = start + prefix.length;
+        const newEnd = newStart + placeholder.length;
+        textarea.setSelectionRange(newStart, newEnd);
+      } else {
+        // Place cursor after the formatted text
+        const newPos = start + formattedText.length;
+        textarea.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
+    
     setShowFormatting(false);
+  };
+  
+  // Check if text contains markdown formatting
+  const hasMarkdownFormatting = (text: string): boolean => {
+    return /\*\*.*\*\*|\*[^*]+\*|`[^`]+`|\[.*\]\(.*\)|^>|^-\s/m.test(text);
   };
 
   // Insert emoji
@@ -1728,6 +1766,17 @@ const ChatBox: React.FC<ChatBoxProps> = ({
 
           {/* Textarea container */}
           <div className="flex-grow relative group">
+            {/* Live Preview - Shows formatted text when markdown is detected */}
+            {inputText && hasMarkdownFormatting(inputText) && (
+              <div className="mb-2 p-3 bg-gray-900/50 border border-gray-800 rounded-lg text-sm">
+                <div className="text-[10px] text-cyan-500 uppercase tracking-wider mb-2 flex items-center gap-1">
+                  <span>📝</span> Preview
+                </div>
+                <div className="text-gray-300">
+                  {renderInlineMarkdown(inputText, 'preview')}
+                </div>
+              </div>
+            )}
             <textarea 
               ref={textareaRef}
               value={inputText}

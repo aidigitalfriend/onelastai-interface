@@ -11,7 +11,8 @@ import { AIService } from '../services/aiService.js';
 const router = express.Router();
 const prisma = new PrismaClient();
 
-const SUBDOMAIN_SECRET = process.env.SUBDOMAIN_TOKEN_SECRET || process.env.JWT_SECRET || 'neural-link-secret';
+// Must match the JWT_SECRET used in server.js for login
+const JWT_SECRET = process.env.NEURAL_LINK_JWT_SECRET || process.env.JWT_SECRET || 'neural-link-secret-key-2026';
 
 // ============================================================================
 // AUTH MIDDLEWARE
@@ -19,75 +20,53 @@ const SUBDOMAIN_SECRET = process.env.SUBDOMAIN_TOKEN_SECRET || process.env.JWT_S
 
 const requireAuth = async (req, res, next) => {
   try {
-    // PRIORITY 1: Check main site's shared session cookie
+    // PRIORITY 1: Check Neural Link's session cookie
+    const sessionToken = req.cookies?.neural_link_session;
+    
+    if (sessionToken) {
+      try {
+        const secret = new TextEncoder().encode(JWT_SECRET);
+        const { payload } = await jose.jwtVerify(sessionToken, secret);
+
+        const user = await prisma.user.findUnique({
+          where: { id: payload.userId },
+          include: { credits: true },
+        });
+
+        if (user) {
+          req.user = user;
+          return next();
+        }
+      } catch (e) {
+        console.log('[Auth] Token verification failed:', e.message);
+      }
+    }
+
+    // PRIORITY 2: Check main site's shared session cookie and link account
     const mainSiteSessionId = req.cookies?.session_id || req.cookies?.sessionId;
     
     if (mainSiteSessionId) {
-      // Look up user in main database by session ID
-      const mainUser = await prisma.$queryRaw`
-        SELECT id, email, name, "sessionId", "sessionExpiry" 
-        FROM "User" 
-        WHERE "sessionId" = ${mainSiteSessionId} 
-        AND ("sessionExpiry" IS NULL OR "sessionExpiry" > NOW())
-        LIMIT 1
-      `;
+      // Look up user by onelastai session ID in our user table
+      const linkedUser = await prisma.user.findFirst({
+        where: { onelastaiUserId: mainSiteSessionId },
+        include: { credits: true },
+      });
       
-      if (mainUser && mainUser.length > 0) {
-        const foundUser = mainUser[0];
-        
-        // Find or create Neural Link user
-        let nlUser = await prisma.user.findUnique({
-          where: { onelastaiUserId: foundUser.id },
-          include: { credits: true },
-        });
-        
-        if (!nlUser) {
-          nlUser = await prisma.user.create({
-            data: {
-              email: foundUser.email,
-              name: foundUser.name || null,
-              onelastaiUserId: foundUser.id,
-              isVerified: true,
-              credits: {
-                create: {
-                  balance: 5.0,
-                  freeCreditsMax: 5.0,
-                },
-              },
-            },
-            include: { credits: true },
-          });
-        }
-        
-        req.user = nlUser;
+      if (linkedUser) {
+        req.user = linkedUser;
         return next();
       }
     }
-    
-    // PRIORITY 2: Neural Link's own session cookie (legacy/fallback)
-    const sessionToken = req.cookies?.neural_link_session;
-    
-    if (!sessionToken) {
-      return res.status(401).json({ success: false, error: 'Not authenticated' });
-    }
 
-    const secret = new TextEncoder().encode(SUBDOMAIN_SECRET);
-    const { payload } = await jose.jwtVerify(sessionToken, secret);
-
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      include: { credits: true },
+    // No valid authentication found - user must login
+    return res.status(401).json({ 
+      success: false, 
+      error: 'Please login to continue',
+      requiresLogin: true 
     });
-
-    if (!user) {
-      return res.status(401).json({ success: false, error: 'User not found' });
-    }
-
-    req.user = user;
-    next();
   } catch (error) {
     console.error('[Auth] Error:', error);
-    res.status(401).json({ success: false, error: 'Invalid session' });
+    res.status(401).json({ success: false, error: 'Authentication failed' });
   }
 };
 
@@ -106,14 +85,14 @@ router.get('/providers', (req, res) => {
 
 router.post('/sessions', requireAuth, async (req, res) => {
   try {
-    const { provider = 'anthropic', model = 'claude-3-5-sonnet-20241022', title } = req.body;
+    const { provider = 'anthropic', model = 'claude-sonnet-4-20250514', title } = req.body;
 
     const session = await prisma.chatSession.create({
       data: {
         userId: req.user.id,
         provider,
         model,
-        title: title || 'New Chat',
+        name: title || 'New Chat',
       },
     });
 
@@ -189,7 +168,7 @@ router.post('/send', requireAuth, async (req, res) => {
       sessionId, 
       message, 
       provider = 'anthropic', 
-      model = 'claude-3-5-sonnet-20241022',
+      model = 'claude-sonnet-4-20250514',
       systemPrompt,
       image, // { data: base64, name: string, mimeType: string }
     } = req.body;
@@ -218,7 +197,7 @@ router.post('/send', requireAuth, async (req, res) => {
           userId: req.user.id,
           provider,
           model,
-          title: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
+          name: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
           settings: systemPrompt ? { systemPrompt } : undefined,
         },
         include: { messages: true },
@@ -324,7 +303,7 @@ router.post('/stream', requireAuth, async (req, res) => {
       sessionId, 
       message, 
       provider = 'anthropic', 
-      model = 'claude-3-5-sonnet-20241022',
+      model = 'claude-sonnet-4-20250514',
       systemPrompt,
     } = req.body;
 
@@ -360,7 +339,7 @@ router.post('/stream', requireAuth, async (req, res) => {
           userId: req.user.id,
           provider,
           model,
-          title: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
+          name: message.slice(0, 50) + (message.length > 50 ? '...' : ''),
           settings: systemPrompt ? { systemPrompt } : undefined,
         },
         include: { messages: true },
@@ -420,13 +399,12 @@ router.post('/stream', requireAuth, async (req, res) => {
         },
       });
 
-      // Update session
+      // Update session (increment message count)
       await prisma.chatSession.update({
         where: { id: session.id },
         data: {
           updatedAt: new Date(),
-          totalTokens: { increment: finalResponse.totalTokens },
-          totalCost: { increment: finalResponse.creditsCost },
+          messageCount: { increment: 1 },
         },
       });
 

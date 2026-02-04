@@ -203,9 +203,9 @@ const App: React.FC = () => {
           // Update the message with error
           let errorText = '⚠️ An error occurred. Please try again.';
           if (error === 'auth') {
-            errorText = '⚠️ Please sign in to use the AI chat.';
+            errorText = '⚠️ **Please sign in to continue.** Click the ↗ button in the header to go to the home page and sign in or create an account. Once logged in, return here to chat!';
           } else if (error === 'credits') {
-            errorText = '⚠️ Insufficient credits. Please purchase more credits.';
+            errorText = '⚠️ **Insufficient credits.** Please go to your dashboard to purchase more credits. Click the ↗ button in the header to access billing.';
           }
           
           setSessions(prev => prev.map(s => {
@@ -394,15 +394,17 @@ const App: React.FC = () => {
         return;
       }
       const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
+      recognition.continuous = false; // Get single result, not continuous
+      recognition.interimResults = false; // Only final results to avoid duplicates
       recognition.lang = 'en-US';
 
       recognition.onresult = (event: any) => {
-        const transcript = Array.from(event.results)
-          .map((result: any) => result[0].transcript)
-          .join('');
-        setSttTranscript(transcript);
+        // Get only the final result from the last result
+        const lastResult = event.results[event.results.length - 1];
+        if (lastResult.isFinal) {
+          const transcript = lastResult[0].transcript;
+          setSttTranscript(prev => prev ? prev + ' ' + transcript : transcript);
+        }
       };
 
       recognition.onend = () => setIsRecordingSTT(false);

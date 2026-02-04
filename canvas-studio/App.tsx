@@ -13,7 +13,7 @@ import CanvasNavDrawer, { trackCanvasUsage, trackCanvasProject } from './compone
 import Dashboard from './components/Dashboard';
 import Overlay from './components/Overlay';
 
-// AI Models - 5 Providers, 8 Models
+// AI Models - 4 Providers, 6 Models (Gemini removed)
 const MODELS: ModelOption[] = [
   // Anthropic
   {
@@ -41,20 +41,6 @@ const MODELS: ModelOption[] = [
     name: 'GPT-4o Mini',
     provider: 'OpenAI',
     description: 'Fast and efficient.',
-  },
-  // Gemini
-  {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    provider: 'Gemini',
-    description: 'Fast multimodal model.',
-  },
-  {
-    id: 'gemini-2.5-pro',
-    name: 'Gemini 2.5 Pro',
-    provider: 'Gemini',
-    description: 'Advanced reasoning capabilities.',
-    isThinking: true,
   },
   // xAI
   {
@@ -736,6 +722,17 @@ const App: React.FC = () => {
   });
   const [commentary, setCommentary] = useState(GENERATION_COMMENTARY[0]);
   const [commentaryIndex, setCommentaryIndex] = useState(0);
+  
+  // � Conversational Mode State
+  const [conversationMode, setConversationMode] = useState(false); // true = chat first, false = direct build
+  const [conversationHistory, setConversationHistory] = useState<ChatMessage[]>([]);
+  const [isReadyToBuild, setIsReadyToBuild] = useState(false);
+  const [buildRequirements, setBuildRequirements] = useState<string>('');
+  
+  // �🚀 Deploy/Hosting State
+  const [isDeploying, setIsDeploying] = useState(false);
+  const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
+  const [showDeployModal, setShowDeployModal] = useState(false);
 
   // 🎭 Rotate fun commentary messages during generation
   useEffect(() => {
@@ -820,7 +817,6 @@ const App: React.FC = () => {
 
   // Filter models by selected provider
   const filteredModels = MODELS.filter(m => m.provider.toLowerCase() === selectedProvider.toLowerCase() || 
-    (selectedProvider === 'Gemini' && m.provider === 'google') ||
     (selectedProvider === 'xAI' && m.provider === 'xai') ||
     (selectedProvider === 'Groq' && m.provider === 'groq'));
 
@@ -934,6 +930,10 @@ const App: React.FC = () => {
 
       setGenState({ isGenerating: false, error: null, progressMessage: '' });
       setViewMode(ViewMode.PREVIEW);
+      
+      // After successful build, switch to editing mode
+      setConversationMode(true);
+      setIsReadyToBuild(false);
     } catch (err: any) {
       setGenState({
         isGenerating: false,
@@ -941,6 +941,257 @@ const App: React.FC = () => {
         progressMessage: '',
       });
     }
+  };
+
+  // � UNIFIED AGENT - Send message, AI decides what to do
+  const handleAgentMessage = async (message: string) => {
+    if (!message.trim() || genState.isGenerating) return;
+    
+    // Add user message to conversation history
+    const userMsg: ChatMessage = {
+      role: 'user',
+      text: message,
+      timestamp: Date.now(),
+    };
+    setConversationHistory(prev => [...prev, userMsg]);
+    
+    // Show loading state
+    setGenState({
+      isGenerating: true,
+      error: null,
+      progressMessage: `Thinking with ${selectedModel.name}...`,
+    });
+
+    try {
+      // Send to unified agent endpoint - AI decides what to do
+      const response = await fetch('/api/canvas/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          currentCode: currentApp?.code || null,
+          conversationHistory: conversationHistory,
+          provider: selectedModel.provider,
+          modelId: selectedModel.id,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Agent request failed');
+      }
+
+      console.log('[Agent] Action:', data.action);
+
+      // Handle agent's decision
+      if (data.action === 'chat') {
+        // Agent decided to chat - add response to history
+        const aiMsg: ChatMessage = {
+          role: 'model',
+          text: data.message,
+          timestamp: Date.now(),
+        };
+        setConversationHistory(prev => [...prev, aiMsg]);
+        setActivePanel('assistant'); // Open chat panel
+        
+      } else if (data.action === 'build') {
+        // Agent decided to build - create new app
+        const newApp: GeneratedApp = {
+          id: Date.now().toString(),
+          name: message.substring(0, 30) + '...',
+          code: data.code,
+          language: data.language || 'html',
+          prompt: message,
+          timestamp: Date.now(),
+          history: [{
+            role: 'model',
+            text: data.message || 'Application built!',
+            timestamp: Date.now(),
+          }],
+        };
+        setCurrentApp(newApp);
+        saveHistory([newApp, ...history].slice(0, 10));
+        setViewMode(ViewMode.PREVIEW);
+        
+        // Add success message to chat
+        const aiMsg: ChatMessage = {
+          role: 'model',
+          text: data.message || '✨ Done! I built your app. Check out the preview!',
+          timestamp: Date.now(),
+        };
+        setConversationHistory(prev => [...prev, aiMsg]);
+        
+        // Track usage
+        trackCanvasUsage({
+          type: 'generation',
+          model: selectedModel.name,
+          provider: selectedModel.provider,
+          credits: selectedModel.costPer1k || 1,
+          description: message.substring(0, 50)
+        });
+        
+      } else if (data.action === 'edit') {
+        // Agent decided to edit - update existing app
+        if (currentApp) {
+          const updatedApp: GeneratedApp = {
+            ...currentApp,
+            code: data.code,
+            language: data.language || currentApp.language,
+            history: [...currentApp.history, {
+              role: 'model',
+              text: data.message || 'Changes applied!',
+              timestamp: Date.now(),
+            }],
+          };
+          setCurrentApp(updatedApp);
+          saveHistory(history.map(a => a.id === updatedApp.id ? updatedApp : a));
+          setViewMode(ViewMode.PREVIEW);
+          
+          // Add success message to chat
+          const aiMsg: ChatMessage = {
+            role: 'model',
+            text: data.message || '✅ Done! I made the changes. Check the preview!',
+            timestamp: Date.now(),
+          };
+          setConversationHistory(prev => [...prev, aiMsg]);
+          
+          // Track usage
+          trackCanvasUsage({
+            type: 'edit',
+            model: selectedModel.name,
+            provider: selectedModel.provider,
+            credits: selectedModel.costPer1k || 1,
+            description: 'Edit: ' + message.substring(0, 40)
+          });
+        }
+      }
+
+      setGenState({ isGenerating: false, error: null, progressMessage: '' });
+
+    } catch (err: any) {
+      setGenState({
+        isGenerating: false,
+        error: err.message,
+        progressMessage: '',
+      });
+      
+      // Add error message to chat
+      const errorMsg: ChatMessage = {
+        role: 'model',
+        text: '⚠️ Sorry, something went wrong. Please try again.',
+        timestamp: Date.now(),
+      };
+      setConversationHistory(prev => [...prev, errorMsg]);
+    }
+    
+    // Clear prompt input
+    setPrompt('');
+  };
+
+  // 💬 Legacy Conversational Chat Handler (kept for compatibility)
+  const handleConversationalChat = async (message: string) => {
+    // Add user message to history
+    const userMsg: ChatMessage = {
+      role: 'user',
+      text: message,
+      timestamp: Date.now(),
+    };
+    setConversationHistory(prev => [...prev, userMsg]);
+    
+    setGenState({
+      isGenerating: true,
+      error: null,
+      progressMessage: 'Thinking...',
+    });
+
+    try {
+      const response = await fetch('/api/canvas/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message,
+          conversationHistory: conversationHistory,
+          templateContext: buildRequirements || undefined,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Chat failed');
+      }
+
+      // Add AI response to history
+      const aiMsg: ChatMessage = {
+        role: 'model',
+        text: data.message,
+        timestamp: Date.now(),
+      };
+      setConversationHistory(prev => [...prev, aiMsg]);
+      
+      // Check if AI is ready to build
+      if (data.isReadyToBuild) {
+        setIsReadyToBuild(true);
+        // Extract requirements from conversation for building
+        const requirements = conversationHistory
+          .filter(m => m.role === 'user')
+          .map(m => m.text)
+          .join('\n');
+        setBuildRequirements(requirements + '\n' + message);
+      }
+
+      setGenState({ isGenerating: false, error: null, progressMessage: '' });
+    } catch (err: any) {
+      setGenState({
+        isGenerating: false,
+        error: err.message,
+        progressMessage: '',
+      });
+      
+      // Add error message to chat
+      const errorMsg: ChatMessage = {
+        role: 'model',
+        text: '⚠️ Sorry, something went wrong. Please try again.',
+        timestamp: Date.now(),
+      };
+      setConversationHistory(prev => [...prev, errorMsg]);
+    }
+  };
+
+  // 🏗️ Start Building from Conversation
+  const handleStartBuilding = async () => {
+    if (!buildRequirements) return;
+    
+    // Switch to generation mode
+    setConversationMode(false);
+    
+    // Build the app with the collected requirements
+    await handleGenerate(buildRequirements, true);
+    
+    // Reset conversation state for editing
+    setConversationHistory([]);
+    setIsReadyToBuild(false);
+    setBuildRequirements('');
+    setConversationMode(true); // Switch back to chat mode for editing
+  };
+
+  // 💬 Handle Chat Message - decides between conversation and direct edit
+  const handleChatMessage = async (message: string) => {
+    if (!currentApp && conversationMode) {
+      // No app yet and in conversation mode = continue conversation
+      await handleConversationalChat(message);
+    } else {
+      // App exists = direct edit mode
+      await handleGenerate(message, false);
+    }
+  };
+
+  // 📝 Template Click - Just send to agent, agent decides
+  const handleTemplateClick = (templatePrompt: string) => {
+    setActivePanel('assistant');
+    // Send the template prompt to the agent - agent will decide to build or chat
+    handleAgentMessage(`I want to build: ${templatePrompt}`);
   };
 
   const togglePanel = (panel: ActivePanel) => {
@@ -1152,6 +1403,65 @@ const App: React.FC = () => {
     }
   };
 
+  // 🚀 Deploy app to get shareable URL
+  const deployApp = async () => {
+    if (!currentApp?.code) {
+      alert('No app to deploy. Generate something first!');
+      return;
+    }
+
+    setIsDeploying(true);
+    setShowDeployModal(true);
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
+      
+      const response = await fetch(`${API_URL}/api/hosting/deploy`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          code: currentApp.code,
+          name: currentApp.name || 'Untitled App',
+          description: currentApp.prompt,
+          language: currentApp.language || 'html',
+          isPublic: true,
+          userId: userId,
+          originalPrompt: currentApp.prompt,
+          aiModel: selectedModel.id,
+          aiProvider: selectedProvider
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to deploy');
+      }
+
+      const data = await response.json();
+      
+      if (data.success && data.app?.url) {
+        setDeployedUrl(data.app.url);
+      } else {
+        throw new Error(data.error || 'Deployment failed');
+      }
+    } catch (error) {
+      console.error('Deploy error:', error);
+      alert('Failed to deploy: ' + (error as Error).message);
+      setShowDeployModal(false);
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
+  // Copy deployed URL to clipboard
+  const copyDeployedUrl = () => {
+    if (deployedUrl) {
+      navigator.clipboard.writeText(deployedUrl);
+      alert('URL copied to clipboard!');
+    }
+  };
+
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'bg-[#0a0a0a] text-gray-300 matrix-bg' : 'bg-gray-100 text-gray-800'}`}>
       {/* Activation Overlay */}
@@ -1324,6 +1634,31 @@ const App: React.FC = () => {
               </svg>
             </button>
 
+            {/* 🚀 DEPLOY - One Click Deploy */}
+            <button 
+              onClick={deployApp} 
+              disabled={!currentApp?.code || isDeploying}
+              className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${
+                isDeploying 
+                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 animate-pulse' 
+                  : currentApp?.code 
+                    ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/20 border-transparent hover:border-orange-500/30 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)]' 
+                    : 'text-gray-600 cursor-not-allowed border-transparent'
+              }`} 
+              title="Deploy & Get Shareable URL"
+            >
+              {isDeploying ? (
+                <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+              )}
+            </button>
+
             {/* Open in New Tab */}
             <button onClick={openInNewTab} className="p-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all w-full flex justify-center" title="Open in New Tab">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1484,20 +1819,20 @@ const App: React.FC = () => {
                   <div className="flex-1 overflow-y-scroll px-6 pb-6" style={{ maxHeight: 'calc(100vh - 60px)' }}>
                   <div className="mb-6">
                     <label className={`block text-[10px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase mb-2 tracking-widest`}>
-                      New App Concept
+                      Message Agent
                     </label>
                     <textarea
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
-                      placeholder="Ex: Landing page for a SaaS..."
+                      placeholder="Say hi, describe what you want to build, or ask anything..."
                       className={`w-full p-4 text-xs border ${isDarkMode ? 'border-gray-800 bg-black/50 text-gray-200 placeholder:text-gray-700' : 'border-gray-200 bg-gray-50 text-gray-800 placeholder:text-gray-400'} rounded-lg focus:ring-1 focus:ring-cyan-500/50 focus:border-cyan-500/50 outline-none min-h-[120px] resize-none transition-all`}
                     />
                     <button
-                      onClick={() => handleGenerate(prompt, true)}
+                      onClick={() => handleAgentMessage(prompt)}
                       disabled={genState.isGenerating || !prompt.trim()}
                       className="w-full mt-3 py-3 bg-gradient-to-r from-cyan-600 to-emerald-600 text-white text-xs font-bold rounded-lg hover:from-cyan-500 hover:to-emerald-500 disabled:from-gray-700 disabled:to-gray-700 disabled:text-gray-500 flex items-center justify-center gap-2 transition-all shadow-lg shadow-cyan-900/30 uppercase tracking-widest"
                     >
-                      {genState.isGenerating ? 'SYNTHESIZING...' : 'START BUILDING'}
+                      {genState.isGenerating ? 'THINKING...' : 'SEND'}
                     </button>
                   </div>
 
@@ -1544,11 +1879,14 @@ const App: React.FC = () => {
                       {PRESET_TEMPLATES.map((tpl) => (
                         <button
                           key={tpl.name}
-                          onClick={() => setPrompt(tpl.prompt)}
+                          onClick={() => handleTemplateClick(tpl.prompt)}
                           className={`w-full text-left px-4 py-3 text-xs ${isDarkMode ? 'text-gray-400 bg-black/30 border-gray-800 hover:bg-cyan-500/10 hover:border-cyan-500/30' : 'text-gray-600 bg-white border-gray-200 hover:bg-cyan-50 hover:border-cyan-300'} border rounded-lg transition-all flex items-center gap-3 group`}
                         >
                           <span className="text-xl">{tpl.icon}</span>
-                          <span className={`${isDarkMode ? 'group-hover:text-cyan-400' : 'group-hover:text-cyan-600'} transition-colors`}>{tpl.name}</span>
+                          <div className="flex-1">
+                            <span className={`${isDarkMode ? 'group-hover:text-cyan-400' : 'group-hover:text-cyan-600'} transition-colors`}>{tpl.name}</span>
+                            <span className="ml-2 text-[9px] text-gray-600">💬 Chat first</span>
+                          </div>
                         </button>
                       ))}
                     </div>
@@ -1561,35 +1899,72 @@ const App: React.FC = () => {
                 <div className="h-full flex flex-col bg-[#111]/95">
                   <div className="px-6 py-4 flex items-center justify-between">
                     <h3 className="text-xs font-bold text-cyan-500/80 uppercase tracking-widest">
-                      AI Assistant
+                      {conversationMode && !currentApp ? 'AI Assistant - Planning Mode' : 'AI Assistant'}
                     </h3>
-                    <button
-                      onClick={() => setActivePanel(null)}
-                      className="text-gray-600 hover:text-cyan-400 transition-colors"
-                      title="Close"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
+                    <div className="flex items-center gap-2">
+                      {/* New Conversation Button */}
+                      <button
+                        onClick={() => {
+                          setConversationHistory([]);
+                          setIsReadyToBuild(false);
+                          setBuildRequirements('');
+                        }}
+                        className="text-[10px] text-gray-500 hover:text-cyan-400 px-2 py-1 rounded border border-gray-800 hover:border-cyan-500/30"
+                        title="New Conversation"
                       >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
+                        New Chat
+                      </button>
+                      <button
+                        onClick={() => setActivePanel(null)}
+                        className="text-gray-600 hover:text-cyan-400 transition-colors"
+                        title="Close"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-4 w-4"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M6 18L18 6M6 6l12 12"
+                          />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
+                  
+                  {/* Ready to Build Banner */}
+                  {isReadyToBuild && !currentApp && (
+                    <div className="mx-6 mb-3 p-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-bold text-emerald-400">🚀 Ready to build!</p>
+                          <p className="text-[10px] text-gray-400">Requirements gathered. Let's create your app.</p>
+                        </div>
+                        <button
+                          onClick={handleStartBuilding}
+                          disabled={genState.isGenerating}
+                          className="px-4 py-2 bg-gradient-to-r from-cyan-600 to-emerald-600 text-white text-xs font-bold rounded-lg hover:from-cyan-500 hover:to-emerald-500 disabled:opacity-50 flex items-center gap-2 uppercase tracking-wide"
+                        >
+                          {genState.isGenerating ? 'Building...' : 'Start Building'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="flex-1 min-h-0 overflow-hidden">
                     <ChatBox
-                      messages={currentApp?.history || []}
-                      onSendMessage={(text) => handleGenerate(text, false)}
+                      messages={conversationHistory}
+                      onSendMessage={handleAgentMessage}
                       isGenerating={genState.isGenerating}
                       onNewChat={() => {
+                        // Reset conversation
+                        setConversationHistory([]);
+                        setCurrentApp(null);
                         // Create a completely new chat session
                         const newApp = {
                           id: Date.now().toString(),
@@ -1873,7 +2248,7 @@ const App: React.FC = () => {
 
                       {/* Provider Tabs */}
                       <div className="flex gap-1 mb-3 flex-wrap">
-                        {['Anthropic', 'OpenAI', 'Gemini', 'xAI', 'Groq'].map((provider) => (
+                        {['Anthropic', 'OpenAI', 'xAI', 'Groq'].map((provider) => (
                           <button
                             key={provider}
                             onClick={() => setSelectedProvider(provider)}
@@ -2493,6 +2868,80 @@ const App: React.FC = () => {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🚀 Deploy Success Modal */}
+      {showDeployModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-[#111] border border-gray-800 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl shadow-cyan-500/10">
+            {isDeploying ? (
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-orange-500/20 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-orange-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Deploying Your App...</h3>
+                <p className="text-gray-500 text-sm">Creating shareable URL</p>
+              </div>
+            ) : deployedUrl ? (
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                  <svg className="w-8 h-8 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">🎉 Deployed Successfully!</h3>
+                <p className="text-gray-500 text-sm mb-6">Your app is now live at:</p>
+                
+                {/* URL Display */}
+                <div className="bg-black/50 border border-gray-700 rounded-lg p-3 mb-4">
+                  <a 
+                    href={deployedUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-cyan-400 hover:text-cyan-300 text-sm break-all font-mono"
+                  >
+                    {deployedUrl}
+                  </a>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3">
+                  <button 
+                    onClick={copyDeployedUrl}
+                    className="flex-1 py-3 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Copy URL
+                  </button>
+                  <a 
+                    href={deployedUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex-1 py-3 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg font-bold transition-all flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                    Open
+                  </a>
+                </div>
+
+                {/* Close Button */}
+                <button 
+                  onClick={() => { setShowDeployModal(false); setDeployedUrl(null); }}
+                  className="w-full mt-4 py-2 text-gray-500 hover:text-gray-400 text-sm transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

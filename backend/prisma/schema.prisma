@@ -40,6 +40,7 @@ model User {
   usageLogs         UsageLog[]
   billingHistory    BillingHistory[]
   apiKeys           ApiKey[]
+  hostedApps        HostedApp[]
   
   @@map("users")
 }
@@ -343,4 +344,89 @@ model CreditPackage {
   updatedAt       DateTime  @updatedAt @map("updated_at")
   
   @@map("credit_packages")
+}
+
+// ============================================================================
+// HOSTED APPS (Phase 2: Canvas Studio Hosting)
+// ============================================================================
+
+model HostedApp {
+  id              String    @id @default(cuid())
+  userId          String?   @map("user_id")  // Optional for demo/anonymous
+  
+  // App identification
+  slug            String    @unique  // URL slug: myapp-123abc
+  name            String
+  description     String?
+  
+  // Code & Language
+  code            String    @db.Text
+  language        String    @default("html")  // html, react, typescript, javascript, python
+  
+  // Metadata
+  framework       String?   // react, vue, vanilla, flask, etc.
+  thumbnail       String?   // Screenshot URL
+  
+  // Access control
+  isPublic        Boolean   @default(true) @map("is_public")
+  password        String?   // Optional password protection
+  allowedEmails   String[]  @default([]) @map("allowed_emails")
+  
+  // Custom domain (Phase 2)
+  customDomain    String?   @unique @map("custom_domain")
+  sslEnabled      Boolean   @default(false) @map("ssl_enabled")
+  sslCertPath     String?   @map("ssl_cert_path")
+  sslKeyPath      String?   @map("ssl_key_path")
+  
+  // Analytics
+  viewCount       Int       @default(0) @map("view_count")
+  lastViewedAt    DateTime? @map("last_viewed_at")
+  
+  // Status
+  status          HostedAppStatus @default(ACTIVE)
+  
+  // AI Generation context
+  originalPrompt  String?   @map("original_prompt") @db.Text
+  aiModel         String?   @map("ai_model")
+  aiProvider      String?   @map("ai_provider")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  publishedAt     DateTime? @map("published_at")
+  
+  // Relations
+  user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  versions        HostedAppVersion[]
+  
+  @@index([userId, createdAt])
+  @@index([slug])
+  @@index([customDomain])
+  @@map("hosted_apps")
+}
+
+model HostedAppVersion {
+  id              String    @id @default(cuid())
+  appId           String    @map("app_id")
+  
+  // Version info
+  version         Int       @default(1)
+  code            String    @db.Text
+  changeNote      String?   @map("change_note")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  
+  // Relations
+  app             HostedApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@index([appId, version])
+  @@map("hosted_app_versions")
+}
+
+enum HostedAppStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+  SUSPENDED
 }

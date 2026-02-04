@@ -2232,10 +2232,16 @@ app.use('/api/canvas', canvasRoutes);
 import filesRoutes from './routes/files.js';
 app.use('/api/files', filesRoutes);
 
+// Import and mount hosting routes for /api/hosting endpoints (Phase 2: One-click deploy)
+import hostingRoutes from './routes/hosting.js';
+app.use('/api/hosting', hostingRoutes);
+
+// Import and mount chat routes for /api/chat endpoints (streaming, etc.)
+import chatRoutes from './routes/chat.js';
+app.use('/api/chat', chatRoutes);
+
 // Note: Other routes are defined inline above. Separate route files available:
-// import chatRoutes from './routes/chat.js';
 // import billingRoutes from './routes/billing.js';
-// app.use('/api/chat', chatRoutes);
 // app.use('/api/billing', billingRoutes);
 
 // ============================================================================

@@ -8,8 +8,8 @@ interface CanvasAppDrawerProps {
 const CanvasAppDrawer: React.FC<CanvasAppDrawerProps> = ({ isOpen, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
   
-  // Use neural-chat's own canvas-app
-  const canvasAppUrl = '/canvas-app/';
+  // Use neural-chat's own canvas-build (inside neural-chat folder)
+  const canvasAppUrl = '/neural-chat/canvas-build/';
 
   useEffect(() => {
     if (isOpen) {

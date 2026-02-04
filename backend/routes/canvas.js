@@ -153,6 +153,52 @@ User: "Make the header blue"
 User: "Add a login form"
 → Output: Full file with new login form component added
 
+## MULTI-PAGE APPLICATIONS
+When user asks for a "website" with multiple pages (Home, About, Contact, etc.):
+- ALWAYS implement ALL pages with working navigation
+- Use JavaScript-based page switching (single file, multiple "views")
+- Pages should have UNIQUE, MEANINGFUL content - not placeholders
+
+User: "Create a portfolio website with Home, Projects, About, Contact pages"
+→ Generate full app with 4 real pages, each with proper content and working navigation
+
+User: "Build a company website with all standard pages"
+→ Include: Home (hero, features), About (team, history), Services (list of offerings), Contact (form), possibly Blog, Pricing, etc.
+
+## SPECIFIC EDITING & MODIFICATIONS
+When user asks to edit/modify SPECIFIC parts, ONLY change those parts while keeping everything else:
+
+User: "Change the hero text to 'Welcome to My Site'"
+→ Find the hero section, update ONLY the text, keep all styling and other content
+
+User: "Add a new page called 'Pricing'"
+→ Add new page to navigation AND create the page content, keep all existing pages
+
+User: "Make the contact form have email and phone fields"
+→ Update ONLY the contact form, keep all other parts of the app
+
+User: "Change the color scheme to purple"
+→ Update color classes throughout, but keep all functionality and layout
+
+User: "Add a footer with social links"
+→ Add footer component/section, don't touch existing content
+
+User: "Remove the about page"
+→ Remove from navigation AND remove the page content, keep everything else
+
+User: "Make the navbar sticky"
+→ Add position: sticky/fixed to header, don't change other styling
+
+## TARGETED EDIT KEYWORDS
+Listen for these phrases that indicate specific modifications:
+- "change the [X]" → Edit only X
+- "update the [X]" → Edit only X  
+- "add [X] to the [Y]" → Add X inside Y section
+- "remove the [X]" → Delete only X
+- "make the [X] [adjective]" → Style change to X only
+- "in the [section], do [action]" → Targeted edit
+- "only modify" / "just change" → Very targeted edit
+
 ## WHAT NOT TO DO
 ❌ Don't wrap code in \`\`\` blocks
 ❌ Don't explain what you're doing
@@ -160,6 +206,8 @@ User: "Add a login form"
 ❌ Don't say "Here's the code:"
 ❌ Don't ask clarifying questions (make best judgment)
 ❌ Don't include placeholder comments like "// rest of code here"
+❌ Don't create single-page apps when user clearly wants multiple pages
+❌ Don't use placeholder text like "Lorem ipsum" - create REAL content
 
 ## ⚠️ CRITICAL: SINGLE FILE OUTPUT ⚠️
 ALL CODE MUST BE IN A SINGLE FILE!
@@ -190,11 +238,22 @@ import Header from './components/Header'; // ❌ FORBIDDEN
 
 const LANGUAGE_SPECIFIC_RULES = {
   html: `
-## CURRENT TASK: HTML APPLICATION (FULLY FUNCTIONAL)
-Generate a complete, single-file HTML application with FULL INTERACTIVITY.
+## CURRENT TASK: HTML APPLICATION (FULLY FUNCTIONAL MULTI-PAGE)
+Generate a complete, single-file HTML application with FULL INTERACTIVITY and MULTIPLE PAGES.
 
-⚠️ CRITICAL: MAKE EVERYTHING WORK! ⚠️
-This is NOT just a static page. Every button, tab, link, and interaction MUST work!
+⚠️ CRITICAL RULES ⚠️
+1. MAKE EVERYTHING WORK! Every button, tab, link must function
+2. CREATE MULTIPLE PAGES when user asks for a "website" or multiple sections
+3. Each page must have REAL, MEANINGFUL content - no placeholders!
+4. ALL navigation must actually switch between pages
+
+## DEFAULT: MULTI-PAGE WEBSITE
+Unless user specifically asks for a "single page" or "landing page", CREATE MULTIPLE PAGES:
+- Home page (hero, features, CTA)
+- About page (team, mission, story)
+- Services/Products page (offerings with details)
+- Contact page (working form)
+- Possibly: Blog, Pricing, FAQ, Portfolio, etc.
 
 ## NAVIGATION & PAGE SWITCHING (JAVASCRIPT-BASED)
 Since it's a single file, use JavaScript to switch between "pages":
@@ -213,22 +272,58 @@ Since it's a single file, use JavaScript to switch between "pages":
       link.classList.toggle('text-cyan-400', link.dataset.page === page);
       link.classList.toggle('text-gray-400', link.dataset.page !== page);
     });
+    // Scroll to top
+    window.scrollTo(0, 0);
   }
 </script>
 
-<!-- Navigation -->
-<nav class="flex gap-6">
-  <button onclick="showPage('home')" data-page="home" class="nav-link text-cyan-400">Home</button>
-  <button onclick="showPage('about')" data-page="about" class="nav-link text-gray-400">About</button>
-  <button onclick="showPage('services')" data-page="services" class="nav-link text-gray-400">Services</button>
-  <button onclick="showPage('contact')" data-page="contact" class="nav-link text-gray-400">Contact</button>
-</nav>
+<!-- Navigation (in header) -->
+<header class="fixed top-0 left-0 right-0 bg-[#0a0a0a]/90 backdrop-blur-md z-50 border-b border-gray-800">
+  <nav class="container mx-auto px-6 py-4 flex items-center justify-between">
+    <div class="text-xl font-bold text-cyan-400">Brand</div>
+    <div class="flex gap-6">
+      <button onclick="showPage('home')" data-page="home" class="nav-link text-cyan-400 hover:text-white transition">Home</button>
+      <button onclick="showPage('about')" data-page="about" class="nav-link text-gray-400 hover:text-white transition">About</button>
+      <button onclick="showPage('services')" data-page="services" class="nav-link text-gray-400 hover:text-white transition">Services</button>
+      <button onclick="showPage('contact')" data-page="contact" class="nav-link text-gray-400 hover:text-white transition">Contact</button>
+    </div>
+  </nav>
+</header>
 
-<!-- Pages (only one visible at a time) -->
-<div id="page-home" class="page"><!-- Home content --></div>
-<div id="page-about" class="page hidden"><!-- About content --></div>
-<div id="page-services" class="page hidden"><!-- Services content --></div>
-<div id="page-contact" class="page hidden"><!-- Contact content --></div>
+<!-- Pages (only one visible at a time) - ADD REAL CONTENT TO EACH! -->
+<main class="pt-20">
+  <div id="page-home" class="page">
+    <!-- Hero section with headline, subtext, CTA button -->
+    <!-- Features section with 3-4 feature cards -->
+    <!-- Testimonials or social proof -->
+  </div>
+  <div id="page-about" class="page hidden">
+    <!-- Company story/mission -->
+    <!-- Team section with photos and bios -->
+    <!-- Values or history timeline -->
+  </div>
+  <div id="page-services" class="page hidden">
+    <!-- Service cards with icons, descriptions, prices -->
+    <!-- Call to action for each service -->
+  </div>
+  <div id="page-contact" class="page hidden">
+    <!-- Contact form (name, email, message) - MUST WORK! -->
+    <!-- Contact info (address, phone, email) -->
+    <!-- Map placeholder or social links -->
+  </div>
+</main>
+
+<!-- Footer (always visible) -->
+<footer class="bg-gray-900 border-t border-gray-800 py-12">
+  <!-- Footer links, social icons, copyright -->
+</footer>
+
+## WHEN USER ASKS TO MODIFY A PAGE
+If user says "change the about page" or "update contact section":
+1. Find that specific page/section
+2. Modify ONLY that part
+3. Keep all other pages exactly the same
+4. Return the FULL file with the targeted change
 
 ## TABS (MUST SWITCH CONTENT)
 <script>
@@ -363,40 +458,96 @@ Required structure:
 ✅ EVERY form must SUBMIT properly
 ✅ EVERY button must have onclick that WORKS
 ✅ Include JavaScript for ALL interactivity
+✅ CREATE MULTIPLE PAGES when user wants a "website"
 ❌ NO dead buttons
 ❌ NO tabs that don't switch
-❌ NO forms that don't work`,
+❌ NO forms that don't work
+❌ NO placeholder text - use REAL content`,
 
   react: `
-## CURRENT TASK: REACT APPLICATION (FULLY FUNCTIONAL)
-Generate a SINGLE-FILE React TypeScript application with FULL FUNCTIONALITY.
+## CURRENT TASK: REACT APPLICATION (FULLY FUNCTIONAL MULTI-PAGE)
+Generate a SINGLE-FILE React TypeScript application with FULL FUNCTIONALITY and MULTIPLE PAGES.
 
-⚠️ CRITICAL: MAKE EVERYTHING WORK! ⚠️
-This is NOT just a static mockup. Every button, tab, link, and interaction MUST work!
+⚠️ CRITICAL RULES ⚠️
+1. MAKE EVERYTHING WORK! Every button, tab, link must function
+2. CREATE MULTIPLE PAGES when user asks for a "website" or mentions multiple sections
+3. Each page must have REAL, MEANINGFUL content - no Lorem ipsum!
+4. ALL navigation must actually switch between pages
+
+## DEFAULT: MULTI-PAGE WEBSITE
+Unless user specifically asks for a "single page" or "landing page", CREATE MULTIPLE PAGES:
+- Home page (hero, features, CTA)
+- About page (team, mission, story)
+- Services/Products page (offerings with details)
+- Contact page (working form)
+- Possibly: Blog, Pricing, FAQ, Portfolio, etc.
 
 ## ROUTING & NAVIGATION (USE STATE-BASED ROUTING)
 Since we can't use react-router in Sandpack, implement client-side navigation with useState:
 
-const [currentPage, setCurrentPage] = useState('home');
+// State for current page
+const [currentPage, setCurrentPage] = useState<'home' | 'about' | 'services' | 'contact'>('home');
 
-// Navigation component
+// Navigation component (in header)
 const Navigation = () => (
-  <nav className="flex gap-4">
-    <button onClick={() => setCurrentPage('home')} className={currentPage === 'home' ? 'text-cyan-400' : 'text-gray-400'}>Home</button>
-    <button onClick={() => setCurrentPage('about')} className={currentPage === 'about' ? 'text-cyan-400' : 'text-gray-400'}>About</button>
-    <button onClick={() => setCurrentPage('contact')} className={currentPage === 'contact' ? 'text-cyan-400' : 'text-gray-400'}>Contact</button>
-  </nav>
+  <header className="fixed top-0 left-0 right-0 bg-[#0a0a0a]/90 backdrop-blur-md z-50 border-b border-gray-800">
+    <nav className="container mx-auto px-6 py-4 flex items-center justify-between">
+      <div className="text-xl font-bold text-cyan-400">Brand</div>
+      <div className="flex gap-6">
+        {(['home', 'about', 'services', 'contact'] as const).map(page => (
+          <button 
+            key={page}
+            onClick={() => setCurrentPage(page)} 
+            className={\`\${currentPage === page ? 'text-cyan-400' : 'text-gray-400'} hover:text-white transition capitalize\`}
+          >
+            {page}
+          </button>
+        ))}
+      </div>
+    </nav>
+  </header>
 );
 
-// Page rendering
-const renderPage = () => {
-  switch(currentPage) {
-    case 'home': return <HomePage />;
-    case 'about': return <AboutPage />;
-    case 'contact': return <ContactPage />;
-    default: return <HomePage />;
-  }
-};
+// Page components - EACH WITH REAL CONTENT!
+const HomePage = () => (
+  <div className="pt-20">
+    {/* Hero with headline, subtext, CTA */}
+    {/* Features section */}
+    {/* Testimonials */}
+  </div>
+);
+
+const AboutPage = () => (
+  <div className="pt-20">
+    {/* Company story */}
+    {/* Team section */}
+  </div>
+);
+
+// Main app renders current page
+export default function App() {
+  const [currentPage, setCurrentPage] = useState<'home' | 'about' | 'services' | 'contact'>('home');
+  
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-white">
+      <Navigation />
+      <main className="pt-20">
+        {currentPage === 'home' && <HomePage />}
+        {currentPage === 'about' && <AboutPage />}
+        {currentPage === 'services' && <ServicesPage />}
+        {currentPage === 'contact' && <ContactPage />}
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+## WHEN USER ASKS TO MODIFY A PAGE/SECTION
+If user says "change the about page" or "update the hero section":
+1. Find that specific page/section component
+2. Modify ONLY that part
+3. Keep all other pages and components exactly the same
+4. Return the FULL file with the targeted change
 
 ## TABS (MUST ACTUALLY SWITCH CONTENT)
 const [activeTab, setActiveTab] = useState('dashboard');
@@ -935,15 +1086,11 @@ const MODEL_MAPPING = {
   'claude-3-5-sonnet': 'claude-sonnet-4-20250514',
   'claude-3-opus': 'claude-3-opus-20240229',
   'claude-sonnet-4': 'claude-sonnet-4-20250514',
+  'claude-opus-4': 'claude-sonnet-4-20250514',
   // OpenAI
   'gpt-4o': 'gpt-4o',
   'gpt-4o-mini': 'gpt-4o-mini',
   'gpt-4.1': 'gpt-4.1',
-  // Gemini
-  'gemini-1.5-flash': 'gemini-1.5-flash',
-  'gemini-1.5-pro': 'gemini-1.5-pro',
-  'gemini-2.0-flash': 'gemini-2.0-flash',
-  'gemini-2.5-pro': 'gemini-2.5-pro-exp-03-25',
   // xAI
   'grok-3': 'grok-3',
   // Groq
@@ -954,21 +1101,279 @@ const MODEL_MAPPING = {
 const PROVIDER_MAPPING = {
   'Anthropic': 'anthropic',
   'OpenAI': 'openai',
-  'Gemini': 'gemini',
   'xAI': 'xai',
   'Groq': 'groq',
 };
 
 // ============================================================================
-// GENERATE APP CODE
+// UNIFIED AGENT ENDPOINT - AI decides what to do
+// ============================================================================
+
+const AGENT_DECISION_PROMPT = `You are Canvas Agent, an intelligent AI assistant for One Last AI's Canvas Studio.
+
+## YOUR ROLE
+You receive messages from users and YOU DECIDE what action to take. You are not scripted - you make intelligent decisions based on the context.
+
+## DECISION FRAMEWORK
+Analyze each message and decide:
+
+1. **CHAT** - When user is:
+   - Greeting you (hi, hello, hey)
+   - Asking questions about what you can do
+   - Having a casual conversation
+   - Exploring ideas without a clear build request
+   - Needs clarification before building
+
+2. **BUILD** - When user:
+   - Clearly describes an app/website/page they want
+   - Gives specific requirements for a new project
+   - Uses words like "build", "create", "make" with clear details
+   - Example: "Create a portfolio website with home, projects, about, and contact pages"
+
+3. **EDIT** - When user:
+   - Wants to change existing code (you have currentCode)
+   - Says "change", "update", "modify", "add to", "remove"
+   - Refers to something in the current app
+
+## RESPONSE FORMAT
+You MUST respond with a JSON object (and nothing else):
+
+For CHAT:
+{"action": "chat", "message": "Your friendly conversational response here"}
+
+For BUILD:
+{"action": "build", "requirements": "Clear description of what to build based on user's request"}
+
+For EDIT:
+{"action": "edit", "instruction": "Specific edit instruction for the code"}
+
+## EXAMPLES
+
+User: "hi"
+{"action": "chat", "message": "Hey! 👋 I'm Canvas Agent, ready to help you build something amazing. What would you like to create today?"}
+
+User: "what can you do?"
+{"action": "chat", "message": "I can build complete web applications, dashboards, landing pages, portfolios - you name it! Just describe what you want, and I'll create it for you. What do you have in mind?"}
+
+User: "I want to build something for my business"
+{"action": "chat", "message": "Nice! I'd love to help with that. What kind of business is it? And what do you need - a website, a dashboard, a landing page? Tell me more and I'll make sure it's perfect for you."}
+
+User: "Create a modern SaaS landing page with hero, features, pricing, and testimonials"
+{"action": "build", "requirements": "Modern SaaS landing page with: hero section with headline and CTA, features section with icons, pricing table with 3 tiers, testimonials carousel, professional dark theme"}
+
+User: "Make the header blue" (when currentCode exists)
+{"action": "edit", "instruction": "Change the header/navbar background color to blue"}
+
+User: "Add a contact form"  (when currentCode exists)
+{"action": "edit", "instruction": "Add a contact form section with name, email, and message fields"}
+
+## IMPORTANT
+- ONLY output valid JSON, nothing else
+- Be friendly and helpful in chat messages
+- For build/edit, extract clear requirements from the user's message
+- When in doubt, chat to clarify rather than guessing`;
+
+router.post('/agent', optionalAuth, async (req, res) => {
+  try {
+    const { 
+      message, 
+      currentCode,
+      conversationHistory = [],
+      provider = 'Anthropic', 
+      modelId = 'claude-sonnet-4',
+    } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    console.log('[Canvas Agent] Received message:', message.substring(0, 50) + '...');
+
+    // Create mock user for demo mode if not authenticated
+    const user = req.user || {
+      id: 'demo-user',
+      credits: { balance: 100 },
+    };
+
+    // Initialize AI service
+    const aiService = new AIService(user);
+
+    // Build context for agent decision
+    let contextInfo = '';
+    if (currentCode) {
+      contextInfo = `\n\n[CONTEXT: User has existing code in the editor. Language: ${detectLanguage(currentCode)}]`;
+    }
+    if (conversationHistory.length > 0) {
+      contextInfo += `\n[CONTEXT: Previous conversation exists with ${conversationHistory.length} messages]`;
+    }
+
+    // Ask agent to decide what to do
+    const decisionMessages = [
+      { role: 'user', content: message + contextInfo }
+    ];
+
+    // Use Anthropic for decision making (more reliable than Gemini which has referrer issues)
+    const decisionResult = await aiService.chat(
+      decisionMessages,
+      'anthropic',
+      'claude-sonnet-4-20250514',
+      {
+        systemPrompt: AGENT_DECISION_PROMPT,
+        maxTokens: 512,
+        endpoint: 'canvas-agent-decision',
+      }
+    );
+
+    // Parse agent's decision
+    let decision;
+    try {
+      // Clean the response - remove any markdown code blocks
+      let cleanResponse = decisionResult.content.trim();
+      if (cleanResponse.startsWith('```')) {
+        cleanResponse = cleanResponse.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
+      }
+      decision = JSON.parse(cleanResponse);
+    } catch (parseError) {
+      console.error('[Canvas Agent] Failed to parse decision:', decisionResult.content);
+      // Default to chat if parsing fails
+      decision = { action: 'chat', message: decisionResult.content };
+    }
+
+    console.log('[Canvas Agent] Decision:', decision.action);
+
+    // Execute the decision
+    if (decision.action === 'chat') {
+      // Just return the chat response
+      return res.json({
+        success: true,
+        action: 'chat',
+        message: decision.message,
+      });
+    }
+
+    if (decision.action === 'build') {
+      // Map to backend IDs
+      const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
+      const backendModel = MODEL_MAPPING[modelId] || modelId;
+      const language = detectLanguageFromPrompt(decision.requirements);
+      const systemPrompt = getSystemPrompt(language);
+
+      const buildPrompt = `## NEW APPLICATION REQUEST
+
+Create a complete ${language === 'react' ? 'React TypeScript component' : 'HTML application'} for:
+${decision.requirements}
+
+## Instructions:
+1. Generate complete, production-ready code
+2. Follow all the rules in your system prompt
+3. Make it beautiful and functional
+4. Return ONLY the code, no explanations`;
+
+      const buildResult = await aiService.chat(
+        [{ role: 'user', content: buildPrompt }],
+        backendProvider,
+        backendModel,
+        {
+          systemPrompt,
+          maxTokens: 16384,
+          endpoint: 'canvas-agent-build',
+        }
+      );
+
+      // Clean the code
+      let code = buildResult.content;
+      code = code.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
+
+      return res.json({
+        success: true,
+        action: 'build',
+        code,
+        language,
+        message: 'Application built successfully!',
+      });
+    }
+
+    if (decision.action === 'edit') {
+      if (!currentCode) {
+        return res.json({
+          success: true,
+          action: 'chat',
+          message: "I'd love to edit your code, but I don't see any code to edit yet. Would you like me to build something first?",
+        });
+      }
+
+      // Map to backend IDs
+      const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
+      const backendModel = MODEL_MAPPING[modelId] || modelId;
+      const language = detectLanguage(currentCode);
+      const systemPrompt = getSystemPrompt(language);
+
+      const editPrompt = `## MODIFICATION REQUEST
+
+Current ${language.toUpperCase()} code to modify:
+\`\`\`${language}
+${currentCode}
+\`\`\`
+
+## User's Request:
+${decision.instruction}
+
+## Instructions:
+1. Analyze the current code
+2. Make ONLY the requested changes
+3. Return the COMPLETE updated file
+4. Do NOT include markdown code blocks in your response`;
+
+      const editResult = await aiService.chat(
+        [{ role: 'user', content: editPrompt }],
+        backendProvider,
+        backendModel,
+        {
+          systemPrompt,
+          maxTokens: 16384,
+          endpoint: 'canvas-agent-edit',
+        }
+      );
+
+      // Clean the code
+      let code = editResult.content;
+      code = code.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
+
+      return res.json({
+        success: true,
+        action: 'edit',
+        code,
+        language,
+        message: 'Changes applied!',
+      });
+    }
+
+    // Fallback
+    return res.json({
+      success: true,
+      action: 'chat',
+      message: decision.message || "I'm not sure what you'd like me to do. Could you tell me more?",
+    });
+
+  } catch (error) {
+    console.error('[Canvas Agent] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Agent failed',
+    });
+  }
+});
+
+// ============================================================================
+// GENERATE APP CODE (Legacy - kept for compatibility)
 // ============================================================================
 
 router.post('/generate', optionalAuth, async (req, res) => {
   try {
     const { 
       prompt, 
-      provider = 'Gemini', 
-      modelId = 'gemini-2.0-flash',
+      provider = 'Anthropic', 
+      modelId = 'claude-sonnet-4',
       isThinking = false,
       currentCode,
       history = [],
@@ -1133,6 +1538,262 @@ ${prompt}
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Failed to generate code',
+    });
+  }
+});
+
+// ============================================================================
+// INTENT DETECTION - Determines if user wants to chat or build directly
+// ============================================================================
+
+// Keywords that indicate direct build intent
+const BUILD_KEYWORDS = [
+  'build', 'create', 'make', 'generate', 'design', 'develop',
+  'landing page', 'website', 'app', 'dashboard', 'portfolio',
+  'e-commerce', 'ecommerce', 'store', 'shop', 'blog',
+  'todo', 'calculator', 'form', 'login', 'signup',
+  'react', 'html', 'python', 'typescript',
+  'add', 'change', 'update', 'fix', 'modify', 'remove'
+];
+
+// Keywords/patterns that indicate casual chat
+const CHAT_KEYWORDS = [
+  'hi', 'hello', 'hey', 'yo', 'sup',
+  'how are you', 'what can you do', 'help me',
+  'what is', 'tell me', 'explain',
+  'i want', 'i need', 'i\'m thinking', 'i\'d like',
+  'can you', 'could you', 'would you',
+  'not sure', 'ideas', 'suggest', 'recommend'
+];
+
+function detectIntent(message) {
+  const lowerMsg = message.toLowerCase().trim();
+  
+  // Very short messages are usually greetings/chat
+  if (lowerMsg.length < 15) {
+    // Check if it's a simple greeting
+    const greetings = ['hi', 'hello', 'hey', 'yo', 'sup', 'hola', 'howdy'];
+    if (greetings.some(g => lowerMsg === g || lowerMsg.startsWith(g + ' ') || lowerMsg.startsWith(g + '!'))) {
+      return 'chat';
+    }
+  }
+  
+  // Check for explicit build commands
+  const hasBuildKeyword = BUILD_KEYWORDS.some(kw => lowerMsg.includes(kw));
+  const hasChatKeyword = CHAT_KEYWORDS.some(kw => lowerMsg.includes(kw));
+  
+  // If it contains build keywords AND is specific enough, it's a build request
+  if (hasBuildKeyword && lowerMsg.length > 20) {
+    // Check if it's descriptive enough to build
+    if (lowerMsg.includes('with') || lowerMsg.includes('for') || 
+        lowerMsg.includes('that') || lowerMsg.includes('landing') ||
+        lowerMsg.includes('website') || lowerMsg.includes('dashboard') ||
+        lowerMsg.includes('app')) {
+      return 'build';
+    }
+  }
+  
+  // Vague build requests should start a conversation
+  if (hasBuildKeyword && hasChatKeyword) {
+    return 'chat';
+  }
+  
+  // Questions are always chat
+  if (lowerMsg.includes('?')) {
+    return 'chat';
+  }
+  
+  // Short vague messages = chat
+  if (lowerMsg.length < 40 && !hasBuildKeyword) {
+    return 'chat';
+  }
+  
+  // Long descriptive messages with build keywords = build
+  if (hasBuildKeyword && lowerMsg.length > 50) {
+    return 'build';
+  }
+  
+  // Default to chat for safety
+  return 'chat';
+}
+
+// ============================================================================
+// CONVERSATIONAL CHAT (Natural conversation before building)
+// ============================================================================
+
+const CONVERSATION_SYSTEM_PROMPT = `You are Canvas AI, a friendly and helpful AI assistant for One Last AI's Canvas Studio.
+
+## YOUR ROLE
+You're having a natural conversation with the user to understand what they want to build.
+- Be friendly, natural, and conversational (like chatting with a friend)
+- Ask clarifying questions to understand their needs
+- Help them think through their requirements
+- When you have enough information, summarize what you'll build and ask for confirmation
+
+## CONVERSATION FLOW
+1. **Greet & Understand**: Welcome them and understand their vision
+2. **Ask Questions**: Clarify requirements, features, design preferences
+3. **Suggest Ideas**: Offer suggestions based on their needs
+4. **Summarize**: When ready, provide a clear summary of what you'll build
+5. **Confirm**: Ask "Shall I start building this for you?"
+
+## GOOD QUESTIONS TO ASK
+- "What's the main purpose of this website/app?"
+- "Who is the target audience?"
+- "What pages or sections do you need?"
+- "Any specific color scheme or style preference?"
+- "Any features you must have?"
+- "Any websites you like for inspiration?"
+
+## RESPONSE STYLE
+- Keep responses concise but helpful (2-4 sentences usually)
+- Use emojis occasionally for friendliness 😊
+- Be encouraging and positive
+- When they're ready to build, end with: "[READY_TO_BUILD]" in your response
+
+## EXAMPLE CONVERSATION
+User: "I want a portfolio website"
+You: "Great choice! 🎨 A portfolio is perfect for showcasing your work. What field are you in - design, development, photography, or something else? And do you have a preferred style - minimal, bold, creative?"
+
+User: "I'm a photographer, I like minimal style"
+You: "Perfect! Minimal works beautifully for photography - lets the images shine. ✨ For your portfolio, I'm thinking:
+• Clean hero with your best shot
+• Gallery grid for your work
+• About section with your story  
+• Contact form for inquiries
+
+Any specific pages or features you'd like to add? And any color preferences - classic black/white, or maybe a subtle accent color?"
+
+User: "That sounds good, add a pricing page too"
+You: "Excellent! Here's what I'll build for you:
+
+📸 **Photographer Portfolio Website**
+- **Home**: Minimal hero with featured work
+- **Gallery**: Beautiful grid of your photos
+- **About**: Your story and experience
+- **Pricing**: Package options for clients
+- **Contact**: Simple contact form
+
+Style: Minimal & elegant with black/white + subtle accents
+
+Shall I start building this for you? [READY_TO_BUILD]"
+
+## IMPORTANT
+- Do NOT generate any code during conversation
+- Do NOT use markdown code blocks
+- Stay focused on understanding requirements
+- Be patient and helpful`;
+
+// ============================================================================
+// DETECT INTENT - Quick endpoint to determine chat vs build
+// ============================================================================
+
+router.post('/detect-intent', (req, res) => {
+  try {
+    const { message, hasCurrentApp } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+    
+    // If user already has an app, any message is likely an edit request
+    if (hasCurrentApp) {
+      return res.json({ success: true, intent: 'edit' });
+    }
+    
+    const intent = detectIntent(message);
+    console.log(`[Canvas Intent] "${message.substring(0, 50)}..." → ${intent}`);
+    
+    res.json({ success: true, intent });
+  } catch (error) {
+    console.error('[Canvas Intent] Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ============================================================================
+// CANVAS CHAT - For conversational flow
+// ============================================================================
+
+router.post('/chat', optionalAuth, async (req, res) => {
+  try {
+    const { 
+      message, 
+      conversationHistory = [],
+      templateContext, // If started from a template
+    } = req.body;
+
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+
+    console.log('[Canvas Chat] Conversational message received');
+
+    // Build conversation messages
+    const messages = [];
+    
+    // Add template context if provided
+    if (templateContext && conversationHistory.length === 0) {
+      messages.push({
+        role: 'user',
+        content: `I'm interested in building something like: "${templateContext}". Help me refine my requirements.`,
+      });
+    }
+    
+    // Add conversation history
+    conversationHistory.forEach(msg => {
+      messages.push({
+        role: msg.role === 'user' ? 'user' : 'assistant',
+        content: msg.text || msg.content,
+      });
+    });
+    
+    // Add current message
+    messages.push({ role: 'user', content: message });
+
+    // Create mock user for demo mode if not authenticated
+    const user = req.user || {
+      id: 'demo-user',
+      credits: { balance: 100 },
+    };
+
+    // Initialize AI service
+    const aiService = new AIService(user);
+
+    // Use Claude for conversational chat
+    const result = await aiService.chat(
+      messages,
+      'anthropic',
+      'claude-sonnet-4-20250514',
+      {
+        systemPrompt: CONVERSATION_SYSTEM_PROMPT,
+        maxTokens: 1024,
+        endpoint: 'canvas-chat',
+      }
+    );
+
+    const response = result.content;
+    const isReadyToBuild = response.includes('[READY_TO_BUILD]');
+    
+    // Clean the response (remove the marker)
+    const cleanedResponse = response.replace('[READY_TO_BUILD]', '').trim();
+
+    res.json({ 
+      success: true, 
+      message: cleanedResponse,
+      isReadyToBuild,
+      usage: {
+        provider: result.provider,
+        model: result.model,
+        creditsCost: result.creditsCost,
+      },
+    });
+
+  } catch (error) {
+    console.error('[Canvas Chat] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Chat failed',
     });
   }
 });
