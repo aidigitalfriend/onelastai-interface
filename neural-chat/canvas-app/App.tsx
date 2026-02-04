@@ -11,6 +11,7 @@ import CodeView from './components/CodeView';
 import ChatBox from './components/ChatBox';
 import CanvasNavDrawer from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
+import { useEditorBridge } from './services/useEditorBridge';
 
 // AI Models - 7 Providers, 14 Models with friendly names
 const MODELS: ModelOption[] = [
@@ -187,6 +188,19 @@ const App: React.FC = () => {
     error: null,
     progressMessage: '',
   });
+
+  // 🔗 EDITOR BRIDGE - Full editor integration
+  const editorBridge = useEditorBridge({
+    'main.html': currentApp?.code || ''
+  });
+
+  // Sync currentApp.code to editorBridge when it changes
+  useEffect(() => {
+    if (currentApp?.code) {
+      editorBridge.setFile('main.html', currentApp.code);
+      editorBridge.setActiveFile('main.html');
+    }
+  }, [currentApp?.code]);
 
   // Load dark mode preference
   useEffect(() => {

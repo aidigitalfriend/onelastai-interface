@@ -12,6 +12,7 @@ import Footer from './components/Footer';
 import { ChatSession, Message, SettingsState, NavItem, CanvasState, WorkspaceMode, FileAttachment } from './types';
 import { DEFAULT_SETTINGS, NEURAL_PRESETS } from './constants';
 import { callBackendAPI, streamChat, extractFileText } from './services/apiService';
+import { useFileBridge } from './services/useFileBridge';
 
 const App: React.FC = () => {
   // UI State
@@ -34,6 +35,25 @@ const App: React.FC = () => {
   
   // File attachment state
   const [pendingFiles, setPendingFiles] = useState<FileAttachment[]>([]);
+
+  // File Bridge for comprehensive file operations
+  const fileBridge = useFileBridge({
+    onMessage: (message) => {
+      console.log('[FileBridge]', message);
+    },
+    onProgress: (percent, message) => {
+      console.log('[FileBridge Progress]', percent, message);
+    },
+    onApprovalRequest: async (request) => {
+      const confirmed = window.confirm(
+        `Allow ${request.action} on ${request.path}?\n${request.details || ''}`
+      );
+      return confirmed;
+    },
+    onQuestion: async (question) => {
+      return window.prompt(question);
+    }
+  });
 
   // Gemini Live & STT Refs
   const recognitionRef = useRef<any>(null);

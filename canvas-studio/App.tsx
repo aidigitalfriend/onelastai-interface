@@ -12,6 +12,7 @@ import ChatBox from './components/ChatBox';
 import CanvasNavDrawer, { trackCanvasUsage, trackCanvasProject } from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
 import Overlay from './components/Overlay';
+import { useEditorBridge } from './services/useEditorBridge';
 
 // AI Models - 4 Providers, 6 Models (Gemini removed)
 const MODELS: ModelOption[] = [
@@ -734,6 +735,24 @@ const App: React.FC = () => {
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
+  // 🔗 EDITOR BRIDGE - Full editor integration for agent
+  const editorBridge = useEditorBridge({
+    'main.html': currentApp?.code || ''
+  });
+
+  // Sync currentApp.code to editorBridge when it changes
+  useEffect(() => {
+    if (currentApp?.code) {
+      const ext = currentApp.language === 'react' ? 'tsx' : 
+                  currentApp.language === 'python' ? 'py' : 
+                  currentApp.language === 'typescript' ? 'ts' :
+                  currentApp.language === 'javascript' ? 'js' : 'html';
+      const filename = `main.${ext}`;
+      editorBridge.setFile(filename, currentApp.code);
+      editorBridge.setActiveFile(filename);
+    }
+  }, [currentApp?.code, currentApp?.language]);
+
   // 🎭 Rotate fun commentary messages during generation
   useEffect(() => {
     if (!genState.isGenerating) {
@@ -963,16 +982,28 @@ const App: React.FC = () => {
     });
 
     try {
-      // Send to unified agent endpoint - AI decides what to do
+      // Get editor context for the agent
+      const editorContext = editorBridge.getAgentContext();
+      
+      // Send to unified agent endpoint with full context
       const response = await fetch('/api/canvas/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message,
           currentCode: currentApp?.code || null,
+          currentLanguage: currentApp?.language || 'html',
+          currentProvider: selectedModel.provider,
+          currentModel: selectedModel.id,
           conversationHistory: conversationHistory,
           provider: selectedModel.provider,
           modelId: selectedModel.id,
+          appState: {
+            hasCode: !!currentApp?.code,
+            viewMode: viewMode,
+          },
+          // 🔗 Editor Bridge Context
+          editorContext: editorContext,
         }),
       });
 
@@ -984,87 +1015,261 @@ const App: React.FC = () => {
 
       console.log('[Agent] Action:', data.action);
 
-      // Handle agent's decision
-      if (data.action === 'chat') {
-        // Agent decided to chat - add response to history
+      // Helper to add AI message to chat
+      const addAIMessage = (text: string) => {
         const aiMsg: ChatMessage = {
           role: 'model',
-          text: data.message,
+          text,
           timestamp: Date.now(),
         };
         setConversationHistory(prev => [...prev, aiMsg]);
-        setActivePanel('assistant'); // Open chat panel
-        
-      } else if (data.action === 'build') {
-        // Agent decided to build - create new app
-        const newApp: GeneratedApp = {
-          id: Date.now().toString(),
-          name: message.substring(0, 30) + '...',
-          code: data.code,
-          language: data.language || 'html',
-          prompt: message,
-          timestamp: Date.now(),
-          history: [{
-            role: 'model',
-            text: data.message || 'Application built!',
-            timestamp: Date.now(),
-          }],
-        };
-        setCurrentApp(newApp);
-        saveHistory([newApp, ...history].slice(0, 10));
-        setViewMode(ViewMode.PREVIEW);
-        
-        // Add success message to chat
-        const aiMsg: ChatMessage = {
-          role: 'model',
-          text: data.message || '✨ Done! I built your app. Check out the preview!',
-          timestamp: Date.now(),
-        };
-        setConversationHistory(prev => [...prev, aiMsg]);
-        
-        // Track usage
-        trackCanvasUsage({
-          type: 'generation',
-          model: selectedModel.name,
-          provider: selectedModel.provider,
-          credits: selectedModel.costPer1k || 1,
-          description: message.substring(0, 50)
-        });
-        
-      } else if (data.action === 'edit') {
-        // Agent decided to edit - update existing app
-        if (currentApp) {
-          const updatedApp: GeneratedApp = {
-            ...currentApp,
+      };
+
+      // Handle agent's action
+      const action = data.action;
+
+      switch (action) {
+        case 'chat':
+          addAIMessage(data.message);
+          setActivePanel('assistant');
+          break;
+
+        case 'build': {
+          const newApp: GeneratedApp = {
+            id: Date.now().toString(),
+            name: 'Canvas App',
             code: data.code,
-            language: data.language || currentApp.language,
-            history: [...currentApp.history, {
-              role: 'model',
-              text: data.message || 'Changes applied!',
-              timestamp: Date.now(),
-            }],
-          };
-          setCurrentApp(updatedApp);
-          saveHistory(history.map(a => a.id === updatedApp.id ? updatedApp : a));
-          setViewMode(ViewMode.PREVIEW);
-          
-          // Add success message to chat
-          const aiMsg: ChatMessage = {
-            role: 'model',
-            text: data.message || '✅ Done! I made the changes. Check the preview!',
+            language: data.language || 'html',
+            prompt: message,
             timestamp: Date.now(),
+            history: [],
           };
-          setConversationHistory(prev => [...prev, aiMsg]);
+          setCurrentApp(newApp);
+          saveHistory([newApp, ...history].slice(0, 10));
+          setViewMode(ViewMode.PREVIEW);
+          addAIMessage(data.message || '✨ Done! Your app is ready - check out the preview!');
           
-          // Track usage
           trackCanvasUsage({
-            type: 'edit',
+            type: 'generation',
             model: selectedModel.name,
             provider: selectedModel.provider,
             credits: selectedModel.costPer1k || 1,
-            description: 'Edit: ' + message.substring(0, 40)
+            description: 'Build new app'
           });
+          break;
         }
+
+        case 'edit': {
+          if (currentApp) {
+            const updatedApp: GeneratedApp = {
+              ...currentApp,
+              code: data.code,
+              language: data.language || currentApp.language,
+              history: [...currentApp.history],
+            };
+            setCurrentApp(updatedApp);
+            saveHistory(history.map(a => a.id === updatedApp.id ? updatedApp : a));
+            setViewMode(ViewMode.PREVIEW);
+            addAIMessage(data.message || '✅ Changes applied! Check the preview.');
+            
+            trackCanvasUsage({
+              type: 'edit',
+              model: selectedModel.name,
+              provider: selectedModel.provider,
+              credits: selectedModel.costPer1k || 1,
+              description: 'Edit code'
+            });
+          }
+          break;
+        }
+
+        case 'preview':
+          setViewMode(ViewMode.PREVIEW);
+          addAIMessage(data.message || '👀 Opening preview...');
+          break;
+
+        case 'deploy':
+          setActivePanel('workspace');
+          addAIMessage(data.message || '🚀 Opening deploy panel...');
+          break;
+
+        case 'save':
+          addAIMessage(data.message || '💾 Saved!');
+          break;
+
+        case 'open_panel': {
+          const panelMap: Record<string, ActivePanel> = {
+            'dashboard': 'dashboard',
+            'settings': 'settings',
+            'files': 'files',
+            'templates': 'templates',
+            'history': 'history',
+            'workspace': 'workspace',
+            'assistant': 'assistant',
+          };
+          const panel = panelMap[data.panel] || 'dashboard';
+          setActivePanel(panel);
+          addAIMessage(data.message || `Opening ${data.panel}...`);
+          break;
+        }
+
+        case 'copy_code':
+          if (currentApp?.code) {
+            navigator.clipboard.writeText(currentApp.code);
+            addAIMessage(data.message || '📋 Code copied to clipboard!');
+          }
+          break;
+
+        case 'new_chat':
+          setConversationHistory([]);
+          setCurrentApp(null);
+          setViewMode(ViewMode.PREVIEW);
+          addAIMessage(data.message || '🔄 Starting fresh! What would you like to build?');
+          break;
+
+        case 'download':
+          if (currentApp?.code) {
+            const blob = new Blob([currentApp.code], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `app.${currentApp.language === 'react' ? 'tsx' : currentApp.language === 'python' ? 'py' : 'html'}`;
+            a.click();
+            URL.revokeObjectURL(url);
+            addAIMessage(data.message || '⬇️ Download started!');
+          }
+          break;
+
+        case 'sandbox':
+          addAIMessage(data.message || '📦 Opening in CodeSandbox...');
+          setViewMode(ViewMode.PREVIEW);
+          break;
+
+        case 'change_provider': {
+          const providerModels = MODELS.filter(m => m.provider === data.provider);
+          if (providerModels.length > 0) {
+            const model = data.model 
+              ? providerModels.find(m => m.id.toLowerCase().includes(data.model.toLowerCase())) || providerModels[0]
+              : providerModels[0];
+            setSelectedModel(model);
+            addAIMessage(data.message || `✓ Switched to ${model.name}`);
+          }
+          break;
+        }
+
+        case 'change_language':
+          addAIMessage(data.message || `✓ Switched to ${data.language}`);
+          break;
+
+        case 'explain':
+          addAIMessage(data.explanation || 'Let me explain this code...');
+          setActivePanel('assistant');
+          break;
+
+        case 'debug':
+          addAIMessage(`🔍 **Analysis:** ${data.analysis}\n\n🔧 **Fix:** ${data.fix}`);
+          setActivePanel('assistant');
+          break;
+
+        // 🔗 EDITOR BRIDGE ACTIONS
+        case 'insert_at': {
+          // Insert text at specific line/column
+          if (data.position && data.text) {
+            editorBridge.insertAt(data.position, data.text);
+            addAIMessage(data.message || `✏️ Inserted at line ${data.position.line}`);
+          }
+          break;
+        }
+
+        case 'replace_range': {
+          // Replace specific range of code
+          if (data.start && data.end && data.text) {
+            editorBridge.replaceRange(data.start, data.end, data.text);
+            addAIMessage(data.message || `🔄 Replaced lines ${data.start.line}-${data.end.line}`);
+          }
+          break;
+        }
+
+        case 'delete_lines': {
+          // Delete specific lines
+          if (data.startLine && data.endLine) {
+            editorBridge.deleteLines(data.startLine, data.endLine);
+            addAIMessage(data.message || `🗑️ Deleted lines ${data.startLine}-${data.endLine}`);
+          }
+          break;
+        }
+
+        case 'goto_line': {
+          // Move cursor to specific line
+          if (data.line) {
+            editorBridge.setCursor({ line: data.line, column: data.column || 1 });
+            addAIMessage(data.message || `📍 Moved to line ${data.line}`);
+          }
+          break;
+        }
+
+        case 'create_file': {
+          // Create a new file
+          if (data.path && data.content !== undefined) {
+            editorBridge.createFile(data.path, data.content, data.language);
+            addAIMessage(data.message || `📄 Created ${data.path}`);
+          }
+          break;
+        }
+
+        case 'delete_file': {
+          // Delete a file
+          if (data.path) {
+            editorBridge.deleteFile(data.path);
+            addAIMessage(data.message || `🗑️ Deleted ${data.path}`);
+          }
+          break;
+        }
+
+        case 'open_file': {
+          // Open/switch to a file
+          if (data.path) {
+            editorBridge.setActiveFile(data.path);
+            addAIMessage(data.message || `📂 Opened ${data.path}`);
+          }
+          break;
+        }
+
+        case 'undo':
+          editorBridge.undo();
+          addAIMessage(data.message || '↩️ Undone!');
+          break;
+
+        case 'redo':
+          editorBridge.redo();
+          addAIMessage(data.message || '↪️ Redone!');
+          break;
+
+        case 'find_replace': {
+          // Find and replace all occurrences
+          if (data.find && data.replace !== undefined) {
+            editorBridge.replaceAll(data.find, data.replace);
+            addAIMessage(data.message || `🔍 Replaced all "${data.find}"`);
+          }
+          break;
+        }
+
+        case 'get_selection': {
+          // Get current selection and respond with it
+          const selection = editorBridge.selection;
+          if (selection) {
+            addAIMessage(data.message || `📋 Selection: lines ${selection.start.line}-${selection.end.line}`);
+          } else {
+            addAIMessage(data.message || '📋 No selection active');
+          }
+          break;
+        }
+
+        default:
+          if (data.message) {
+            addAIMessage(data.message);
+          }
+          break;
       }
 
       setGenState({ isGenerating: false, error: null, progressMessage: '' });

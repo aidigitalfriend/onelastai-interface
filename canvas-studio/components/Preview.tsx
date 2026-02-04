@@ -192,6 +192,22 @@ const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange
   if (projectType === 'react') {
     const { files, dependencies } = parseReactCode(code);
     
+    // Create a CodeSandbox URL for opening in external sandbox
+    const openInCodeSandbox = () => {
+      const parameters = {
+        files: Object.entries(files).reduce((acc, [path, content]) => {
+          acc[path.replace(/^\//, '')] = { content, isBinary: false };
+          return acc;
+        }, {} as Record<string, { content: string; isBinary: boolean }>),
+      };
+      // UTF-8 safe base64 encoding
+      const jsonStr = JSON.stringify(parameters);
+      const bytes = new TextEncoder().encode(jsonStr);
+      const binStr = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+      const encoded = btoa(binStr);
+      window.open(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encoded}`, '_blank');
+    };
+    
     return (
       <div className="w-full bg-[#0a0a0a] flex flex-col" style={{ height: '100%', minHeight: 0, maxHeight: '100%' }}>
         {/* Sandpack CSS Override */}
@@ -216,16 +232,25 @@ const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange
               ⚛️ React Live Preview
             </span>
           </div>
-          <button
-            onClick={() => setShowEditor(!showEditor)}
-            className={`px-3 py-1 text-xs rounded transition-all uppercase tracking-wider font-medium ${
-              showEditor 
-                ? 'bg-cyan-500 text-white' 
-                : 'bg-gray-800 hover:bg-cyan-500/20 text-gray-400 hover:text-cyan-400'
-            }`}
-          >
-            {showEditor ? '✓ Editor' : '⌨ Editor'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowEditor(!showEditor)}
+              className={`px-3 py-1 text-[10px] rounded transition-all uppercase tracking-wider font-medium ${
+                showEditor 
+                  ? 'bg-cyan-500 text-white' 
+                  : 'bg-gray-800 hover:bg-cyan-500/20 text-gray-400 hover:text-cyan-400'
+              }`}
+            >
+              {showEditor ? '✓ Editor' : '⌨ Editor'}
+            </button>
+            <button
+              onClick={openInCodeSandbox}
+              className="px-3 py-1 text-[10px] rounded bg-gray-800 hover:bg-purple-500/20 text-gray-400 hover:text-purple-400 transition-all uppercase tracking-wider font-medium"
+              title="Open in CodeSandbox"
+            >
+              📦 Sandbox
+            </button>
+          </div>
         </div>
         
         {/* Sandpack */}
@@ -287,29 +312,77 @@ const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange
 </html>`,
     };
     
+    // Create a CodeSandbox URL for opening in external sandbox
+    const openInCodeSandbox = () => {
+      const parameters = {
+        files: {
+          'index.js': { content: code, isBinary: false },
+          'index.html': { content: files['/index.html'], isBinary: false },
+        },
+      };
+      // UTF-8 safe base64 encoding
+      const jsonStr = JSON.stringify(parameters);
+      const bytes = new TextEncoder().encode(jsonStr);
+      const binStr = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+      const encoded = btoa(binStr);
+      window.open(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encoded}`, '_blank');
+    };
+    
     return (
       <div className="w-full h-full bg-[#0a0a0a] flex flex-col overflow-hidden">
-        <div className="flex items-center gap-2 px-4 py-2 bg-black/60 border-b border-gray-800">
-          <div className="flex gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+        <div className="flex items-center justify-between px-4 py-2 bg-black/60 border-b border-gray-800">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+            </div>
+            <span className="text-[10px] text-yellow-400 uppercase tracking-wider font-mono ml-2">
+              📜 JavaScript Preview
+            </span>
           </div>
-          <span className="text-[10px] text-yellow-400 uppercase tracking-wider font-mono ml-2">
-            📜 JavaScript Preview
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowEditor(!showEditor)}
+              className={`px-3 py-1 text-[10px] rounded transition-all uppercase tracking-wider font-medium ${
+                showEditor 
+                  ? 'bg-cyan-500 text-white' 
+                  : 'bg-gray-800 hover:bg-cyan-500/20 text-gray-400 hover:text-cyan-400'
+              }`}
+            >
+              {showEditor ? '✓ Editor' : '⌨ Editor'}
+            </button>
+            <button
+              onClick={openInCodeSandbox}
+              className="px-3 py-1 text-[10px] rounded bg-gray-800 hover:bg-purple-500/20 text-gray-400 hover:text-purple-400 transition-all uppercase tracking-wider font-medium"
+              title="Open in CodeSandbox"
+            >
+              📦 Sandbox
+            </button>
+          </div>
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-hidden" style={{ display: 'flex', flexDirection: showEditor ? 'row' : 'column' }}>
           <SandpackProvider
             template="vanilla"
             files={files}
             theme="dark"
           >
-            <SandpackPreview 
-              showNavigator={false}
-              showRefreshButton
-              style={{ height: '100%' }}
-            />
+            {showEditor && (
+              <div style={{ width: '50%', height: '100%', borderRight: '1px solid #333' }}>
+                <SandpackCodeEditor 
+                  showTabs 
+                  showLineNumbers 
+                  style={{ height: '100%' }}
+                />
+              </div>
+            )}
+            <div style={{ width: showEditor ? '50%' : '100%', height: '100%' }}>
+              <SandpackPreview 
+                showNavigator={false}
+                showRefreshButton
+                style={{ height: '100%' }}
+              />
+            </div>
           </SandpackProvider>
         </div>
       </div>
@@ -318,22 +391,66 @@ const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange
 
   // HTML - Direct iframe
   if (projectType === 'html') {
+    // Create a CodeSandbox URL for opening in external sandbox
+    const openInCodeSandbox = () => {
+      const parameters = {
+        files: {
+          'index.html': {
+            content: code,
+            isBinary: false,
+          },
+        },
+      };
+      // UTF-8 safe base64 encoding
+      const jsonStr = JSON.stringify(parameters);
+      const bytes = new TextEncoder().encode(jsonStr);
+      const binStr = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+      const encoded = btoa(binStr);
+      window.open(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encoded}`, '_blank');
+    };
+    
     return (
       <div className="w-full h-full bg-[#0a0a0a] shadow-sm overflow-hidden flex flex-col">
-        <div className="flex items-center gap-2 px-4 py-2 bg-black/60 border-b border-gray-800 text-xs text-gray-500">
-          <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500/80"></div>
-            <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+        <div className="flex items-center justify-between px-4 py-2 bg-black/60 border-b border-gray-800 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="flex gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></div>
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+            </div>
+            <span className="text-[10px] text-cyan-400 uppercase tracking-wider font-mono ml-2">
+              🌐 Live Preview
+            </span>
           </div>
-          <div className="flex-1 text-center font-mono text-gray-600 opacity-80 truncate uppercase tracking-wider text-[10px]">
-            neural://localhost:3000/generated-app
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowEditor(!showEditor)}
+              className={`px-3 py-1 text-[10px] rounded transition-all uppercase tracking-wider font-medium ${
+                showEditor 
+                  ? 'bg-cyan-500 text-white' 
+                  : 'bg-gray-800 hover:bg-cyan-500/20 text-gray-400 hover:text-cyan-400'
+              }`}
+            >
+              {showEditor ? '✓ Editor' : '⌨ Editor'}
+            </button>
+            <button
+              onClick={openInCodeSandbox}
+              className="px-3 py-1 text-[10px] rounded bg-gray-800 hover:bg-purple-500/20 text-gray-400 hover:text-purple-400 transition-all uppercase tracking-wider font-medium"
+              title="Open in CodeSandbox"
+            >
+              📦 Sandbox
+            </button>
           </div>
         </div>
+        {showEditor && (
+          <div className="h-[40%] border-b border-gray-800 overflow-auto bg-[#0d0d0d]">
+            <pre className="p-4 text-xs font-mono text-gray-300 whitespace-pre-wrap">{code}</pre>
+          </div>
+        )}
         <iframe
           ref={iframeRef}
           title="App Preview"
-          className="w-full h-full border-none bg-white"
+          className={`w-full border-none bg-white ${showEditor ? 'h-[60%]' : 'h-full'}`}
           sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-same-origin"
         />
       </div>

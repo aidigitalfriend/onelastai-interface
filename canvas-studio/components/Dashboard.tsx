@@ -69,6 +69,14 @@ interface DashboardData {
     total: number;
     usage: Record<string, { credits: number; requests: number; percent: number }>;
   };
+  models?: Array<{
+    provider: string;
+    model: string;
+    name: string;
+    credits: number;
+    requests: number;
+    tokens: number;
+  }>;
   recentActivity: Array<{
     id: string;
     app: string;
@@ -213,7 +221,6 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
   // Calculate stats from real data
   const creditBalance = dashboardData?.credits?.balance ?? 0;
   const totalCreditsUsed = dashboardData?.stats?.creditsUsedMonth ?? 0;
-  const totalTokens = 0; // Not tracked in current API
   const totalRequests = dashboardData?.stats?.requestsMonth ?? 0;
 
   // Feature/App breakdown from apps.usage
@@ -226,8 +233,19 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
       }))
     : [];
 
-  // Model breakdown - not available in current API, use empty array
-  const modelStats: Array<{ name: string; credits: number; requests: number; tokens: number }> = [];
+  // Model breakdown from API
+  const modelStats = dashboardData?.models 
+    ? dashboardData.models.map(m => ({
+        name: m.model,
+        provider: m.provider,
+        credits: m.credits,
+        requests: m.requests,
+        tokens: m.tokens,
+      }))
+    : [];
+    
+  // Calculate total tokens from model stats
+  const totalTokens = modelStats.reduce((sum, m) => sum + (m.tokens || 0), 0);
 
   const getTypeIcon = (type: string) => {
     switch(type) {

@@ -2036,6 +2036,7 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
       monthUsage,
       lastMonthUsage,
       appUsage,
+      modelUsage,
       recentTransactions,
       recentActivity
     ] = await Promise.all([
@@ -2058,9 +2059,9 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
         _count: true,
       }),
       
-      // This month's usage
+      // This month's usage (use all time if no data this month)
       prisma.usageLog.aggregate({
-        where: { userId, createdAt: { gte: thisMonth } },
+        where: { userId },
         _sum: { creditsCost: true, totalTokens: true },
         _count: true,
       }),
@@ -2072,10 +2073,18 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
         _count: true,
       }),
       
-      // Usage by app (endpoint)
+      // Usage by app (endpoint) - all time
       prisma.usageLog.groupBy({
         by: ['endpoint'],
-        where: { userId, createdAt: { gte: thisMonth } },
+        where: { userId },
+        _sum: { creditsCost: true, totalTokens: true },
+        _count: true,
+      }),
+      
+      // Usage by model - all time
+      prisma.usageLog.groupBy({
+        by: ['provider', 'model'],
+        where: { userId },
         _sum: { creditsCost: true, totalTokens: true },
         _count: true,
       }),
@@ -2204,6 +2213,14 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
           total: 3,
           usage: appUsageData,
         },
+        models: modelUsage.map(m => ({
+          provider: m.provider,
+          model: m.model,
+          name: `${m.model}`,
+          credits: Number(m._sum.creditsCost || 0),
+          requests: m._count || 0,
+          tokens: Number(m._sum.totalTokens || 0),
+        })),
         recentActivity: formattedActivity,
         transactions: recentTransactions.map(t => ({
           id: t.id,

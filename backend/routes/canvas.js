@@ -1106,81 +1106,200 @@ const PROVIDER_MAPPING = {
 };
 
 // ============================================================================
-// UNIFIED AGENT ENDPOINT - AI decides what to do
+// CANVAS STUDIO AGENT - FULL ACCESS INTEGRATED SYSTEM
+// Agent has access to ALL Canvas Studio capabilities as tools
 // ============================================================================
 
-const AGENT_DECISION_PROMPT = `You are Canvas Agent, an intelligent AI assistant for One Last AI's Canvas Studio.
+const CANVAS_AGENT_SYSTEM = `You are **Canvas Agent**, the intelligent AI assistant fully integrated into One Last AI's Canvas Studio.
 
-## YOUR ROLE
-You receive messages from users and YOU DECIDE what action to take. You are not scripted - you make intelligent decisions based on the context.
+## YOUR IDENTITY
+You are not just a code generator - you are the CONTROL CENTER of Canvas Studio. You have full access to every feature, panel, and capability of the application.
 
-## DECISION FRAMEWORK
-Analyze each message and decide:
+## YOUR TOOLS/CAPABILITIES
+You have access to these tools. When you want to use a tool, respond with a JSON object containing the "tool" key:
 
-1. **CHAT** - When user is:
-   - Greeting you (hi, hello, hey)
-   - Asking questions about what you can do
-   - Having a casual conversation
-   - Exploring ideas without a clear build request
-   - Needs clarification before building
+### 1. CHAT - Conversational Response
+Use when: greeting, questions, clarification, discussion
+{"tool": "chat", "message": "Your response here"}
 
-2. **BUILD** - When user:
-   - Clearly describes an app/website/page they want
-   - Gives specific requirements for a new project
-   - Uses words like "build", "create", "make" with clear details
-   - Example: "Create a portfolio website with home, projects, about, and contact pages"
+### 2. BUILD - Generate New Code
+Use when: user wants to create a new app/website/component
+{"tool": "build", "prompt": "Detailed requirements", "language": "react|html|typescript|javascript|python"}
 
-3. **EDIT** - When user:
-   - Wants to change existing code (you have currentCode)
-   - Says "change", "update", "modify", "add to", "remove"
-   - Refers to something in the current app
+### 3. EDIT - Modify Existing Code
+Use when: user wants to change something in the current code
+{"tool": "edit", "instruction": "What to change", "targetSection": "optional - header/footer/etc"}
 
-## RESPONSE FORMAT
-You MUST respond with a JSON object (and nothing else):
+### 4. PREVIEW - Run/Show the App
+Use when: user wants to see, preview, run, or test the current app
+{"tool": "preview", "message": "Opening preview..."}
 
-For CHAT:
-{"action": "chat", "message": "Your friendly conversational response here"}
+### 5. CHANGE_PROVIDER - Switch AI Provider
+Use when: user wants to change which AI model to use
+{"tool": "change_provider", "provider": "Anthropic|OpenAI|xAI|Groq", "model": "optional model name"}
 
-For BUILD:
-{"action": "build", "requirements": "Clear description of what to build based on user's request"}
+### 6. CHANGE_LANGUAGE - Switch Output Language
+Use when: user wants to change the coding language
+{"tool": "change_language", "language": "react|html|typescript|javascript|python"}
 
-For EDIT:
-{"action": "edit", "instruction": "Specific edit instruction for the code"}
+### 7. DEPLOY - Deploy the App
+Use when: user wants to publish/deploy/host their app
+{"tool": "deploy", "message": "Deploying your app..."}
+
+### 8. SAVE - Save to Workspace
+Use when: user wants to save their code
+{"tool": "save", "filename": "optional filename"}
+
+### 9. OPEN_PANEL - Open a Panel
+Use when: user wants to access dashboard, settings, files, templates, etc
+{"tool": "open_panel", "panel": "dashboard|settings|files|templates|history|workspace"}
+
+### 10. COPY_CODE - Copy Code to Clipboard
+Use when: user wants to copy the code
+{"tool": "copy_code", "message": "Code copied!"}
+
+### 11. NEW_CHAT - Start Fresh
+Use when: user wants to start over, clear, or reset
+{"tool": "new_chat", "message": "Starting fresh!"}
+
+### 12. EXPLAIN - Explain the Code
+Use when: user wants to understand the code (don't regenerate, just explain)
+{"tool": "explain", "explanation": "Detailed explanation of the code"}
+
+### 13. DEBUG - Fix Errors
+Use when: user reports bugs, errors, or something not working
+{"tool": "debug", "analysis": "What's wrong", "fix": "How to fix it"}
+
+### 14. DOWNLOAD - Download Files
+Use when: user wants to download the code as a file
+{"tool": "download", "format": "single|zip"}
+
+### 15. SANDBOX - Open in CodeSandbox
+Use when: user wants to open in external sandbox/playground
+{"tool": "sandbox", "message": "Opening in CodeSandbox..."}
+
+### 16. INSERT_AT - Insert Code at Specific Line
+Use when: user wants to add code at a specific location
+{"tool": "insert_at", "position": {"line": 10, "column": 1}, "text": "code to insert"}
+
+### 17. REPLACE_RANGE - Replace Code Range
+Use when: user wants to replace specific lines
+{"tool": "replace_range", "start": {"line": 5, "column": 1}, "end": {"line": 10, "column": 1}, "text": "new code"}
+
+### 18. DELETE_LINES - Delete Specific Lines
+Use when: user wants to remove specific lines
+{"tool": "delete_lines", "startLine": 5, "endLine": 10}
+
+### 19. GOTO_LINE - Move Cursor to Line
+Use when: user wants to navigate to a specific line
+{"tool": "goto_line", "line": 42, "column": 1}
+
+### 20. CREATE_FILE - Create New File
+Use when: user wants to create a new file in the project
+{"tool": "create_file", "path": "src/utils.js", "content": "file content", "language": "javascript"}
+
+### 21. DELETE_FILE - Delete a File
+Use when: user wants to delete a file
+{"tool": "delete_file", "path": "src/old-file.js"}
+
+### 22. OPEN_FILE - Open/Switch to File
+Use when: user wants to open or switch to a different file
+{"tool": "open_file", "path": "src/App.tsx"}
+
+### 23. UNDO - Undo Last Edit
+Use when: user wants to undo
+{"tool": "undo"}
+
+### 24. REDO - Redo Last Undo
+Use when: user wants to redo
+{"tool": "redo"}
+
+### 25. FIND_REPLACE - Find and Replace All
+Use when: user wants to find and replace text throughout the code
+{"tool": "find_replace", "find": "oldText", "replace": "newText"}
+
+## HOW TO RESPOND
+1. Analyze what the user wants
+2. Choose the appropriate tool
+3. Respond with ONLY the JSON object for that tool
+4. Be intelligent - if user says "run it", use preview. If they say "make it blue", use edit.
+
+## MULTI-TOOL RESPONSES
+For complex requests, you can execute multiple tools in sequence:
+{"tools": [
+  {"tool": "edit", "instruction": "Add a contact form"},
+  {"tool": "preview", "message": "Let me show you the updated app"}
+]}
+
+## CONTEXT AWARENESS
+You always know:
+- Current code in editor (provided as currentCode)
+- Current language (provided as currentLanguage) 
+- Current provider/model (provided as currentProvider/currentModel)
+- Conversation history (provided as history)
+- User's app state (provided as appState)
+- Editor context (provided as editorContext) including:
+  - Active file path
+  - Current cursor position (line, column)
+  - Current selection (if any)
+  - Project file tree
+  - All project files and their contents
 
 ## EXAMPLES
 
 User: "hi"
-{"action": "chat", "message": "Hey! 👋 I'm Canvas Agent, ready to help you build something amazing. What would you like to create today?"}
+{"tool": "chat", "message": "Hey! 👋 I'm Canvas Agent, your AI partner for building amazing apps. I can create, edit, preview, deploy - you name it. What would you like to build today?"}
 
-User: "what can you do?"
-{"action": "chat", "message": "I can build complete web applications, dashboards, landing pages, portfolios - you name it! Just describe what you want, and I'll create it for you. What do you have in mind?"}
+User: "preview this app" or "run it" or "show me"
+{"tool": "preview", "message": "Opening preview for you!"}
 
-User: "I want to build something for my business"
-{"action": "chat", "message": "Nice! I'd love to help with that. What kind of business is it? And what do you need - a website, a dashboard, a landing page? Tell me more and I'll make sure it's perfect for you."}
+User: "use GPT-4 instead"
+{"tool": "change_provider", "provider": "OpenAI", "model": "gpt-4o"}
 
-User: "Create a modern SaaS landing page with hero, features, pricing, and testimonials"
-{"action": "build", "requirements": "Modern SaaS landing page with: hero section with headline and CTA, features section with icons, pricing table with 3 tiers, testimonials carousel, professional dark theme"}
+User: "open settings"
+{"tool": "open_panel", "panel": "settings"}
 
-User: "Make the header blue" (when currentCode exists)
-{"action": "edit", "instruction": "Change the header/navbar background color to blue"}
+User: "deploy this"
+{"tool": "deploy", "message": "Let's deploy your app! Opening the deploy panel..."}
 
-User: "Add a contact form"  (when currentCode exists)
-{"action": "edit", "instruction": "Add a contact form section with name, email, and message fields"}
+User: "make a portfolio website"
+{"tool": "build", "prompt": "Modern portfolio website with: hero section with name and title, about me section, projects gallery, skills section, contact form, dark theme with gradient accents", "language": "html"}
 
-## IMPORTANT
-- ONLY output valid JSON, nothing else
-- Be friendly and helpful in chat messages
-- For build/edit, extract clear requirements from the user's message
-- When in doubt, chat to clarify rather than guessing`;
+User: "change the header color to blue" (when code exists)
+{"tool": "edit", "instruction": "Change header/navbar background color to blue", "targetSection": "header"}
+
+User: "what does this code do?"
+{"tool": "explain", "explanation": "This code creates a [detailed explanation of the current code]..."}
+
+User: "it's not working, help"
+{"tool": "debug", "analysis": "Looking at your code, I see...", "fix": "Here's what needs to be fixed..."}
+
+User: "copy the code"
+{"tool": "copy_code", "message": "Done! Code copied to your clipboard."}
+
+User: "open in sandbox"
+{"tool": "sandbox", "message": "Opening in CodeSandbox..."}
+
+## IMPORTANT RULES
+1. ALWAYS respond with valid JSON
+2. Choose the RIGHT tool for the job
+3. Be helpful, friendly, and proactive
+4. If unsure, chat to clarify
+5. You ARE Canvas Studio - act like it!`;
 
 router.post('/agent', optionalAuth, async (req, res) => {
   try {
     const { 
       message, 
       currentCode,
+      currentLanguage = 'html',
+      currentProvider = 'Anthropic',
+      currentModel = 'claude-sonnet-4',
       conversationHistory = [],
+      appState = {},
       provider = 'Anthropic', 
       modelId = 'claude-sonnet-4',
+      editorContext = null, // 🔗 Editor Bridge Context
     } = req.body;
 
     if (!message) {
@@ -1198,13 +1317,46 @@ router.post('/agent', optionalAuth, async (req, res) => {
     // Initialize AI service
     const aiService = new AIService(user);
 
-    // Build context for agent decision
-    let contextInfo = '';
-    if (currentCode) {
-      contextInfo = `\n\n[CONTEXT: User has existing code in the editor. Language: ${detectLanguage(currentCode)}]`;
-    }
+    // Build rich context for agent
+    let contextInfo = `\n\n## CURRENT STATE`;
+    contextInfo += `\n- Code in editor: ${currentCode ? 'YES (' + detectLanguage(currentCode) + ')' : 'EMPTY'}`;
+    contextInfo += `\n- Current language: ${currentLanguage}`;
+    contextInfo += `\n- Current provider: ${currentProvider}`;
+    contextInfo += `\n- Current model: ${currentModel}`;
     if (conversationHistory.length > 0) {
-      contextInfo += `\n[CONTEXT: Previous conversation exists with ${conversationHistory.length} messages]`;
+      contextInfo += `\n- Conversation: ${conversationHistory.length} previous messages`;
+    }
+    
+    // 🔗 Include Editor Bridge Context
+    if (editorContext) {
+      contextInfo += `\n\n## EDITOR CONTEXT`;
+      contextInfo += `\n- Active file: ${editorContext.activeFile || 'none'}`;
+      contextInfo += `\n- Cursor: line ${editorContext.cursor?.line || 1}, column ${editorContext.cursor?.column || 1}`;
+      if (editorContext.selection) {
+        contextInfo += `\n- Selection: lines ${editorContext.selection.start.line}-${editorContext.selection.end.line}`;
+        if (editorContext.selectedText) {
+          const selectedSnippet = editorContext.selectedText.substring(0, 200);
+          contextInfo += `\n- Selected text: \`${selectedSnippet}${editorContext.selectedText.length > 200 ? '...' : ''}\``;
+        }
+      }
+      if (editorContext.projectTree && editorContext.projectTree.length > 0) {
+        contextInfo += `\n\n### Project Files:`;
+        const listFiles = (nodes, indent = '') => {
+          for (const node of nodes) {
+            contextInfo += `\n${indent}${node.isDirectory ? '📁' : '📄'} ${node.name}`;
+            if (node.children && node.children.length > 0) {
+              listFiles(node.children, indent + '  ');
+            }
+          }
+        };
+        listFiles(editorContext.projectTree);
+      }
+    }
+    
+    if (currentCode) {
+      // Include a snippet of the current code for context
+      const codeSnippet = currentCode.substring(0, 500) + (currentCode.length > 500 ? '...' : '');
+      contextInfo += `\n\n## CURRENT CODE SNIPPET:\n\`\`\`\n${codeSnippet}\n\`\`\``;
     }
 
     // Ask agent to decide what to do
@@ -1212,22 +1364,21 @@ router.post('/agent', optionalAuth, async (req, res) => {
       { role: 'user', content: message + contextInfo }
     ];
 
-    // Use Anthropic for decision making (more reliable than Gemini which has referrer issues)
+    // Use Anthropic for agent reasoning
     const decisionResult = await aiService.chat(
       decisionMessages,
       'anthropic',
       'claude-sonnet-4-20250514',
       {
-        systemPrompt: AGENT_DECISION_PROMPT,
-        maxTokens: 512,
-        endpoint: 'canvas-agent-decision',
+        systemPrompt: CANVAS_AGENT_SYSTEM,
+        maxTokens: 1024,
+        endpoint: 'canvas',
       }
     );
 
     // Parse agent's decision
     let decision;
     try {
-      // Clean the response - remove any markdown code blocks
       let cleanResponse = decisionResult.content.trim();
       if (cleanResponse.startsWith('```')) {
         cleanResponse = cleanResponse.replace(/```json?\n?/g, '').replace(/```/g, '').trim();
@@ -1235,134 +1386,230 @@ router.post('/agent', optionalAuth, async (req, res) => {
       decision = JSON.parse(cleanResponse);
     } catch (parseError) {
       console.error('[Canvas Agent] Failed to parse decision:', decisionResult.content);
-      // Default to chat if parsing fails
-      decision = { action: 'chat', message: decisionResult.content };
+      decision = { tool: 'chat', message: decisionResult.content };
     }
 
-    console.log('[Canvas Agent] Decision:', decision.action);
-
-    // Execute the decision
-    if (decision.action === 'chat') {
-      // Just return the chat response
+    // Handle multi-tool responses
+    if (decision.tools && Array.isArray(decision.tools)) {
+      console.log('[Canvas Agent] Multi-tool request:', decision.tools.map(t => t.tool).join(', '));
       return res.json({
         success: true,
-        action: 'chat',
-        message: decision.message,
+        actions: decision.tools.map(t => processToolRequest(t)),
       });
     }
 
-    if (decision.action === 'build') {
-      // Map to backend IDs
-      const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
-      const backendModel = MODEL_MAPPING[modelId] || modelId;
-      const language = detectLanguageFromPrompt(decision.requirements);
-      const systemPrompt = getSystemPrompt(language);
+    console.log('[Canvas Agent] Tool:', decision.tool || 'chat');
 
-      const buildPrompt = `## NEW APPLICATION REQUEST
+    // Process single tool request
+    const result = await processToolRequestWithAI(decision, {
+      currentCode,
+      currentLanguage,
+      provider,
+      modelId,
+      aiService,
+      user,
+    });
 
-Create a complete ${language === 'react' ? 'React TypeScript component' : 'HTML application'} for:
-${decision.requirements}
-
-## Instructions:
-1. Generate complete, production-ready code
-2. Follow all the rules in your system prompt
-3. Make it beautiful and functional
-4. Return ONLY the code, no explanations`;
-
-      const buildResult = await aiService.chat(
-        [{ role: 'user', content: buildPrompt }],
-        backendProvider,
-        backendModel,
-        {
-          systemPrompt,
-          maxTokens: 16384,
-          endpoint: 'canvas-agent-build',
-        }
-      );
-
-      // Clean the code
-      let code = buildResult.content;
-      code = code.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
-
-      return res.json({
-        success: true,
-        action: 'build',
-        code,
-        language,
-        message: 'Application built successfully!',
-      });
-    }
-
-    if (decision.action === 'edit') {
-      if (!currentCode) {
-        return res.json({
-          success: true,
-          action: 'chat',
-          message: "I'd love to edit your code, but I don't see any code to edit yet. Would you like me to build something first?",
-        });
-      }
-
-      // Map to backend IDs
-      const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
-      const backendModel = MODEL_MAPPING[modelId] || modelId;
-      const language = detectLanguage(currentCode);
-      const systemPrompt = getSystemPrompt(language);
-
-      const editPrompt = `## MODIFICATION REQUEST
-
-Current ${language.toUpperCase()} code to modify:
-\`\`\`${language}
-${currentCode}
-\`\`\`
-
-## User's Request:
-${decision.instruction}
-
-## Instructions:
-1. Analyze the current code
-2. Make ONLY the requested changes
-3. Return the COMPLETE updated file
-4. Do NOT include markdown code blocks in your response`;
-
-      const editResult = await aiService.chat(
-        [{ role: 'user', content: editPrompt }],
-        backendProvider,
-        backendModel,
-        {
-          systemPrompt,
-          maxTokens: 16384,
-          endpoint: 'canvas-agent-edit',
-        }
-      );
-
-      // Clean the code
-      let code = editResult.content;
-      code = code.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
-
-      return res.json({
-        success: true,
-        action: 'edit',
-        code,
-        language,
-        message: 'Changes applied!',
-      });
-    }
-
-    // Fallback
     return res.json({
       success: true,
-      action: 'chat',
-      message: decision.message || "I'm not sure what you'd like me to do. Could you tell me more?",
+      ...result,
     });
 
   } catch (error) {
     console.error('[Canvas Agent] Error:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message || 'Agent failed',
+      error: error.message || 'Agent error',
+      action: 'chat',
+      message: 'Sorry, I encountered an error. Please try again.',
     });
   }
 });
+
+// Process tool requests that don't need AI generation
+function processToolRequest(tool) {
+  const toolName = tool.tool || 'chat';
+  
+  switch (toolName) {
+    case 'preview':
+      return { action: 'preview', message: tool.message || 'Opening preview...' };
+    case 'deploy':
+      return { action: 'deploy', message: tool.message || 'Opening deploy panel...' };
+    case 'save':
+      return { action: 'save', filename: tool.filename, message: 'Saving...' };
+    case 'open_panel':
+      return { action: 'open_panel', panel: tool.panel, message: `Opening ${tool.panel}...` };
+    case 'copy_code':
+      return { action: 'copy_code', message: tool.message || 'Code copied!' };
+    case 'new_chat':
+      return { action: 'new_chat', message: tool.message || 'Starting fresh!' };
+    case 'download':
+      return { action: 'download', format: tool.format || 'single', message: 'Preparing download...' };
+    case 'sandbox':
+      return { action: 'sandbox', message: tool.message || 'Opening in CodeSandbox...' };
+    case 'change_provider':
+      return { action: 'change_provider', provider: tool.provider, model: tool.model, message: `Switching to ${tool.provider}...` };
+    case 'change_language':
+      return { action: 'change_language', language: tool.language, message: `Switching to ${tool.language}...` };
+    case 'explain':
+      return { action: 'explain', explanation: tool.explanation, message: 'Here\'s what this code does...' };
+    case 'debug':
+      return { action: 'debug', analysis: tool.analysis, fix: tool.fix, message: 'Found the issue!' };
+    
+    // 🔗 EDITOR BRIDGE TOOLS
+    case 'insert_at':
+      return { action: 'insert_at', position: tool.position, text: tool.text, message: tool.message || `Inserting at line ${tool.position?.line}...` };
+    case 'replace_range':
+      return { action: 'replace_range', start: tool.start, end: tool.end, text: tool.text, message: tool.message || 'Replacing code...' };
+    case 'delete_lines':
+      return { action: 'delete_lines', startLine: tool.startLine, endLine: tool.endLine, message: tool.message || `Deleting lines ${tool.startLine}-${tool.endLine}...` };
+    case 'goto_line':
+      return { action: 'goto_line', line: tool.line, column: tool.column || 1, message: tool.message || `Going to line ${tool.line}...` };
+    case 'create_file':
+      return { action: 'create_file', path: tool.path, content: tool.content || '', language: tool.language, message: tool.message || `Creating ${tool.path}...` };
+    case 'delete_file':
+      return { action: 'delete_file', path: tool.path, message: tool.message || `Deleting ${tool.path}...` };
+    case 'open_file':
+      return { action: 'open_file', path: tool.path, message: tool.message || `Opening ${tool.path}...` };
+    case 'undo':
+      return { action: 'undo', message: tool.message || 'Undoing...' };
+    case 'redo':
+      return { action: 'redo', message: tool.message || 'Redoing...' };
+    case 'find_replace':
+      return { action: 'find_replace', find: tool.find, replace: tool.replace, message: tool.message || `Replacing "${tool.find}"...` };
+    case 'get_selection':
+      return { action: 'get_selection', message: tool.message || 'Getting selection...' };
+    
+    case 'chat':
+    default:
+      return { action: 'chat', message: tool.message || 'How can I help?' };
+  }
+}
+
+// Process tool requests that need AI generation
+async function processToolRequestWithAI(tool, context) {
+  const { currentCode, currentLanguage, provider, modelId, aiService } = context;
+  const toolName = tool.tool || 'chat';
+
+  // Handle tools that don't need additional AI calls (passthrough tools)
+  const passthroughTools = [
+    'preview', 'deploy', 'save', 'open_panel', 'copy_code', 'new_chat', 
+    'download', 'sandbox', 'change_provider', 'change_language',
+    // 🔗 Editor Bridge tools (all passthrough)
+    'insert_at', 'replace_range', 'delete_lines', 'goto_line',
+    'create_file', 'delete_file', 'open_file', 'undo', 'redo',
+    'find_replace', 'get_selection'
+  ];
+  
+  if (passthroughTools.includes(toolName)) {
+    return processToolRequest(tool);
+  }
+
+  // Handle chat/explain/debug (already have content)
+  if (toolName === 'chat' || toolName === 'explain' || toolName === 'debug') {
+    return processToolRequest(tool);
+  }
+
+  // Handle BUILD - needs code generation
+  if (toolName === 'build') {
+    const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
+    const backendModel = MODEL_MAPPING[modelId] || modelId;
+    const language = tool.language || detectLanguageFromPrompt(tool.prompt) || 'html';
+    const systemPrompt = getSystemPrompt(language);
+
+    const buildPrompt = `## CREATE NEW APPLICATION
+
+Requirements:
+${tool.prompt}
+
+Generate a complete, beautiful, production-ready ${language === 'react' ? 'React TypeScript component' : language.toUpperCase() + ' application'}.
+Return ONLY the code, no explanations.`;
+
+    const buildResult = await aiService.chat(
+      [{ role: 'user', content: buildPrompt }],
+      backendProvider,
+      backendModel,
+      {
+        systemPrompt,
+        maxTokens: 16384,
+        endpoint: 'canvas',
+      }
+    );
+
+    let code = buildResult.content;
+    code = code.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
+    
+    if (language === 'react') {
+      code = fixReactImports(code);
+    }
+
+    return {
+      action: 'build',
+      code,
+      language,
+      message: 'Here\'s your new app! Click preview to see it in action.',
+    };
+  }
+
+  // Handle EDIT - needs code modification
+  if (toolName === 'edit') {
+    if (!currentCode) {
+      return {
+        action: 'chat',
+        message: "I don't see any code to edit yet. Would you like me to build something first?",
+      };
+    }
+
+    const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
+    const backendModel = MODEL_MAPPING[modelId] || modelId;
+    const language = detectLanguage(currentCode);
+    const systemPrompt = getSystemPrompt(language);
+
+    const editPrompt = `## MODIFY EXISTING CODE
+
+Current code:
+\`\`\`${language}
+${currentCode}
+\`\`\`
+
+Modification requested:
+${tool.instruction}
+${tool.targetSection ? `Target section: ${tool.targetSection}` : ''}
+
+Return the COMPLETE updated code with the modification applied. Return ONLY code, no explanations.`;
+
+    const editResult = await aiService.chat(
+      [{ role: 'user', content: editPrompt }],
+      backendProvider,
+      backendModel,
+      {
+        systemPrompt,
+        maxTokens: 16384,
+        endpoint: 'canvas',
+      }
+    );
+
+    let code = editResult.content;
+    code = code.replace(/^```[\w]*\n?/gm, '').replace(/```$/gm, '').trim();
+    
+    if (language === 'react') {
+      code = fixReactImports(code);
+    }
+
+    return {
+      action: 'edit',
+      code,
+      language,
+      message: 'Updated! Click preview to see the changes.',
+    };
+  }
+
+  // Default to chat
+  return {
+    action: 'chat',
+    message: tool.message || 'How can I help you?',
+  };
+}
 
 // ============================================================================
 // GENERATE APP CODE (Legacy - kept for compatibility)
