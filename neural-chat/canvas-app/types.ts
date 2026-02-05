@@ -25,10 +25,14 @@ export type ModelProvider =
   | 'xai'
   | 'anthropic';
 
+// Backend provider IDs
+export type BackendProvider = 'mistral' | 'openai' | 'gemini' | 'anthropic' | 'groq' | 'cerebras' | 'xai';
+
 export interface ModelOption {
   id: string;
   name: string;
   provider: ModelProvider;
+  backendProvider?: BackendProvider;
   description: string;
   isThinking?: boolean;
   icon?: string;

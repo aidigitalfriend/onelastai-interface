@@ -363,6 +363,27 @@ model HostedApp {
   code            String    @db.Text
   language        String    @default("html")  // html, react, typescript, javascript, python
   
+  // Project structure (NEW)
+  projectType     ProjectType @default(STATIC) @map("project_type")
+  files           Json?       // Full file tree structure as JSON
+  mainFile        String?     @map("main_file")
+  
+  // Build configuration (NEW)
+  buildCommand    String?     @map("build_command")
+  startCommand    String?     @map("start_command")
+  envVars         Json?       @map("env_vars")
+  
+  // Backend config (NEW for full-stack)
+  hasBackend      Boolean     @default(false) @map("has_backend")
+  backendType     String?     @map("backend_type") // express, flask, fastapi
+  backendPort     Int?        @map("backend_port")
+  containerId     String?     @map("container_id") // Docker container ID
+  
+  // Database config (NEW)
+  hasDatabase     Boolean     @default(false) @map("has_database")
+  databaseType    String?     @map("database_type") // sqlite, postgres
+  databaseUrl     String?     @map("database_url")
+  
   // Metadata
   framework       String?   // react, vue, vanilla, flask, etc.
   thumbnail       String?   // Screenshot URL
@@ -377,10 +398,20 @@ model HostedApp {
   sslEnabled      Boolean   @default(false) @map("ssl_enabled")
   sslCertPath     String?   @map("ssl_cert_path")
   sslKeyPath      String?   @map("ssl_key_path")
+  sslExpiry       DateTime? @map("ssl_expiry")
+  
+  // URLs
+  previewUrl      String?   @map("preview_url")
+  productionUrl   String?   @map("production_url")
   
   // Analytics
   viewCount       Int       @default(0) @map("view_count")
   lastViewedAt    DateTime? @map("last_viewed_at")
+  lastDeployedAt  DateTime? @map("last_deployed_at")
+  
+  // Storage
+  storageUsed     Int       @default(0) @map("storage_used") // bytes
+  bandwidthUsed   Int       @default(0) @map("bandwidth_used") // bytes this month
   
   // Status
   status          HostedAppStatus @default(ACTIVE)
@@ -398,11 +429,20 @@ model HostedApp {
   // Relations
   user            User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
   versions        HostedAppVersion[]
+  deployments     Deployment[]
   
   @@index([userId, createdAt])
   @@index([slug])
   @@index([customDomain])
   @@map("hosted_apps")
+}
+
+enum ProjectType {
+  STATIC        // HTML/CSS/JS static site
+  SPA           // React/Vue single-page app
+  SSR           // Next.js/Nuxt server-side rendering
+  FULLSTACK     // Frontend + Backend
+  API_ONLY      // Backend API only
 }
 
 model HostedAppVersion {
@@ -422,6 +462,43 @@ model HostedAppVersion {
   
   @@index([appId, version])
   @@map("hosted_app_versions")
+}
+
+model Deployment {
+  id              String    @id @default(cuid())
+  appId           String    @map("app_id")
+  
+  // Deployment info
+  version         Int       @default(1)
+  environment     String    @default("production") // preview, production
+  status          DeployStatus @default(PENDING)
+  
+  // Build info
+  buildLogs       String?   @db.Text @map("build_logs")
+  buildDuration   Int?      @map("build_duration") // seconds
+  
+  // Result
+  url             String?
+  error           String?
+  
+  // Timestamps
+  startedAt       DateTime  @default(now()) @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  
+  // Relations
+  app             HostedApp @relation(fields: [appId], references: [id], onDelete: Cascade)
+  
+  @@index([appId, startedAt])
+  @@map("deployments")
+}
+
+enum DeployStatus {
+  PENDING
+  BUILDING
+  DEPLOYING
+  LIVE
+  FAILED
+  ROLLED_BACK
 }
 
 enum HostedAppStatus {

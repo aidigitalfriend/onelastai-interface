@@ -2262,6 +2262,67 @@ app.use('/api/chat', chatRoutes);
 // app.use('/api/billing', billingRoutes);
 
 // ============================================================================
+// OPENAI REALTIME API SESSION
+// ============================================================================
+
+// Get ephemeral session token for OpenAI Realtime API
+app.post('/api/realtime/session', requireAuth, async (req, res) => {
+  try {
+    const { voice = 'alloy', instructions } = req.body;
+    
+    // Check credits (voice calls cost more)
+    const credits = Number(req.user.credits?.balance) || 0;
+    if (credits < 1) {
+      return res.status(402).json({ 
+        success: false, 
+        error: 'Insufficient credits for voice call (minimum 1 credit required)' 
+      });
+    }
+
+    // Get ephemeral token from OpenAI
+    const response = await fetch('https://api.openai.com/v1/realtime/sessions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-realtime-preview-2024-12-17',
+        voice: voice,
+        instructions: instructions || 'You are a helpful AI assistant. Be conversational, friendly, and concise.',
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('[Realtime] Session creation failed:', error);
+      return res.status(500).json({ 
+        success: false, 
+        error: 'Failed to create realtime session' 
+      });
+    }
+
+    const data = await response.json();
+    
+    console.log('[Realtime] Session created for user:', req.user.id);
+    
+    res.json({
+      success: true,
+      session: {
+        client_secret: data.client_secret,
+        expires_at: data.expires_at,
+      }
+    });
+  } catch (error) {
+    console.error('[Realtime] Error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to initialize realtime session' 
+    });
+  }
+});
+
+// ============================================================================
 // ERROR HANDLING
 // ============================================================================
 

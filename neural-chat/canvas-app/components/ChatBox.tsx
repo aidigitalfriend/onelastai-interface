@@ -3,6 +3,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
 import { speak } from '../services/speechService';
 
+// Voice options for the call modal
+const VOICE_OPTIONS = ['Alloy', 'Echo', 'Fable', 'Onyx', 'Nova', 'Shimmer'];
+
+interface VoiceMessage {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: number;
+}
+
 interface ChatSession {
   id: string;
   title: string;
@@ -43,6 +53,15 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   const [selectedProvider, setSelectedProvider] = useState<string>('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Voice Call Modal State
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [callStatus, setCallStatus] = useState<'idle' | 'connecting' | 'active'>('idle');
+  const [selectedVoice, setSelectedVoice] = useState('Alloy');
+  const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
+  const [statusText, setStatusText] = useState('Ready to call');
+  const recognitionRef = useRef<any>(null);
+  const voiceScrollRef = useRef<HTMLDivElement>(null);
 
   // Get unique providers
   const providers = Array.from(new Set(models.map(m => m.provider)));
@@ -90,6 +109,13 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     }
   }, [messages]);
 
+  // Scroll voice messages to bottom
+  useEffect(() => {
+    if (voiceScrollRef.current) {
+      voiceScrollRef.current.scrollTop = voiceScrollRef.current.scrollHeight;
+    }
+  }, [voiceMessages]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (input.trim() && !isGenerating) {
@@ -104,34 +130,142 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     setSpeakingIdx(null);
   };
 
-  // Voice recording using Web Speech API
-  const toggleVoiceRecording = () => {
+  // Open Voice Call Modal
+  const openVoiceModal = () => {
+    setShowVoiceModal(true);
+    setCallStatus('idle');
+    setStatusText('Ready to call');
+  };
+
+  // Close Voice Call Modal
+  const closeVoiceModal = () => {
+    if (callStatus === 'active') {
+      endVoiceCall();
+    }
+    setShowVoiceModal(false);
+    setVoiceMessages([]);
+  };
+
+  // Start Voice Call
+  const startVoiceCall = async () => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-      alert('Voice recognition not supported in this browser');
+      setStatusText('Voice recognition not supported');
       return;
     }
 
-    if (isRecording) {
-      setIsRecording(false);
-      return;
-    }
+    setCallStatus('connecting');
+    setStatusText('Connecting...');
 
+    // Short delay to show connecting state
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    setCallStatus('active');
+    setStatusText('Call active - Speak now');
+
+    // Start continuous listening
+    startListening();
+  };
+
+  // End Voice Call
+  const endVoiceCall = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setCallStatus('idle');
+    setStatusText('Call ended');
+    setIsRecording(false);
+  };
+
+  // Start listening for voice input
+  const startListening = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognitionRef.current = recognition;
+    
+    recognition.continuous = true;
     recognition.interimResults = false;
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => setIsRecording(true);
-    recognition.onend = () => setIsRecording(false);
-    recognition.onerror = () => setIsRecording(false);
-    
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + ' ' + transcript);
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setStatusText('Listening...');
     };
 
-    recognition.start();
+    recognition.onend = () => {
+      setIsRecording(false);
+      // Auto-restart if call is still active
+      if (callStatus === 'active' && recognitionRef.current) {
+        setTimeout(() => {
+          if (callStatus === 'active') {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log('Recognition restart failed');
+            }
+          }
+        }, 100);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        setStatusText(`Error: ${event.error}`);
+      }
+    };
+    
+    recognition.onresult = async (event: any) => {
+      const transcript = event.results[event.results.length - 1][0].transcript;
+      
+      // Add user message
+      const userMsg: VoiceMessage = {
+        id: Date.now().toString(),
+        text: transcript,
+        isUser: true,
+        timestamp: Date.now()
+      };
+      setVoiceMessages(prev => [...prev, userMsg]);
+      setStatusText('Processing...');
+
+      // Send to AI and get response
+      try {
+        onSendMessage(transcript);
+        
+        // Simulate AI response (in real implementation, this would come from the actual AI response)
+        setTimeout(async () => {
+          const aiResponse = "Hello! I'm AI Studio Assistant. How can I help you today?";
+          const aiMsg: VoiceMessage = {
+            id: (Date.now() + 1).toString(),
+            text: aiResponse,
+            isUser: false,
+            timestamp: Date.now()
+          };
+          setVoiceMessages(prev => [...prev, aiMsg]);
+          setStatusText('Speaking...');
+          
+          // Speak the response
+          await speak(aiResponse);
+          setStatusText('Listening...');
+        }, 1000);
+      } catch (error) {
+        console.error('Error processing voice message:', error);
+        setStatusText('Error - Try again');
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch (e) {
+      console.error('Failed to start recognition:', e);
+      setStatusText('Failed to start listening');
+    }
+  };
+
+  // Voice recording using Web Speech API (legacy - for inline input)
+  const toggleVoiceRecording = () => {
+    // Open the voice modal instead
+    openVoiceModal();
   };
 
   // File upload handler
@@ -388,6 +522,117 @@ const ChatBox: React.FC<ChatBoxProps> = ({
           </button>
         </div>
       </form>
+
+      {/* Voice Call Modal */}
+      {showVoiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4 bg-[#1a1a2e] rounded-2xl border border-purple-500/20 shadow-2xl overflow-hidden">
+            {/* Close Button */}
+            <button
+              onClick={closeVoiceModal}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white transition-colors z-10"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Modal Content */}
+            <div className="p-6 pt-8 flex flex-col items-center">
+              {/* AI Avatar */}
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-500/30 to-cyan-500/30 flex items-center justify-center mb-4 border-2 border-teal-500/40">
+                <span className="text-5xl">🤖</span>
+              </div>
+
+              {/* Title */}
+              <h2 className="text-xl font-bold text-white mb-1">AI Studio Assistant</h2>
+              
+              {/* Status */}
+              <p className={`text-sm mb-4 ${
+                callStatus === 'active' ? 'text-emerald-400' : 
+                callStatus === 'connecting' ? 'text-yellow-400' : 
+                statusText.includes('Error') || statusText.includes('failed') ? 'text-red-400' :
+                'text-gray-400'
+              }`}>
+                {statusText}
+              </p>
+
+              {/* Voice Selector */}
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-gray-400 text-sm">Voice:</span>
+                <select
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                  disabled={callStatus === 'active'}
+                  className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-lg text-purple-300 text-sm focus:outline-none focus:border-purple-500/50 disabled:opacity-50"
+                >
+                  {VOICE_OPTIONS.map(voice => (
+                    <option key={voice} value={voice} className="bg-[#1a1a2e]">{voice}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Voice Messages Area - Only show when there are messages */}
+              {voiceMessages.length > 0 && (
+                <div 
+                  ref={voiceScrollRef}
+                  className="w-full max-h-48 overflow-y-auto mb-6 bg-[#0d0d1a] rounded-xl p-4 border border-gray-800/50"
+                >
+                  {voiceMessages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} mb-2`}>
+                      <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                        msg.isUser 
+                          ? 'bg-purple-500/30 text-purple-100 rounded-br-none' 
+                          : 'bg-gray-700/50 text-gray-200 rounded-bl-none'
+                      }`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Call Button */}
+              <button
+                onClick={callStatus === 'active' ? endVoiceCall : startVoiceCall}
+                disabled={callStatus === 'connecting'}
+                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 ${
+                  callStatus === 'active' 
+                    ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.5)]' 
+                    : callStatus === 'connecting'
+                    ? 'bg-yellow-500/50 cursor-wait'
+                    : 'bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-[0_0_20px_rgba(0,0,0,0.5)]'
+                }`}
+              >
+                {callStatus === 'active' ? (
+                  // End call icon
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
+                  </svg>
+                ) : callStatus === 'connecting' ? (
+                  // Loading spinner
+                  <svg className="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  // Phone icon
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Hint Text */}
+              <p className="text-gray-500 text-xs mt-4 text-center">
+                {callStatus === 'active' 
+                  ? 'Tap the button to end the call' 
+                  : 'Tap the button to start a voice call'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

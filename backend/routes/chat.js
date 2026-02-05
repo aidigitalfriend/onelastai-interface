@@ -247,13 +247,12 @@ router.post('/send', requireAuth, async (req, res) => {
       },
     });
 
-    // Update session
+    // Update session - only update fields that exist in schema
     await prisma.chatSession.update({
       where: { id: session.id },
       data: {
         updatedAt: new Date(),
-        totalTokens: { increment: response.totalTokens },
-        totalCost: { increment: response.creditsCost },
+        messageCount: { increment: 1 },
       },
     });
 

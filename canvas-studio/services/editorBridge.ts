@@ -56,54 +56,155 @@ export interface EditOperation {
   replaceWith?: string;
 }
 
+// Agent mode types
+export type AgentMode = 'chat' | 'dev' | 'review';
+
+// Message types for UI
+export interface UIMessage {
+  type: 'info' | 'warning' | 'error';
+  text: string;
+  timestamp: number;
+}
+
+// Symbol info for code intelligence
+export interface SymbolInfo {
+  name: string;
+  kind: 'function' | 'class' | 'variable' | 'interface' | 'type' | 'method' | 'property';
+  location: { line: number; column: number };
+  path: string;
+}
+
+// Diff types
+export interface DiffResult {
+  hunks: Array<{
+    oldStart: number;
+    oldLines: number;
+    newStart: number;
+    newLines: number;
+    lines: string[];
+  }>;
+  additions: number;
+  deletions: number;
+}
+
+// Error/Log types
+export interface EditorError {
+  path: string;
+  line: number;
+  column: number;
+  message: string;
+  severity: 'error' | 'warning' | 'info';
+}
+
+export interface LogEntry {
+  timestamp: number;
+  level: 'log' | 'info' | 'warn' | 'error';
+  message: string;
+  data?: any;
+}
+
 export interface EditorBridgeAPI {
-  // File operations
+  // ===== FILE OPERATIONS =====
   getFile: (path: string) => string | null;
-  setFile: (path: string, content: string) => void;
+  writeFile: (path: string, content: string) => void;
+  updateFile: (path: string, diff: string) => boolean;
   createFile: (path: string, content: string, language?: string) => void;
   deleteFile: (path: string) => void;
   renameFile: (oldPath: string, newPath: string) => void;
+  fileExists: (path: string) => boolean;
   
-  // Multi-file operations
+  // ===== DIRECTORY OPERATIONS =====
+  listFiles: (directory: string) => string[];
+  getProjectTree: () => FileNode[];
   getAllFiles: () => Map<string, string>;
   getOpenFiles: () => string[];
   getActiveFile: () => string | null;
   setActiveFile: (path: string) => void;
+  openFile: (path: string) => void;
   
-  // Project tree
-  getProjectTree: () => FileNode[];
-  
-  // Cursor & Selection
-  getCursor: () => CursorPosition;
-  setCursor: (position: CursorPosition) => void;
+  // ===== CURSOR & SELECTION =====
+  getCursorPosition: () => CursorPosition;
+  setCursorPosition: (position: CursorPosition) => void;
   getSelection: () => Selection | null;
   setSelection: (start: CursorPosition, end: CursorPosition) => void;
-  
-  // Edit operations
-  insertAt: (position: CursorPosition, text: string) => void;
-  insertAtCursor: (text: string) => void;
   replaceSelection: (text: string) => void;
+  insertAtCursor: (text: string) => void;
+  
+  // ===== EDIT OPERATIONS =====
+  insertAt: (position: CursorPosition, text: string) => void;
   replaceRange: (start: CursorPosition, end: CursorPosition, text: string) => void;
   replaceAll: (searchPattern: string, replaceWith: string) => void;
   deleteLine: (lineNumber: number) => void;
   deleteLines: (startLine: number, endLine: number) => void;
-  
-  // Bulk operations
   applyEdits: (operations: EditOperation[]) => void;
   
-  // State
-  getState: () => EditorState;
-  getLanguage: () => string;
+  // ===== SEARCH =====
+  searchInFiles: (query: string) => Array<{ path: string; line: number; text: string; match: string }>;
+  findFileByName: (name: string) => string[];
+  
+  // ===== CODE INTELLIGENCE =====
+  getLanguage: (path?: string) => string;
   setLanguage: (lang: string) => void;
+  getSymbols: (path: string) => SymbolInfo[];
+  findReferences: (symbol: string) => Array<{ path: string; line: number; column: number }>;
+  goToDefinition: (symbol: string) => { path: string; line: number; column: number } | null;
+  
+  // ===== COMMANDS & EXECUTION =====
+  runCommand: (command: string) => Promise<{ success: boolean; output: string; error?: string }>;
+  runTests: () => Promise<{ passed: number; failed: number; errors: string[] }>;
+  getErrors: () => EditorError[];
+  getLogs: () => LogEntry[];
+  clearLogs: () => void;
+  
+  // ===== DIFF OPERATIONS =====
+  generateDiff: (oldCode: string, newCode: string) => DiffResult;
+  showDiff: (path: string, diff: DiffResult) => void;
+  applyDiff: (path: string, diff: DiffResult) => boolean;
+  
+  // ===== PROJECT INFO =====
+  getDependencies: () => Record<string, string>;
+  getPackageJson: () => Record<string, any> | null;
+  getConfigFiles: () => string[];
+  getEnvInfo: () => { nodeVersion?: string; npmVersion?: string; env: Record<string, string> };
+  
+  // ===== MEMORY/STATE PERSISTENCE =====
+  saveMemory: (key: string, value: any) => void;
+  getMemory: (key: string) => any;
+  clearMemory: () => void;
+  
+  // ===== PERMISSIONS =====
+  requestApproval: (action: string, details?: string) => Promise<boolean>;
+  checkPermission: (action: string) => boolean;
+  
+  // ===== UI MESSAGES =====
+  showMessage: (text: string) => void;
+  showWarning: (text: string) => void;
+  showError: (text: string) => void;
+  askUser: (question: string) => Promise<string | null>;
+  
+  // ===== AGENT STATE =====
+  setMode: (mode: AgentMode) => void;
+  getMode: () => AgentMode;
+  getAgentState: () => {
+    mode: AgentMode;
+    isRunning: boolean;
+    currentTask: string | null;
+    memory: Record<string, any>;
+  };
+  cancelTask: () => void;
+  
+  // ===== STATE =====
+  getState: () => EditorState;
   isDirty: () => boolean;
   markClean: () => void;
   
-  // Undo/Redo
+  // ===== UNDO/REDO =====
   undo: () => void;
   redo: () => void;
   
-  // Events
+  // ===== EVENTS =====
   onChange: (callback: (state: EditorState) => void) => () => void;
+  onMessage: (callback: (message: UIMessage) => void) => () => void;
 }
 
 // ============================================================================
@@ -121,6 +222,18 @@ export class EditorBridge implements EditorBridgeAPI {
   private undoStack: Map<string, string[]> = new Map();
   private redoStack: Map<string, string[]> = new Map();
   private listeners: Set<(state: EditorState) => void> = new Set();
+  private messageListeners: Set<(message: UIMessage) => void> = new Set();
+  
+  // Agent state
+  private agentMode: AgentMode = 'chat';
+  private isRunning: boolean = false;
+  private currentTask: string | null = null;
+  private memory: Map<string, any> = new Map();
+  private permissions: Set<string> = new Set(['read', 'write', 'create', 'delete']);
+  private logs: LogEntry[] = [];
+  private errors: EditorError[] = [];
+  private approvalHandler: ((action: string, details?: string) => Promise<boolean>) | null = null;
+  private questionHandler: ((question: string) => Promise<string | null>) | null = null;
   
   constructor(initialFiles?: Record<string, string>) {
     if (initialFiles) {
@@ -593,11 +706,480 @@ export class EditorBridge implements EditorBridgeAPI {
     return () => this.listeners.delete(callback);
   }
   
+  onMessage(callback: (message: UIMessage) => void): () => void {
+    this.messageListeners.add(callback);
+    return () => this.messageListeners.delete(callback);
+  }
+  
   private notifyListeners(): void {
     const state = this.getState();
     this.listeners.forEach(callback => callback(state));
   }
   
+  private notifyMessage(message: UIMessage): void {
+    this.messageListeners.forEach(callback => callback(message));
+  }
+  
+  // ========== FILE EXISTS & UPDATE ==========
+  
+  fileExists(path: string): boolean {
+    return this.files.has(path);
+  }
+  
+  writeFile(path: string, content: string): void {
+    this.setFile(path, content);
+  }
+  
+  updateFile(path: string, diff: string): boolean {
+    try {
+      const currentContent = this.files.get(path);
+      if (currentContent === undefined) return false;
+      
+      // Simple patch: append diff lines that start with +, remove lines that start with -
+      const lines = currentContent.split('\n');
+      const diffLines = diff.split('\n');
+      
+      for (const line of diffLines) {
+        if (line.startsWith('+') && !line.startsWith('+++')) {
+          lines.push(line.substring(1));
+        }
+      }
+      
+      this.setFile(path, lines.join('\n'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  
+  // ========== DIRECTORY OPERATIONS ==========
+  
+  listFiles(directory: string): string[] {
+    const normalizedDir = directory.endsWith('/') ? directory : directory + '/';
+    const result: string[] = [];
+    
+    this.files.forEach((_, path) => {
+      if (directory === '/' || directory === '' || path.startsWith(normalizedDir)) {
+        result.push(path);
+      }
+    });
+    
+    return result;
+  }
+  
+  openFile(path: string): void {
+    if (this.files.has(path)) {
+      this.setActiveFile(path);
+    }
+  }
+  
+  // ========== CURSOR ALIASES ==========
+  
+  getCursorPosition(): CursorPosition {
+    return this.getCursor();
+  }
+  
+  setCursorPosition(position: CursorPosition): void {
+    this.setCursor(position);
+  }
+  
+  // ========== SEARCH ==========
+  
+  searchInFiles(query: string): Array<{ path: string; line: number; text: string; match: string }> {
+    const results: Array<{ path: string; line: number; text: string; match: string }> = [];
+    const lowerQuery = query.toLowerCase();
+    
+    this.files.forEach((content, path) => {
+      const lines = content.split('\n');
+      lines.forEach((lineText, index) => {
+        const lowerLine = lineText.toLowerCase();
+        if (lowerLine.includes(lowerQuery)) {
+          results.push({
+            path,
+            line: index + 1,
+            text: lineText.trim(),
+            match: query
+          });
+        }
+      });
+    });
+    
+    return results;
+  }
+  
+  findFileByName(name: string): string[] {
+    const results: string[] = [];
+    const lowerName = name.toLowerCase();
+    
+    this.files.forEach((_, path) => {
+      const fileName = path.split('/').pop()?.toLowerCase() || '';
+      if (fileName.includes(lowerName)) {
+        results.push(path);
+      }
+    });
+    
+    return results;
+  }
+  
+  // ========== CODE INTELLIGENCE ==========
+  
+  getSymbols(path: string): SymbolInfo[] {
+    const content = this.files.get(path);
+    if (!content) return [];
+    
+    const symbols: SymbolInfo[] = [];
+    const lines = content.split('\n');
+    
+    // Simple regex-based symbol detection
+    const patterns = [
+      { regex: /function\s+(\w+)/g, kind: 'function' as const },
+      { regex: /class\s+(\w+)/g, kind: 'class' as const },
+      { regex: /const\s+(\w+)\s*=/g, kind: 'variable' as const },
+      { regex: /let\s+(\w+)\s*=/g, kind: 'variable' as const },
+      { regex: /interface\s+(\w+)/g, kind: 'interface' as const },
+      { regex: /type\s+(\w+)\s*=/g, kind: 'type' as const },
+      { regex: /(\w+)\s*\([^)]*\)\s*{/g, kind: 'method' as const },
+    ];
+    
+    lines.forEach((line, lineIndex) => {
+      for (const { regex, kind } of patterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+          symbols.push({
+            name: match[1],
+            kind,
+            location: { line: lineIndex + 1, column: match.index + 1 },
+            path
+          });
+        }
+      }
+    });
+    
+    return symbols;
+  }
+  
+  findReferences(symbol: string): Array<{ path: string; line: number; column: number }> {
+    const references: Array<{ path: string; line: number; column: number }> = [];
+    
+    this.files.forEach((content, path) => {
+      const lines = content.split('\n');
+      lines.forEach((line, lineIndex) => {
+        let index = 0;
+        while ((index = line.indexOf(symbol, index)) !== -1) {
+          references.push({
+            path,
+            line: lineIndex + 1,
+            column: index + 1
+          });
+          index += symbol.length;
+        }
+      });
+    });
+    
+    return references;
+  }
+  
+  goToDefinition(symbol: string): { path: string; line: number; column: number } | null {
+    // Look for definition patterns
+    const defPatterns = [
+      new RegExp(`function\\s+${symbol}\\s*\\(`),
+      new RegExp(`class\\s+${symbol}`),
+      new RegExp(`const\\s+${symbol}\\s*=`),
+      new RegExp(`let\\s+${symbol}\\s*=`),
+      new RegExp(`interface\\s+${symbol}`),
+      new RegExp(`type\\s+${symbol}\\s*=`),
+    ];
+    
+    for (const [path, content] of this.files.entries()) {
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        for (const pattern of defPatterns) {
+          const match = lines[i].match(pattern);
+          if (match) {
+            return { path, line: i + 1, column: match.index! + 1 };
+          }
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  // ========== COMMANDS & EXECUTION ==========
+  
+  async runCommand(command: string): Promise<{ success: boolean; output: string; error?: string }> {
+    this.addLog('info', `Running command: ${command}`);
+    
+    // Simulate command execution (in browser environment)
+    try {
+      // For now, just log the command
+      this.addLog('log', `Command executed: ${command}`);
+      return { success: true, output: `Simulated output for: ${command}` };
+    } catch (e: any) {
+      return { success: false, output: '', error: e.message };
+    }
+  }
+  
+  async runTests(): Promise<{ passed: number; failed: number; errors: string[] }> {
+    this.addLog('info', 'Running tests...');
+    // Simulate test execution
+    return { passed: 0, failed: 0, errors: ['Test runner not implemented in browser'] };
+  }
+  
+  getErrors(): EditorError[] {
+    return [...this.errors];
+  }
+  
+  getLogs(): LogEntry[] {
+    return [...this.logs];
+  }
+  
+  clearLogs(): void {
+    this.logs = [];
+  }
+  
+  private addLog(level: LogEntry['level'], message: string, data?: any): void {
+    this.logs.push({ timestamp: Date.now(), level, message, data });
+    if (this.logs.length > 1000) {
+      this.logs = this.logs.slice(-500);
+    }
+  }
+  
+  // ========== DIFF OPERATIONS ==========
+  
+  generateDiff(oldCode: string, newCode: string): DiffResult {
+    const oldLines = oldCode.split('\n');
+    const newLines = newCode.split('\n');
+    
+    let additions = 0;
+    let deletions = 0;
+    const diffLines: string[] = [];
+    
+    // Simple line-by-line diff
+    const maxLen = Math.max(oldLines.length, newLines.length);
+    for (let i = 0; i < maxLen; i++) {
+      const oldLine = oldLines[i];
+      const newLine = newLines[i];
+      
+      if (oldLine === newLine) {
+        diffLines.push(' ' + (oldLine || ''));
+      } else {
+        if (oldLine !== undefined) {
+          diffLines.push('-' + oldLine);
+          deletions++;
+        }
+        if (newLine !== undefined) {
+          diffLines.push('+' + newLine);
+          additions++;
+        }
+      }
+    }
+    
+    return {
+      hunks: [{
+        oldStart: 1,
+        oldLines: oldLines.length,
+        newStart: 1,
+        newLines: newLines.length,
+        lines: diffLines
+      }],
+      additions,
+      deletions
+    };
+  }
+  
+  showDiff(path: string, diff: DiffResult): void {
+    this.showMessage(`Diff for ${path}: +${diff.additions} -${diff.deletions} lines`);
+  }
+  
+  applyDiff(path: string, diff: DiffResult): boolean {
+    try {
+      const currentContent = this.files.get(path) || '';
+      const newLines: string[] = [];
+      
+      for (const hunk of diff.hunks) {
+        for (const line of hunk.lines) {
+          if (line.startsWith(' ') || line.startsWith('+')) {
+            newLines.push(line.substring(1));
+          }
+          // Lines starting with '-' are removed (not added to newLines)
+        }
+      }
+      
+      this.setFile(path, newLines.join('\n'));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  
+  // ========== PROJECT INFO ==========
+  
+  getDependencies(): Record<string, string> {
+    const packageJson = this.getPackageJson();
+    if (!packageJson) return {};
+    
+    return {
+      ...(packageJson.dependencies || {}),
+      ...(packageJson.devDependencies || {})
+    };
+  }
+  
+  getPackageJson(): Record<string, any> | null {
+    const content = this.files.get('package.json') || this.files.get('/package.json');
+    if (!content) return null;
+    
+    try {
+      return JSON.parse(content);
+    } catch {
+      return null;
+    }
+  }
+  
+  getConfigFiles(): string[] {
+    const configPatterns = [
+      'package.json', 'tsconfig.json', 'vite.config', 'webpack.config',
+      '.eslintrc', '.prettierrc', 'tailwind.config', 'postcss.config',
+      '.env', 'next.config', 'nuxt.config'
+    ];
+    
+    const configs: string[] = [];
+    this.files.forEach((_, path) => {
+      const fileName = path.split('/').pop() || '';
+      if (configPatterns.some(p => fileName.includes(p))) {
+        configs.push(path);
+      }
+    });
+    
+    return configs;
+  }
+  
+  getEnvInfo(): { nodeVersion?: string; npmVersion?: string; env: Record<string, string> } {
+    const envFile = this.files.get('.env') || this.files.get('/.env') || '';
+    const env: Record<string, string> = {};
+    
+    envFile.split('\n').forEach(line => {
+      const [key, ...valueParts] = line.split('=');
+      if (key && !key.startsWith('#')) {
+        env[key.trim()] = valueParts.join('=').trim();
+      }
+    });
+    
+    return { env };
+  }
+  
+  // ========== MEMORY/STATE PERSISTENCE ==========
+  
+  saveMemory(key: string, value: any): void {
+    this.memory.set(key, value);
+  }
+  
+  getMemory(key: string): any {
+    return this.memory.get(key);
+  }
+  
+  clearMemory(): void {
+    this.memory.clear();
+  }
+  
+  // ========== PERMISSIONS ==========
+  
+  setApprovalHandler(handler: (action: string, details?: string) => Promise<boolean>): void {
+    this.approvalHandler = handler;
+  }
+  
+  setQuestionHandler(handler: (question: string) => Promise<string | null>): void {
+    this.questionHandler = handler;
+  }
+  
+  async requestApproval(action: string, details?: string): Promise<boolean> {
+    if (this.approvalHandler) {
+      return this.approvalHandler(action, details);
+    }
+    
+    // Default: auto-approve safe actions
+    const safeActions = ['read', 'view', 'search', 'list'];
+    return safeActions.includes(action.toLowerCase());
+  }
+  
+  checkPermission(action: string): boolean {
+    return this.permissions.has(action.toLowerCase());
+  }
+  
+  // ========== UI MESSAGES ==========
+  
+  showMessage(text: string): void {
+    const message: UIMessage = { type: 'info', text, timestamp: Date.now() };
+    this.notifyMessage(message);
+    this.addLog('info', text);
+  }
+  
+  showWarning(text: string): void {
+    const message: UIMessage = { type: 'warning', text, timestamp: Date.now() };
+    this.notifyMessage(message);
+    this.addLog('warn', text);
+  }
+  
+  showError(text: string): void {
+    const message: UIMessage = { type: 'error', text, timestamp: Date.now() };
+    this.notifyMessage(message);
+    this.addLog('error', text);
+  }
+  
+  async askUser(question: string): Promise<string | null> {
+    if (this.questionHandler) {
+      return this.questionHandler(question);
+    }
+    return window.prompt(question);
+  }
+  
+  // ========== AGENT STATE ==========
+  
+  setMode(mode: AgentMode): void {
+    this.agentMode = mode;
+    this.notifyListeners();
+  }
+  
+  getMode(): AgentMode {
+    return this.agentMode;
+  }
+  
+  getAgentState(): {
+    mode: AgentMode;
+    isRunning: boolean;
+    currentTask: string | null;
+    memory: Record<string, any>;
+  } {
+    const memoryObj: Record<string, any> = {};
+    this.memory.forEach((value, key) => {
+      memoryObj[key] = value;
+    });
+    
+    return {
+      mode: this.agentMode,
+      isRunning: this.isRunning,
+      currentTask: this.currentTask,
+      memory: memoryObj
+    };
+  }
+  
+  cancelTask(): void {
+    this.isRunning = false;
+    this.currentTask = null;
+    this.showMessage('Task cancelled');
+  }
+  
+  setTask(task: string): void {
+    this.currentTask = task;
+    this.isRunning = true;
+  }
+  
+  completeTask(): void {
+    this.currentTask = null;
+    this.isRunning = false;
+  }
+
   // ========== HELPERS ==========
   
   private detectLanguage(path: string): string {

@@ -12,7 +12,9 @@ import ChatBox from './components/ChatBox';
 import CanvasNavDrawer, { trackCanvasUsage, trackCanvasProject } from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
 import Overlay from './components/Overlay';
+import DeployPanel from './components/DeployPanel';
 import { useEditorBridge } from './services/useEditorBridge';
+import { ToolRegistry, runTool, getAvailableTools, ToolResult } from './services/toolRegistry';
 
 // AI Models - 4 Providers, 6 Models (Gemini removed)
 const MODELS: ModelOption[] = [
@@ -665,6 +667,759 @@ export default function Button({ children, onClick, variant = 'primary' }: Butto
 }` }
       ]}
     ]
+  },
+  {
+    id: 'mern-fullstack-project',
+    name: 'MERN Full Stack',
+    icon: '🚀',
+    language: 'TypeScript',
+    description: 'MongoDB + Express + React + Node.js full-stack application',
+    mainFile: 'client/src/App.tsx',
+    files: [
+      { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "mern-fullstack",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "concurrently \\"npm run server\\" \\"npm run client\\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "build": "cd client && npm run build",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}` },
+      { name: 'server', type: 'folder' as const, children: [
+        { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "mern-server",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "mongoose": "^8.0.0",
+    "dotenv": "^16.3.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}` },
+        { name: 'index.js', type: 'file' as const, language: 'javascript', content: `import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import itemRoutes from './routes/items.js';
+import userRoutes from './routes/users.js';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/mernapp';
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Routes
+app.use('/api/items', itemRoutes);
+app.use('/api/users', userRoutes);
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Connect to MongoDB and start server
+mongoose.connect(MONGODB_URI)
+  .then(() => {
+    console.log('✅ Connected to MongoDB');
+    app.listen(PORT, () => console.log(\`🚀 Server running on port \${PORT}\`));
+  })
+  .catch(err => console.error('MongoDB connection error:', err));` },
+        { name: '.env', type: 'file' as const, language: 'text', content: `PORT=5000
+MONGODB_URI=mongodb://localhost:27017/mernapp
+NODE_ENV=development` },
+        { name: 'models', type: 'folder' as const, children: [
+          { name: 'Item.js', type: 'file' as const, language: 'javascript', content: `import mongoose from 'mongoose';
+
+const itemSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  description: String,
+  price: { type: Number, required: true },
+  category: String,
+  inStock: { type: Boolean, default: true },
+}, { timestamps: true });
+
+export default mongoose.model('Item', itemSchema);` },
+          { name: 'User.js', type: 'file' as const, language: 'javascript', content: `import mongoose from 'mongoose';
+
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  name: { type: String, required: true },
+  avatar: String,
+  role: { type: String, enum: ['user', 'admin'], default: 'user' },
+}, { timestamps: true });
+
+export default mongoose.model('User', userSchema);` }
+        ]},
+        { name: 'routes', type: 'folder' as const, children: [
+          { name: 'items.js', type: 'file' as const, language: 'javascript', content: `import express from 'express';
+import Item from '../models/Item.js';
+
+const router = express.Router();
+
+// Get all items
+router.get('/', async (req, res) => {
+  try {
+    const items = await Item.find().sort({ createdAt: -1 });
+    res.json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get single item
+router.get('/:id', async (req, res) => {
+  try {
+    const item = await Item.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    res.json(item);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Create item
+router.post('/', async (req, res) => {
+  try {
+    const item = new Item(req.body);
+    await item.save();
+    res.status(201).json(item);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Update item
+router.put('/:id', async (req, res) => {
+  try {
+    const item = await Item.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    res.json(item);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Delete item
+router.delete('/:id', async (req, res) => {
+  try {
+    const item = await Item.findByIdAndDelete(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Not found' });
+    res.json({ message: 'Deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+export default router;` },
+          { name: 'users.js', type: 'file' as const, language: 'javascript', content: `import express from 'express';
+import User from '../models/User.js';
+
+const router = express.Router();
+
+router.get('/', async (req, res) => {
+  try {
+    const users = await User.find().select('-__v');
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/', async (req, res) => {
+  try {
+    const user = new User(req.body);
+    await user.save();
+    res.status(201).json(user);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+export default router;` }
+        ]}
+      ]},
+      { name: 'client', type: 'folder' as const, children: [
+        { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "mern-client",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.0",
+    "postcss": "^8.4.0"
+  }
+}` },
+        { name: 'vite.config.ts', type: 'file' as const, language: 'typescript', content: `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': 'http://localhost:5000'
+    }
+  }
+});` },
+        { name: 'index.html', type: 'file' as const, language: 'html', content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MERN App</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>` }
+      ]},
+      { name: 'client/src', type: 'folder' as const, children: [
+        { name: 'main.tsx', type: 'file' as const, language: 'typescript', content: `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);` },
+        { name: 'App.tsx', type: 'file' as const, language: 'typescript', content: `import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+interface Item {
+  _id: string;
+  name: string;
+  description?: string;
+  price: number;
+  inStock: boolean;
+}
+
+function App() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [newItem, setNewItem] = useState({ name: '', price: 0 });
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const fetchItems = async () => {
+    try {
+      const { data } = await axios.get('/api/items');
+      setItems(data);
+    } catch (err) {
+      console.error('Error fetching items:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { data } = await axios.post('/api/items', newItem);
+      setItems([data, ...items]);
+      setNewItem({ name: '', price: 0 });
+    } catch (err) {
+      console.error('Error adding item:', err);
+    }
+  };
+
+  const deleteItem = async (id: string) => {
+    try {
+      await axios.delete(\`/api/items/\${id}\`);
+      setItems(items.filter(item => item._id !== id));
+    } catch (err) {
+      console.error('Error deleting item:', err);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-4xl font-bold text-cyan-400 mb-8">🚀 MERN Full Stack</h1>
+        
+        {/* Add Item Form */}
+        <form onSubmit={addItem} className="mb-8 p-6 bg-gray-800 rounded-xl">
+          <h2 className="text-xl font-bold mb-4">Add New Item</h2>
+          <div className="flex gap-4">
+            <input
+              type="text"
+              placeholder="Item name"
+              value={newItem.name}
+              onChange={(e) => setNewItem({ ...newItem, name: e.target.value })}
+              className="flex-1 px-4 py-2 bg-gray-700 rounded-lg"
+              required
+            />
+            <input
+              type="number"
+              placeholder="Price"
+              value={newItem.price || ''}
+              onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value) || 0 })}
+              className="w-32 px-4 py-2 bg-gray-700 rounded-lg"
+              required
+            />
+            <button type="submit" className="px-6 py-2 bg-cyan-500 hover:bg-cyan-600 rounded-lg font-bold">
+              Add
+            </button>
+          </div>
+        </form>
+
+        {/* Items List */}
+        {loading ? (
+          <p className="text-gray-400">Loading...</p>
+        ) : items.length === 0 ? (
+          <p className="text-gray-400">No items yet. Add one above!</p>
+        ) : (
+          <div className="grid gap-4">
+            {items.map(item => (
+              <div key={item._id} className="p-4 bg-gray-800 rounded-xl flex justify-between items-center">
+                <div>
+                  <h3 className="font-bold">{item.name}</h3>
+                  <p className="text-cyan-400 font-bold">\${item.price.toFixed(2)}</p>
+                </div>
+                <button
+                  onClick={() => deleteItem(item._id)}
+                  className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg"
+                >
+                  Delete
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;` },
+        { name: 'index.css', type: 'file' as const, language: 'css', content: `@tailwind base;
+@tailwind components;
+@tailwind utilities;` }
+      ]}
+    ]
+  },
+  {
+    id: 'flask-react-fullstack',
+    name: 'Flask + React Full Stack',
+    icon: '🐍⚛️',
+    language: 'Python + TypeScript',
+    description: 'Python Flask backend with React frontend',
+    mainFile: 'backend/app.py',
+    files: [
+      { name: 'README.md', type: 'file' as const, language: 'markdown', content: `# Flask + React Full Stack Application
+
+## Project Structure
+\`\`\`
+├── backend/          # Flask API server
+│   ├── app.py        # Main Flask app
+│   ├── models.py     # SQLAlchemy models
+│   └── routes/       # API routes
+├── frontend/         # React TypeScript app
+│   ├── src/          # React source
+│   └── package.json
+\`\`\`
+
+## Getting Started
+
+### Backend
+\`\`\`bash
+cd backend
+python -m venv venv
+source venv/bin/activate  # or venv\\Scripts\\activate on Windows
+pip install -r requirements.txt
+python app.py
+\`\`\`
+
+### Frontend
+\`\`\`bash
+cd frontend
+npm install
+npm run dev
+\`\`\`
+
+API runs on http://localhost:5000
+Frontend runs on http://localhost:3000
+` },
+      { name: 'backend', type: 'folder' as const, children: [
+        { name: 'app.py', type: 'file' as const, language: 'python', content: `from flask import Flask, jsonify, request
+from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+import os
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+CORS(app)
+
+db = SQLAlchemy(app)
+
+# Models
+class Item(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    price = db.Column(db.Float, nullable=False)
+    category = db.Column(db.String(100))
+    in_stock = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'price': self.price,
+            'category': self.category,
+            'inStock': self.in_stock,
+            'createdAt': self.created_at.isoformat()
+        }
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    name = db.Column(db.String(80), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'email': self.email,
+            'name': self.name,
+            'createdAt': self.created_at.isoformat()
+        }
+
+# Routes
+@app.route('/api/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy', 'timestamp': datetime.utcnow().isoformat()})
+
+@app.route('/api/items', methods=['GET'])
+def get_items():
+    items = Item.query.order_by(Item.created_at.desc()).all()
+    return jsonify([item.to_dict() for item in items])
+
+@app.route('/api/items/<int:id>', methods=['GET'])
+def get_item(id):
+    item = Item.query.get_or_404(id)
+    return jsonify(item.to_dict())
+
+@app.route('/api/items', methods=['POST'])
+def create_item():
+    data = request.json
+    item = Item(
+        name=data['name'],
+        description=data.get('description'),
+        price=data['price'],
+        category=data.get('category')
+    )
+    db.session.add(item)
+    db.session.commit()
+    return jsonify(item.to_dict()), 201
+
+@app.route('/api/items/<int:id>', methods=['PUT'])
+def update_item(id):
+    item = Item.query.get_or_404(id)
+    data = request.json
+    item.name = data.get('name', item.name)
+    item.description = data.get('description', item.description)
+    item.price = data.get('price', item.price)
+    item.category = data.get('category', item.category)
+    item.in_stock = data.get('inStock', item.in_stock)
+    db.session.commit()
+    return jsonify(item.to_dict())
+
+@app.route('/api/items/<int:id>', methods=['DELETE'])
+def delete_item(id):
+    item = Item.query.get_or_404(id)
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({'message': 'Item deleted successfully'})
+
+@app.route('/api/users', methods=['GET'])
+def get_users():
+    users = User.query.all()
+    return jsonify([user.to_dict() for user in users])
+
+@app.route('/api/users', methods=['POST'])
+def create_user():
+    data = request.json
+    user = User(email=data['email'], name=data['name'])
+    db.session.add(user)
+    db.session.commit()
+    return jsonify(user.to_dict()), 201
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True, port=5000)` },
+        { name: 'requirements.txt', type: 'file' as const, language: 'text', content: `flask==2.3.3
+flask-cors==4.0.0
+flask-sqlalchemy==3.1.1
+python-dotenv==1.0.0
+gunicorn==21.2.0` },
+        { name: '.env', type: 'file' as const, language: 'text', content: `FLASK_ENV=development
+DATABASE_URL=sqlite:///app.db
+SECRET_KEY=your-secret-key-here` }
+      ]},
+      { name: 'frontend', type: 'folder' as const, children: [
+        { name: 'package.json', type: 'file' as const, language: 'json', content: `{
+  "name": "flask-react-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  }
+}` },
+        { name: 'vite.config.ts', type: 'file' as const, language: 'typescript', content: `import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    proxy: {
+      '/api': 'http://localhost:5000'
+    }
+  }
+});` },
+        { name: 'index.html', type: 'file' as const, language: 'html', content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flask + React App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900">
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>` }
+      ]},
+      { name: 'frontend/src', type: 'folder' as const, children: [
+        { name: 'main.tsx', type: 'file' as const, language: 'typescript', content: `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);` },
+        { name: 'App.tsx', type: 'file' as const, language: 'typescript', content: `import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+
+interface Item {
+  id: number;
+  name: string;
+  description?: string;
+  price: number;
+  category?: string;
+  inStock: boolean;
+  createdAt: string;
+}
+
+function App() {
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({ name: '', price: 0, description: '', category: '' });
+  const [editingId, setEditingId] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const fetchItems = async () => {
+    try {
+      const { data } = await axios.get('/api/items');
+      setItems(data);
+    } catch (err) {
+      console.error('Error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (editingId) {
+        const { data } = await axios.put(\`/api/items/\${editingId}\`, formData);
+        setItems(items.map(item => item.id === editingId ? data : item));
+        setEditingId(null);
+      } else {
+        const { data } = await axios.post('/api/items', formData);
+        setItems([data, ...items]);
+      }
+      setFormData({ name: '', price: 0, description: '', category: '' });
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure?')) return;
+    try {
+      await axios.delete(\`/api/items/\${id}\`);
+      setItems(items.filter(item => item.id !== id));
+    } catch (err) {
+      console.error('Error:', err);
+    }
+  };
+
+  const handleEdit = (item: Item) => {
+    setEditingId(item.id);
+    setFormData({
+      name: item.name,
+      price: item.price,
+      description: item.description || '',
+      category: item.category || ''
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white">
+      <div className="max-w-6xl mx-auto p-8">
+        <header className="mb-12 text-center">
+          <h1 className="text-5xl font-bold bg-gradient-to-r from-cyan-400 to-emerald-400 bg-clip-text text-transparent mb-4">
+            🐍⚛️ Flask + React
+          </h1>
+          <p className="text-gray-400">Full Stack Application with Python Backend</p>
+        </header>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="mb-12 p-8 bg-gray-800/50 backdrop-blur rounded-2xl border border-gray-700">
+          <h2 className="text-2xl font-bold mb-6">{editingId ? '✏️ Edit Item' : '➕ Add New Item'}</h2>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <input
+              type="text"
+              placeholder="Name"
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              className="px-4 py-3 bg-gray-700 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none"
+              required
+            />
+            <input
+              type="number"
+              placeholder="Price"
+              value={formData.price || ''}
+              onChange={e => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
+              className="px-4 py-3 bg-gray-700 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none"
+              required
+            />
+            <input
+              type="text"
+              placeholder="Category (optional)"
+              value={formData.category}
+              onChange={e => setFormData({ ...formData, category: e.target.value })}
+              className="px-4 py-3 bg-gray-700 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none"
+            />
+            <input
+              type="text"
+              placeholder="Description (optional)"
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              className="px-4 py-3 bg-gray-700 rounded-xl focus:ring-2 focus:ring-cyan-500 outline-none"
+            />
+          </div>
+          <div className="flex gap-4">
+            <button type="submit" className="px-8 py-3 bg-gradient-to-r from-cyan-500 to-emerald-500 rounded-xl font-bold hover:opacity-90 transition">
+              {editingId ? 'Update' : 'Add Item'}
+            </button>
+            {editingId && (
+              <button type="button" onClick={() => { setEditingId(null); setFormData({ name: '', price: 0, description: '', category: '' }); }} className="px-8 py-3 bg-gray-700 rounded-xl font-bold hover:bg-gray-600 transition">
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Items Grid */}
+        {loading ? (
+          <div className="text-center py-20">
+            <div className="animate-spin w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full mx-auto mb-4"></div>
+            <p className="text-gray-400">Loading...</p>
+          </div>
+        ) : items.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">
+            <p className="text-xl">No items yet. Add your first item above!</p>
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {items.map(item => (
+              <div key={item.id} className="p-6 bg-gray-800/50 backdrop-blur rounded-2xl border border-gray-700 hover:border-cyan-500/50 transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <h3 className="text-xl font-bold">{item.name}</h3>
+                  <span className="text-2xl font-bold text-cyan-400">\${item.price.toFixed(2)}</span>
+                </div>
+                {item.description && <p className="text-gray-400 mb-3">{item.description}</p>}
+                {item.category && <span className="inline-block px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-sm mb-4">{item.category}</span>}
+                <div className="flex gap-2 mt-4 pt-4 border-t border-gray-700">
+                  <button onClick={() => handleEdit(item)} className="flex-1 py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-400 rounded-lg transition">Edit</button>
+                  <button onClick={() => handleDelete(item.id)} className="flex-1 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition">Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default App;` }
+      ]}
+    ]
   }
 ];
 
@@ -675,9 +1430,10 @@ const DEVICE_SIZES = {
   mobile: { width: '375px', height: '812px', label: 'Mobile' },
 };
 
-type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | 'templates' | null;
+
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 type ConversationPhase = 'initial' | 'gathering' | 'confirming' | 'building' | 'editing';
+type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | 'templates' | 'deploy' | null;
 
 const App: React.FC = () => {
   const [isOverlayActive, setIsOverlayActive] = useState(true);
@@ -695,7 +1451,7 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.PREVIEW);
   const [currentApp, setCurrentApp] = useState<GeneratedApp | null>(null);
   const [history, setHistory] = useState<GeneratedApp[]>([]);
-  const [activePanel, setActivePanel] = useState<ActivePanel>('workspace');
+  const [activePanel, setActivePanel] = useState<ActivePanel>('assistant');
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isStreaming, setIsStreaming] = useState(true);
@@ -736,9 +1492,7 @@ const App: React.FC = () => {
   const [showDeployModal, setShowDeployModal] = useState(false);
 
   // 🔗 EDITOR BRIDGE - Full editor integration for agent
-  const editorBridge = useEditorBridge({
-    'main.html': currentApp?.code || ''
-  });
+  const editorBridge = useEditorBridge({});
 
   // Sync currentApp.code to editorBridge when it changes
   useEffect(() => {
@@ -747,11 +1501,113 @@ const App: React.FC = () => {
                   currentApp.language === 'python' ? 'py' : 
                   currentApp.language === 'typescript' ? 'ts' :
                   currentApp.language === 'javascript' ? 'js' : 'html';
-      const filename = `main.${ext}`;
+      const filename = `App.${ext}`;
       editorBridge.setFile(filename, currentApp.code);
       editorBridge.setActiveFile(filename);
     }
   }, [currentApp?.code, currentApp?.language]);
+
+  // Sync selectedLanguage to currentApp when manually changed (not 'auto')
+  useEffect(() => {
+    if (selectedLanguage !== 'auto' && currentApp) {
+      // Map dropdown values to language values
+      const languageMap: Record<string, string> = {
+        'html': 'html',
+        'react': 'react',
+        'typescript': 'typescript',
+        'javascript': 'javascript',
+        'python': 'python',
+      };
+      const newLang = languageMap[selectedLanguage] || selectedLanguage;
+      if (newLang !== currentApp.language) {
+        setCurrentApp(prev => prev ? { ...prev, language: newLang } : null);
+      }
+    }
+  }, [selectedLanguage]);
+
+  // 🔗 Sync EditorBridge files to projectFiles state
+  // This ensures the Files panel shows what's in the editor
+  useEffect(() => {
+    const files = editorBridge.files;
+    const fileList = editorBridge.fileList;
+    
+    if (fileList.length > 0) {
+      // Convert editorBridge files to ProjectFile format
+      const newProjectFiles: ProjectFile[] = fileList.map(filePath => {
+        const content = files.get(filePath) || '';
+        const name = filePath.split('/').pop() || filePath;
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        
+        // Determine language from extension
+        const langMap: Record<string, string> = {
+          'tsx': 'typescript',
+          'ts': 'typescript',
+          'jsx': 'javascript',
+          'js': 'javascript',
+          'html': 'html',
+          'css': 'css',
+          'py': 'python',
+          'json': 'json',
+          'md': 'markdown',
+        };
+        
+        return {
+          name: filePath, // Use full path for unique keys
+          type: 'file' as const,
+          language: langMap[ext] || 'text',
+          content,
+        };
+      });
+      
+      setProjectFiles(newProjectFiles);
+    }
+  }, [editorBridge.fileList, editorBridge.files]); // Watch fileList which changes when files change
+
+  // 🔗 Handle files generated by Sandpack/Preview component
+  // This syncs generated files (like index.tsx, styles.css) back to EditorBridge AND projectFiles
+  const handlePreviewFilesGenerated = React.useCallback((files: Record<string, string>) => {
+    // Clear existing files first to avoid stale files
+    const currentFiles = editorBridge.fileList;
+    
+    // Build new project files array
+    const newProjectFiles: ProjectFile[] = [];
+    
+    // Sync each file to EditorBridge and projectFiles
+    Object.entries(files).forEach(([filePath, content]) => {
+      // Remove leading slash for EditorBridge
+      const cleanPath = filePath.replace(/^\//, '');
+      
+      // Set file in EditorBridge
+      editorBridge.setFile(cleanPath, content);
+      
+      // Also add to projectFiles
+      const name = cleanPath.split('/').pop() || cleanPath;
+      const ext = name.split('.').pop()?.toLowerCase() || '';
+      const langMap: Record<string, string> = {
+        'tsx': 'typescript',
+        'ts': 'typescript',
+        'jsx': 'javascript',
+        'js': 'javascript',
+        'html': 'html',
+        'css': 'css',
+        'py': 'python',
+        'json': 'json',
+        'md': 'markdown',
+      };
+      
+      newProjectFiles.push({
+        name: cleanPath,
+        type: 'file' as const,
+        language: langMap[ext] || 'text',
+        content,
+      });
+    });
+    
+    // Update projectFiles state directly
+    if (newProjectFiles.length > 0) {
+      setProjectFiles(newProjectFiles);
+    }
+  }, [editorBridge]);
 
   // 🎭 Rotate fun commentary messages during generation
   useEffect(() => {
@@ -985,6 +1841,9 @@ const App: React.FC = () => {
       // Get editor context for the agent
       const editorContext = editorBridge.getAgentContext();
       
+      // Get available tools from registry
+      const availableTools = getAvailableTools();
+      
       // Send to unified agent endpoint with full context
       const response = await fetch('/api/canvas/agent', {
         method: 'POST',
@@ -1004,6 +1863,8 @@ const App: React.FC = () => {
           },
           // 🔗 Editor Bridge Context
           editorContext: editorContext,
+          // 🔧 Available Tools from Registry
+          availableTools: availableTools,
         }),
       });
 
@@ -1056,6 +1917,53 @@ const App: React.FC = () => {
             credits: selectedModel.costPer1k || 1,
             description: 'Build new app'
           });
+          break;
+        }
+
+        case 'build_project': {
+          // 🔗 Multi-file project creation using EditorBridge
+          if (data.files && Array.isArray(data.files)) {
+            console.log('[Canvas Agent] Creating multi-file project with', data.files.length, 'files');
+            
+            // Create all files using editorBridge
+            data.files.forEach((file: { path: string; content: string; language?: string }) => {
+              editorBridge.createFile(file.path, file.content, file.language);
+            });
+            
+            // Set the main file as active
+            const mainFile = data.mainFile || data.files[0]?.path;
+            if (mainFile) {
+              editorBridge.setActiveFile(mainFile);
+              
+              // Also update currentApp with main file content for preview
+              const mainFileData = data.files.find((f: { path: string }) => f.path === mainFile);
+              if (mainFileData) {
+                const newApp: GeneratedApp = {
+                  id: Date.now().toString(),
+                  name: mainFile.split('/').pop() || 'Project',
+                  code: mainFileData.content,
+                  language: mainFileData.language || 'html',
+                  prompt: message,
+                  timestamp: Date.now(),
+                  history: [],
+                };
+                setCurrentApp(newApp);
+                saveHistory([newApp, ...history].slice(0, 10));
+              }
+            }
+            
+            setViewMode(ViewMode.CODE);
+            setActivePanel('files');
+            addAIMessage(data.message || `✨ Created project with ${data.files.length} files! Check the Files panel.`);
+            
+            trackCanvasUsage({
+              type: 'generation',
+              model: selectedModel.name,
+              provider: selectedModel.provider,
+              credits: selectedModel.costPer1k || 1,
+              description: `Build multi-file project (${data.files.length} files)`
+            });
+          }
           break;
         }
 
@@ -1261,6 +2169,63 @@ const App: React.FC = () => {
             addAIMessage(data.message || `📋 Selection: lines ${selection.start.line}-${selection.end.line}`);
           } else {
             addAIMessage(data.message || '📋 No selection active');
+          }
+          break;
+        }
+
+        // 🔧 UNIFIED TOOL REGISTRY - Execute tools via central registry
+        case 'tool_calls': {
+          if (data.tool_calls && Array.isArray(data.tool_calls)) {
+            console.log('[Canvas Agent] Executing tool calls:', data.tool_calls.length);
+            
+            const results: ToolResult[] = [];
+            
+            for (const toolCall of data.tool_calls) {
+              const { tool, args } = toolCall;
+              console.log(`[Tool Registry] Executing: ${tool}`, args);
+              
+              // Execute via unified Tool Registry
+              const result = runTool(tool, args || []);
+              results.push(result);
+              
+              // Log result
+              if (result.success) {
+                console.log(`[Tool Registry] ${tool} succeeded:`, result.message || result.data);
+              } else {
+                console.warn(`[Tool Registry] ${tool} failed:`, result.error);
+              }
+            }
+            
+            // Summarize results
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.length - successCount;
+            
+            if (failCount === 0) {
+              addAIMessage(data.message || `✅ Executed ${successCount} tool${successCount > 1 ? 's' : ''} successfully`);
+            } else {
+              addAIMessage(data.message || `⚠️ ${successCount} succeeded, ${failCount} failed`);
+            }
+            
+            // If any file was created/modified, switch to code view
+            const fileTools = ['writeFile', 'createFile', 'updateFile'];
+            if (data.tool_calls.some((tc: any) => fileTools.includes(tc.tool))) {
+              setViewMode(ViewMode.CODE);
+            }
+          }
+          break;
+        }
+
+        // 🔧 SINGLE TOOL CALL - For simpler cases
+        case 'run_tool': {
+          if (data.tool) {
+            console.log(`[Canvas Agent] Running single tool: ${data.tool}`);
+            const result = runTool(data.tool, data.args || []);
+            
+            if (result.success) {
+              addAIMessage(data.message || result.message || `✅ ${data.tool} completed`);
+            } else {
+              addAIMessage(`⚠️ ${data.tool} failed: ${result.error}`);
+            }
           }
           break;
         }
@@ -1720,17 +2685,17 @@ const App: React.FC = () => {
                 </svg>
               </button>
 
+              {/* AI Assistant - Chat (moved up) */}
+              <button onClick={() => togglePanel('assistant')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'assistant' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="AI Assistant">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </button>
+
               {/* Workspace */}
               <button onClick={() => togglePanel('workspace')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'workspace' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="Workspace">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-              </button>
-
-              {/* AI Assistant */}
-              <button onClick={() => togglePanel('assistant')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'assistant' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="AI Assistant">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </button>
 
@@ -1885,6 +2850,13 @@ const App: React.FC = () => {
               </svg>
             </button>
 
+            {/* Deploy - Rocket Icon */}
+            <button onClick={() => togglePanel('deploy')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'deploy' ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]' : 'text-gray-500 hover:text-orange-400 hover:bg-orange-500/10 border-transparent hover:border-orange-500/20'}`} title="Deploy">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
+              </svg>
+            </button>
+
             {/* Dark/Light Mode */}
             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all w-full flex justify-center" title={isDarkMode ? 'Light Mode' : 'Dark Mode'}>
               {isDarkMode ? (
@@ -1971,13 +2943,13 @@ const App: React.FC = () => {
               >
                 {viewMode === ViewMode.PREVIEW ? (
                   <div className="w-full h-full flex-1" style={{ minHeight: 0 }}>
-                    <Preview code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'html'} />
+                    <Preview code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'html'} projectFiles={projectFiles} onFilesGenerated={handlePreviewFilesGenerated} />
                   </div>
                 ) : viewMode === ViewMode.CODE ? (
                   <CodeView code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'javascript'} />
                 ) : (
                   <div className="flex h-full">
-                    <div className={`w-1/2 border-r ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}><Preview code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'html'} /></div>
+                    <div className={`w-1/2 border-r ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}><Preview code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'html'} projectFiles={projectFiles} onFilesGenerated={handlePreviewFilesGenerated} /></div>
                     <div className="w-1/2"><CodeView code={currentApp?.code || ''} language={currentApp?.language?.toLowerCase() || 'javascript'} /></div>
                   </div>
                 )}
@@ -2998,6 +3970,24 @@ const App: React.FC = () => {
                     )}
                   </div>
                 </div>
+              )}
+
+              {/* Deploy Panel */}
+              {activePanel === 'deploy' && (
+                <DeployPanel
+                  code={currentApp?.code || ''}
+                  language={currentApp?.language || 'html'}
+                  appName={currentApp?.name || 'My App'}
+                  userId={userId}
+                  originalPrompt={currentApp?.prompt}
+                  aiModel={selectedModel.name}
+                  aiProvider={selectedModel.provider}
+                  onDeploySuccess={(app) => {
+                    setDeployedUrl(app.url);
+                    setShowDeployModal(true);
+                  }}
+                  onClose={() => setActivePanel(null)}
+                />
               )}
             </div>
           </div>

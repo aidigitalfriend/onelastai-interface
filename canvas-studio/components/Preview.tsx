@@ -6,10 +6,20 @@ import {
   useSandpack,
 } from '@codesandbox/sandpack-react';
 
+interface ProjectFile {
+  name: string;
+  type: 'file' | 'folder';
+  language?: string;
+  content?: string;
+  children?: ProjectFile[];
+}
+
 interface PreviewProps {
   code: string;
   language?: string;
   onCodeChange?: (newCode: string) => void;
+  projectFiles?: ProjectFile[]; // Multi-file project support
+  onFilesGenerated?: (files: Record<string, string>) => void; // Sync generated files back to parent
 }
 
 // Detect what type of project this is based on code content
@@ -146,7 +156,32 @@ const SandpackEditor: React.FC<{ onCodeChange?: (code: string) => void }> = ({ o
   return null;
 };
 
-const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange }) => {
+// Helper to flatten project files into Sandpack file format
+const buildSandpackFiles = (projectFiles: ProjectFile[], basePath: string = ''): Record<string, string> => {
+  const files: Record<string, string> = {};
+  
+  const processFiles = (items: ProjectFile[], currentPath: string) => {
+    for (const item of items) {
+      if (item.type === 'folder' && item.children) {
+        processFiles(item.children, `${currentPath}/${item.name}`);
+      } else if (item.type === 'file' && item.content) {
+        // Convert path to Sandpack format (add leading slash, use src/ for components)
+        let filePath = `${currentPath}/${item.name}`;
+        if (!filePath.startsWith('/')) filePath = '/' + filePath;
+        // For React files in components/ folder, put them in /src/components/
+        if (filePath.includes('/components/')) {
+          filePath = filePath.replace('/components/', '/components/');
+        }
+        files[filePath] = item.content;
+      }
+    }
+  };
+  
+  processFiles(projectFiles, basePath);
+  return files;
+};
+
+const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange, projectFiles, onFilesGenerated }) => {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showEditor, setShowEditor] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,7 +225,98 @@ const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange
 
   // React/TSX/JSX - Use Sandpack
   if (projectType === 'react') {
-    const { files, dependencies } = parseReactCode(code);
+    // Check if we have multi-file project
+    let files: Record<string, string>;
+    let dependencies: Record<string, string>;
+    
+    if (projectFiles && projectFiles.length > 0) {
+      // Multi-file project: build files from projectFiles
+      const builtFiles = buildSandpackFiles(projectFiles);
+      dependencies = {
+        'react': '^18.2.0',
+        'react-dom': '^18.2.0',
+      };
+      
+      // Detect dependencies from all files
+      Object.values(builtFiles).forEach(fileContent => {
+        const importMatches = fileContent.matchAll(/import\s+.*\s+from\s+['"]([^'"./][^'"]*)['"]/g);
+        for (const match of importMatches) {
+          const pkg = match[1].split('/')[0];
+          if (pkg && pkg !== 'react' && pkg !== 'react-dom') {
+            const commonVersions: Record<string, string> = {
+              'framer-motion': '^10.16.0',
+              'lucide-react': '^0.294.0',
+              '@heroicons/react': '^2.0.18',
+              'axios': '^1.6.0',
+              'zustand': '^4.4.0',
+              '@tanstack/react-query': '^5.0.0',
+              'react-router-dom': '^6.20.0',
+              'clsx': '^2.0.0',
+              'tailwind-merge': '^2.0.0',
+            };
+            dependencies[pkg] = commonVersions[pkg] || 'latest';
+          }
+        }
+      });
+      
+      // Build final files with proper structure
+      files = {
+        ...builtFiles,
+        '/index.tsx': builtFiles['/index.tsx'] || builtFiles['/main.tsx'] || `import React from 'react';
+import { createRoot } from 'react-dom/client';
+import App from './App';
+import './index.css';
+
+const root = createRoot(document.getElementById('root')!);
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);`,
+        '/public/index.html': `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>App Preview</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>`,
+      };
+      
+      // If no index.css exists, add default styles
+      if (!files['/index.css'] && !files['/styles.css']) {
+        files['/index.css'] = `@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0a0a0a;
+  color: #ffffff;
+  min-height: 100vh;
+}`;
+      }
+    } else {
+      // Single file project: use existing parseReactCode
+      const parsed = parseReactCode(code);
+      files = parsed.files;
+      dependencies = parsed.dependencies;
+    }
+    
+    // Notify parent of generated files so they can sync to EditorBridge
+    if (onFilesGenerated) {
+      onFilesGenerated(files);
+    }
     
     // Create a CodeSandbox URL for opening in external sandbox
     const openInCodeSandbox = () => {

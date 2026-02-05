@@ -12,29 +12,33 @@ import ChatBox from './components/ChatBox';
 import CanvasNavDrawer from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
 import { useEditorBridge } from './services/useEditorBridge';
+import { ToolRegistry, runTool, getAvailableTools, ToolResult } from './services/toolRegistry';
 
 // AI Models - 7 Providers, 14 Models with friendly names
 const MODELS: ModelOption[] = [
-  // Maula AI (Anthropic)
+  // Maula AI (Mistral backend)
   {
-    id: 'claude-sonnet-4-20250514',
+    id: 'mistral-large-2501',
     name: 'Nova',
     provider: 'Maula AI',
+    backendProvider: 'mistral',
     description: 'Best for coding - highly recommended.',
     icon: '🌟',
   },
   {
-    id: 'claude-opus-4-20250514',
+    id: 'mistral-large-2501',
     name: 'Nova Pro',
     provider: 'Maula AI',
+    backendProvider: 'mistral',
     description: 'Most powerful reasoning model.',
     isThinking: true,
     icon: '💫',
   },
   {
-    id: 'mistral-large-2501',
+    id: 'codestral-latest',
     name: 'Maula Large',
     provider: 'Maula AI',
+    backendProvider: 'mistral',
     description: 'Advanced multilingual model.',
     icon: '🔮',
   },
@@ -42,14 +46,16 @@ const MODELS: ModelOption[] = [
     id: 'codestral-latest',
     name: 'Maula Code',
     provider: 'Maula AI',
+    backendProvider: 'mistral',
     description: 'Specialized for code generation.',
     icon: '💻',
   },
-  // Image Generator (OpenAI)
+  // Image Generator (OpenAI backend)
   {
     id: 'gpt-4o',
     name: 'Vision Pro',
     provider: 'Image Generator',
+    backendProvider: 'openai',
     description: 'Best for visual tasks and images.',
     icon: '🎨',
   },
@@ -57,14 +63,16 @@ const MODELS: ModelOption[] = [
     id: 'gpt-4o-mini',
     name: 'Vision Fast',
     provider: 'Image Generator',
+    backendProvider: 'openai',
     description: 'Quick image understanding.',
     icon: '⚡',
   },
-  // Designer (Gemini)
+  // Designer (Gemini backend)
   {
     id: 'gemini-2.0-flash',
     name: 'Design Flash',
     provider: 'Designer',
+    backendProvider: 'gemini',
     description: 'Fast multimodal design.',
     icon: '🎯',
   },
@@ -72,30 +80,34 @@ const MODELS: ModelOption[] = [
     id: 'gemini-2.5-pro-preview',
     name: 'Design Pro',
     provider: 'Designer',
+    backendProvider: 'gemini',
     description: 'Advanced design capabilities.',
     isThinking: true,
     icon: '🧠',
   },
-  // Planner (xAI)
+  // Planner (Anthropic backend)
   {
-    id: 'grok-3',
+    id: 'claude-sonnet-4-20250514',
     name: 'Architect',
     provider: 'Planner',
+    backendProvider: 'anthropic',
     description: 'Strategic planning and reasoning.',
     icon: '📐',
   },
   {
-    id: 'grok-3-fast',
+    id: 'claude-sonnet-4-20250514',
     name: 'Architect Fast',
     provider: 'Planner',
+    backendProvider: 'anthropic',
     description: 'Quick planning assistance.',
     icon: '🚀',
   },
-  // Code Builder (Groq)
+  // Code Builder (Groq backend)
   {
     id: 'llama-3.3-70b-versatile',
     name: 'Turbo Code',
     provider: 'Code Builder',
+    backendProvider: 'groq',
     description: 'Ultra-fast code generation.',
     icon: '⚡',
   },
@@ -103,14 +115,16 @@ const MODELS: ModelOption[] = [
     id: 'llama-3.1-8b-instant',
     name: 'Turbo Instant',
     provider: 'Code Builder',
+    backendProvider: 'groq',
     description: 'Lightning fast responses.',
     icon: '💨',
   },
-  // Fast Coding (Cerebras)
+  // Fast Coding (Cerebras backend)
   {
     id: 'llama-3.3-70b',
     name: 'Lightning',
     provider: 'Fast Coding',
+    backendProvider: 'cerebras',
     description: 'Fastest inference speed.',
     icon: '⚡',
   },
@@ -118,6 +132,7 @@ const MODELS: ModelOption[] = [
     id: 'llama3.1-8b',
     name: 'Lightning Lite',
     provider: 'Fast Coding',
+    backendProvider: 'cerebras',
     description: 'Quick lightweight coding.',
     icon: '✨',
   },
@@ -156,6 +171,12 @@ type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' |
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 type ConversationPhase = 'initial' | 'gathering' | 'confirming' | 'building' | 'editing';
 
+interface ProjectFile {
+  path: string;
+  content: string;
+  language?: string;
+}
+
 const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState<ModelOption>(MODELS[0]);
@@ -163,7 +184,8 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.PREVIEW);
   const [currentApp, setCurrentApp] = useState<GeneratedApp | null>(null);
   const [history, setHistory] = useState<GeneratedApp[]>([]);
-  const [activePanel, setActivePanel] = useState<ActivePanel>('workspace');
+  const [activePanel, setActivePanel] = useState<ActivePanel>('assistant');
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
   const [deviceMode, setDeviceMode] = useState<DeviceMode>('desktop');
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isStreaming, setIsStreaming] = useState(true);
@@ -194,6 +216,15 @@ const App: React.FC = () => {
     'main.html': currentApp?.code || ''
   });
 
+  // Expose editorBridge globally for AI agents
+  useEffect(() => {
+    (window as any).editorBridge = editorBridge;
+    console.log('[EditorBridge] Initialized and exposed globally');
+    return () => {
+      delete (window as any).editorBridge;
+    };
+  }, [editorBridge]);
+
   // Sync currentApp.code to editorBridge when it changes
   useEffect(() => {
     if (currentApp?.code) {
@@ -201,6 +232,21 @@ const App: React.FC = () => {
       editorBridge.setActiveFile('main.html');
     }
   }, [currentApp?.code]);
+
+  // 🔗 Sync editorBridge files to projectFiles state for Files panel
+  useEffect(() => {
+    const files = editorBridge.files;
+    const fileList = editorBridge.fileList;
+    
+    if (fileList && fileList.length > 0) {
+      const projectFilesList: ProjectFile[] = fileList.map((filePath: string) => ({
+        path: filePath,
+        content: files.get(filePath) || '',
+        language: editorBridge.language || 'html'
+      }));
+      setProjectFiles(projectFilesList);
+    }
+  }, [editorBridge.fileList, editorBridge.files]);
 
   // Load dark mode preference
   useEffect(() => {
@@ -302,7 +348,7 @@ const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           prompt: instruction,
-          provider: selectedModel.provider,
+          provider: selectedModel.backendProvider || 'mistral',
           modelId: selectedModel.id,
           isThinking: selectedModel.isThinking || false,
           currentCode: isInitial ? undefined : currentApp?.code,
@@ -316,44 +362,164 @@ const App: React.FC = () => {
         throw new Error(data.error || 'Failed to generate application');
       }
 
-      const code = data.code;
-
       const userMsg: ChatMessage = {
         role: 'user',
         text: instruction,
         timestamp: Date.now(),
       };
-      const modelMsg: ChatMessage = {
-        role: 'model',
-        text: isInitial ? 'Application built!' : 'Changes applied.',
-        timestamp: Date.now(),
-      };
 
-      if (isInitial) {
-        const newApp: GeneratedApp = {
-          id: Date.now().toString(),
-          name: instruction.substring(0, 30) + '...',
-          code,
-          prompt: instruction,
-          timestamp: Date.now(),
-          history: [modelMsg],
-        };
-        setCurrentApp(newApp);
-        saveHistory([newApp, ...history].slice(0, 10));
-      } else if (currentApp) {
-        const updatedApp = {
-          ...currentApp,
-          code,
-          history: [...currentApp.history, userMsg, modelMsg],
-        };
-        setCurrentApp(updatedApp);
-        saveHistory(
-          history.map((a) => (a.id === updatedApp.id ? updatedApp : a))
-        );
+      // Handle different action types (agent actions)
+      const action = data.action || (isInitial ? 'build' : 'edit');
+
+      switch (action) {
+        case 'build_project': {
+          // 🔗 Multi-file project creation using EditorBridge
+          if (data.files && Array.isArray(data.files)) {
+            console.log('[Canvas Agent] Creating multi-file project with', data.files.length, 'files');
+            
+            // Create all files using editorBridge
+            data.files.forEach((file: { path: string; content: string; language?: string }) => {
+              editorBridge.createFile(file.path, file.content, file.language);
+            });
+            
+            // Set the main file as active
+            const mainFile = data.mainFile || data.files[0]?.path;
+            if (mainFile) {
+              editorBridge.setActiveFile(mainFile);
+              
+              // Also update currentApp with main file content for preview
+              const mainFileData = data.files.find((f: { path: string }) => f.path === mainFile);
+              if (mainFileData) {
+                const newApp: GeneratedApp = {
+                  id: Date.now().toString(),
+                  name: mainFile.split('/').pop() || 'Project',
+                  code: mainFileData.content,
+                  prompt: instruction,
+                  timestamp: Date.now(),
+                  history: [{ role: 'model', text: `✨ Created project with ${data.files.length} files!`, timestamp: Date.now() }],
+                };
+                setCurrentApp(newApp);
+                saveHistory([newApp, ...history].slice(0, 10));
+              }
+            }
+            
+            setViewMode(ViewMode.CODE);
+            setActivePanel('assistant');
+          }
+          break;
+        }
+
+        // 🔧 UNIFIED TOOL REGISTRY - Execute tools via central registry
+        case 'tool_calls': {
+          if (data.tool_calls && Array.isArray(data.tool_calls)) {
+            console.log('[Canvas Agent] Executing tool calls:', data.tool_calls.length);
+            
+            const results: ToolResult[] = [];
+            
+            for (const toolCall of data.tool_calls) {
+              const { tool, args } = toolCall;
+              console.log(`[Tool Registry] Executing: ${tool}`, args);
+              
+              // Execute via unified Tool Registry
+              const result = runTool(tool, args || []);
+              results.push(result);
+              
+              // Log result
+              if (result.success) {
+                console.log(`[Tool Registry] ${tool} succeeded:`, result.message || result.data);
+              } else {
+                console.warn(`[Tool Registry] ${tool} failed:`, result.error);
+              }
+            }
+            
+            // Summarize results
+            const successCount = results.filter(r => r.success).length;
+            const failCount = results.length - successCount;
+            
+            // Update conversation with result
+            const resultMsg: ChatMessage = {
+              role: 'model',
+              text: failCount === 0 
+                ? data.message || `✅ Executed ${successCount} tool${successCount > 1 ? 's' : ''} successfully`
+                : data.message || `⚠️ ${successCount} succeeded, ${failCount} failed`,
+              timestamp: Date.now(),
+            };
+            if (currentApp) {
+              setCurrentApp({
+                ...currentApp,
+                history: [...currentApp.history, resultMsg],
+              });
+            }
+            
+            // If any file was created/modified, switch to code view
+            const fileTools = ['writeFile', 'createFile', 'updateFile'];
+            if (data.tool_calls.some((tc: any) => fileTools.includes(tc.tool))) {
+              setViewMode(ViewMode.CODE);
+            }
+          }
+          break;
+        }
+
+        // 🔧 SINGLE TOOL CALL - For simpler cases
+        case 'run_tool': {
+          if (data.tool) {
+            console.log(`[Canvas Agent] Running single tool: ${data.tool}`);
+            const result = runTool(data.tool, data.args || []);
+            
+            const resultMsg: ChatMessage = {
+              role: 'model',
+              text: result.success 
+                ? (data.message || result.message || `✅ ${data.tool} completed`)
+                : `⚠️ ${data.tool} failed: ${result.error}`,
+              timestamp: Date.now(),
+            };
+            if (currentApp) {
+              setCurrentApp({
+                ...currentApp,
+                history: [...currentApp.history, resultMsg],
+              });
+            }
+          }
+          break;
+        }
+
+        case 'build':
+        default: {
+          const code = data.code;
+          const modelMsg: ChatMessage = {
+            role: 'model',
+            text: isInitial ? 'Application built!' : 'Changes applied.',
+            timestamp: Date.now(),
+          };
+
+          if (isInitial) {
+            const newApp: GeneratedApp = {
+              id: Date.now().toString(),
+              name: instruction.substring(0, 30) + '...',
+              code,
+              prompt: instruction,
+              timestamp: Date.now(),
+              history: [modelMsg],
+            };
+            setCurrentApp(newApp);
+            saveHistory([newApp, ...history].slice(0, 10));
+          } else if (currentApp) {
+            const updatedApp = {
+              ...currentApp,
+              code,
+              history: [...currentApp.history, userMsg, modelMsg],
+            };
+            setCurrentApp(updatedApp);
+            saveHistory(
+              history.map((a) => (a.id === updatedApp.id ? updatedApp : a))
+            );
+          }
+          setViewMode(ViewMode.PREVIEW);
+          break;
+        }
       }
 
       setGenState({ isGenerating: false, error: null, progressMessage: '' });
-      setViewMode(ViewMode.PREVIEW);
     } catch (err: any) {
       setGenState({
         isGenerating: false,
@@ -675,17 +841,17 @@ const App: React.FC = () => {
                 </svg>
               </button>
 
+              {/* AI Assistant - Chat (moved up) */}
+              <button onClick={() => togglePanel('assistant')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'assistant' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="AI Assistant">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </button>
+
               {/* Workspace */}
               <button onClick={() => togglePanel('workspace')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'workspace' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="Workspace">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                </svg>
-              </button>
-
-              {/* AI Assistant */}
-              <button onClick={() => togglePanel('assistant')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'assistant' ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30 shadow-[0_0_10px_rgba(34,211,238,0.2)]' : 'text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border-transparent hover:border-cyan-500/20'}`} title="AI Assistant">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
               </button>
 
@@ -1084,7 +1250,7 @@ const App: React.FC = () => {
                   {/* Fixed Header */}
                   <div className="p-6 pb-4 border-b border-gray-800/50 flex items-center justify-between shrink-0">
                     <h3 className="text-xs font-bold text-cyan-500/80 uppercase tracking-widest">
-                      Files
+                      Files ({projectFiles.length})
                     </h3>
                     <button onClick={() => setActivePanel(null)} className="text-gray-600 hover:text-cyan-400 transition-colors" title="Close">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1098,53 +1264,35 @@ const App: React.FC = () => {
                     <div className="mb-4">
                       <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Project Files</h4>
                       <div className="space-y-1">
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group" onClick={() => setViewMode(ViewMode.CODE)}>
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">index.html</span>
-                          </div>
-                        </div>
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group" onClick={() => setViewMode(ViewMode.CODE)}>
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">app.js</span>
-                          </div>
-                        </div>
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group" onClick={() => setViewMode(ViewMode.CODE)}>
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">styles.css</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Folders */}
-                    <div className="mb-4">
-                      <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Folders</h4>
-                      <div className="space-y-1">
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group">
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">components/</span>
-                          </div>
-                        </div>
-                        <div className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group">
-                          <div className="flex items-center gap-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                            </svg>
-                            <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors">assets/</span>
-                          </div>
-                        </div>
+                        {projectFiles.length === 0 ? (
+                          <div className="text-xs text-gray-600 italic py-2">No project files yet</div>
+                        ) : (
+                          projectFiles.map((file) => {
+                            const ext = file.path.split('.').pop()?.toLowerCase() || '';
+                            const iconColor = ext === 'html' ? 'text-orange-500' : 
+                                              ext === 'js' || ext === 'jsx' ? 'text-yellow-500' : 
+                                              ext === 'ts' || ext === 'tsx' ? 'text-blue-400' : 
+                                              ext === 'css' ? 'text-pink-400' : 
+                                              ext === 'json' ? 'text-green-400' : 'text-gray-400';
+                            return (
+                              <div 
+                                key={file.path}
+                                className="px-4 py-2 bg-black/30 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all cursor-pointer group"
+                                onClick={() => {
+                                  editorBridge.setActiveFile(file.path);
+                                  setViewMode(ViewMode.CODE);
+                                }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <svg xmlns="http://www.w3.org/2000/svg" className={`h-4 w-4 ${iconColor}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                  </svg>
+                                  <span className="text-xs font-bold text-gray-400 group-hover:text-cyan-400 transition-colors truncate">{file.path}</span>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
                       </div>
                     </div>
 
@@ -1170,7 +1318,17 @@ const App: React.FC = () => {
                       </div>
                     </div>
 
-                    <button className="w-full py-2 text-xs font-bold bg-black/30 text-gray-500 hover:bg-cyan-500/10 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-widest">
+                    <button 
+                      onClick={() => {
+                        const newPath = prompt('Enter new file name (e.g., component.tsx):');
+                        if (newPath) {
+                          editorBridge.createFile(newPath, '');
+                          editorBridge.setActiveFile(newPath);
+                          setViewMode(ViewMode.CODE);
+                        }
+                      }}
+                      className="w-full py-2 text-xs font-bold bg-black/30 text-gray-500 hover:bg-cyan-500/10 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-widest"
+                    >
                       + Add File
                     </button>
                   </div>

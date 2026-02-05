@@ -1,7 +1,6 @@
 /**
- * NEURAL-CHAT CANVAS APP - USE EDITOR BRIDGE HOOK
+ * CANVAS STUDIO - USE EDITOR BRIDGE HOOK
  * React hook for using the Editor Bridge in components
- * NOTE: This is completely independent from canvas-studio
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';

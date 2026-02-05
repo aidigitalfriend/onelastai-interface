@@ -1115,6 +1115,9 @@ const CANVAS_AGENT_SYSTEM = `You are **Canvas Agent**, the intelligent AI assist
 ## YOUR IDENTITY
 You are not just a code generator - you are the CONTROL CENTER of Canvas Studio. You have full access to every feature, panel, and capability of the application.
 
+## MULTI-FILE PROJECT SUPPORT
+You can create and manage multi-file projects! When a template or request requires multiple files (like React apps, Node.js projects, etc.), use the BUILD_PROJECT tool to create the complete project structure.
+
 ## YOUR TOOLS/CAPABILITIES
 You have access to these tools. When you want to use a tool, respond with a JSON object containing the "tool" key:
 
@@ -1122,12 +1125,43 @@ You have access to these tools. When you want to use a tool, respond with a JSON
 Use when: greeting, questions, clarification, discussion
 {"tool": "chat", "message": "Your response here"}
 
-### 2. BUILD - Generate New Code
-Use when: user wants to create a new app/website/component
-{"tool": "build", "prompt": "Detailed requirements", "language": "react|html|typescript|javascript|python"}
+### 2. BUILD - Generate Single-File Code
+Use when: user wants to create a simple single-file app (HTML page, script)
+{"tool": "build", "prompt": "Detailed requirements", "language": "html|javascript|python"}
 
-### 3. EDIT - Modify Existing Code
-Use when: user wants to change something in the current code
+### 3. BUILD_PROJECT - Generate Multi-File Project ⭐ NEW
+Use when: user wants to create a React app, full project, template with multiple files
+{"tool": "build_project", "files": [
+  {"path": "index.html", "content": "<!DOCTYPE html>...", "language": "html"},
+  {"path": "src/App.tsx", "content": "import React...", "language": "typescript"},
+  {"path": "src/index.tsx", "content": "import ReactDOM...", "language": "typescript"},
+  {"path": "src/styles.css", "content": "body {...}", "language": "css"}
+], "mainFile": "src/App.tsx", "message": "Created your React app with X files!"}
+
+### 3.5. BUILD_FULLSTACK - Generate Full-Stack Application 🚀 NEW
+Use when: user wants a complete full-stack app with frontend + backend + database
+{"tool": "build_fullstack", "prompt": "E-commerce site with products, cart, and checkout", "backendType": "express|flask|fastapi", "databaseType": "sqlite|postgres"}
+
+This will generate:
+- Frontend (React + TypeScript)
+- Backend (Express/Flask/FastAPI API)
+- Database schema
+- Docker configuration
+- README with setup instructions
+
+### 4. EDIT - Modify Existing Code
+Use when: user wants to change something in the current code (or a specific file)
+{"tool": "edit", "instruction": "What to change", "targetSection": "optional - header/footer/etc", "targetFile": "optional - specific file path"}
+
+### 5. EDIT_FILE - Edit a Specific File
+Use when: user wants to change a specific file in a multi-file project
+{"tool": "edit_file", "path": "src/App.tsx", "instruction": "What to change"}
+
+### 6. READ_FILE - Read File Contents
+Use when: you need to read a file's contents before editing
+{"tool": "read_file", "path": "src/utils.ts", "message": "Let me check that file..."}
+
+### 7. PREVIEW - Run/Show the App
 {"tool": "edit", "instruction": "What to change", "targetSection": "optional - header/footer/etc"}
 
 ### 4. PREVIEW - Run/Show the App
@@ -1230,6 +1264,19 @@ For complex requests, you can execute multiple tools in sequence:
   {"tool": "edit", "instruction": "Add a contact form"},
   {"tool": "preview", "message": "Let me show you the updated app"}
 ]}
+
+## DIRECT TOOL REGISTRY (ADVANCED)
+For precise editor control, use tool_calls to directly invoke EditorBridge methods:
+{"action": "tool_calls", "tool_calls": [
+  {"tool": "writeFile", "args": ["src/App.tsx", "// File content here"]},
+  {"tool": "createFile", "args": ["src/utils.ts", "export const helper = () => {}", "typescript"]},
+  {"tool": "setCursorPosition", "args": [10, 5]}
+], "message": "Applied changes using tool registry"}
+
+Available Tool Registry methods:
+- File ops: getFile, writeFile, updateFile, createFile, deleteFile, renameFile, listFiles, getProjectTree, fileExists
+- Cursor: getCursorPosition, setCursorPosition, getSelection, setSelection, replaceSelection, insertAtCursor, insertAt, replaceRange, deleteLine
+- Editor: getActiveFile, setActiveFile, undo, redo, getEditorContext, searchInFiles, getSymbols
 
 ## CONTEXT AWARENESS
 You always know:
@@ -1339,21 +1386,27 @@ router.post('/agent', optionalAuth, async (req, res) => {
           contextInfo += `\n- Selected text: \`${selectedSnippet}${editorContext.selectedText.length > 200 ? '...' : ''}\``;
         }
       }
-      if (editorContext.projectTree && editorContext.projectTree.length > 0) {
-        contextInfo += `\n\n### Project Files:`;
-        const listFiles = (nodes, indent = '') => {
-          for (const node of nodes) {
-            contextInfo += `\n${indent}${node.isDirectory ? '📁' : '📄'} ${node.name}`;
-            if (node.children && node.children.length > 0) {
-              listFiles(node.children, indent + '  ');
-            }
-          }
-        };
-        listFiles(editorContext.projectTree);
+      
+      // List project files
+      if (editorContext.fileList && editorContext.fileList.length > 0) {
+        contextInfo += `\n\n### Project Files (${editorContext.fileList.length} files):`;
+        editorContext.fileList.forEach(file => {
+          contextInfo += `\n- 📄 ${file}`;
+        });
+      }
+      
+      // Include ALL file contents so agent can read/modify any file
+      if (editorContext.files && Object.keys(editorContext.files).length > 0) {
+        contextInfo += `\n\n### FILE CONTENTS (Full project):`;
+        for (const [filePath, content] of Object.entries(editorContext.files)) {
+          const fileExt = filePath.split('.').pop() || 'txt';
+          const truncatedContent = content.length > 3000 ? content.substring(0, 3000) + '\n... (truncated)' : content;
+          contextInfo += `\n\n#### ${filePath}\n\`\`\`${fileExt}\n${truncatedContent}\n\`\`\``;
+        }
       }
     }
     
-    if (currentCode) {
+    if (currentCode && !editorContext?.files) {
       // Include a snippet of the current code for context
       const codeSnippet = currentCode.substring(0, 500) + (currentCode.length > 500 ? '...' : '');
       contextInfo += `\n\n## CURRENT CODE SNIPPET:\n\`\`\`\n${codeSnippet}\n\`\`\``;
@@ -1480,6 +1533,32 @@ function processToolRequest(tool) {
     case 'get_selection':
       return { action: 'get_selection', message: tool.message || 'Getting selection...' };
     
+    // � UNIFIED TOOL REGISTRY - Direct EditorBridge invocation
+    case 'tool_calls':
+      return { 
+        action: 'tool_calls', 
+        tool_calls: tool.tool_calls || [], 
+        message: tool.message || `Executing ${tool.tool_calls?.length || 0} tool commands...` 
+      };
+    
+    // 🔧 SINGLE TOOL - Direct EditorBridge method call
+    case 'run_tool':
+      return { 
+        action: 'run_tool', 
+        tool: tool.targetTool || tool.name, 
+        args: tool.args || [], 
+        message: tool.message || `Running ${tool.targetTool || tool.name}...` 
+      };
+    
+    // �🔗 Multi-file project builder
+    case 'build_project':
+      return { 
+        action: 'build_project', 
+        files: tool.files || [], 
+        mainFile: tool.mainFile, 
+        message: tool.message || `Created project with ${tool.files?.length || 0} files!` 
+      };
+    
     case 'chat':
     default:
       return { action: 'chat', message: tool.message || 'How can I help?' };
@@ -1493,12 +1572,16 @@ async function processToolRequestWithAI(tool, context) {
 
   // Handle tools that don't need additional AI calls (passthrough tools)
   const passthroughTools = [
-    'preview', 'deploy', 'save', 'open_panel', 'copy_code', 'new_chat', 
+    'preview', 'save', 'open_panel', 'copy_code', 'new_chat', 
     'download', 'sandbox', 'change_provider', 'change_language',
     // 🔗 Editor Bridge tools (all passthrough)
     'insert_at', 'replace_range', 'delete_lines', 'goto_line',
     'create_file', 'delete_file', 'open_file', 'undo', 'redo',
-    'find_replace', 'get_selection'
+    'find_replace', 'get_selection',
+    // Multi-file project (already has content from agent)
+    'build_project',
+    // 🔧 Unified Tool Registry (direct EditorBridge invocation)
+    'tool_calls', 'run_tool'
   ];
   
   if (passthroughTools.includes(toolName)) {
@@ -1508,6 +1591,18 @@ async function processToolRequestWithAI(tool, context) {
   // Handle chat/explain/debug (already have content)
   if (toolName === 'chat' || toolName === 'explain' || toolName === 'debug') {
     return processToolRequest(tool);
+  }
+
+  // Handle DEPLOY - trigger deployment workflow
+  if (toolName === 'deploy') {
+    return {
+      action: 'deploy',
+      message: tool.message || '🚀 Opening deploy panel... Your app will be live at a unique URL!',
+      deployConfig: {
+        language: currentLanguage || detectLanguage(currentCode) || 'html',
+        suggestedName: tool.appName || 'My Canvas App',
+      }
+    };
   }
 
   // Handle BUILD - needs code generation
@@ -1549,6 +1644,77 @@ Return ONLY the code, no explanations.`;
       language,
       message: 'Here\'s your new app! Click preview to see it in action.',
     };
+  }
+
+  // Handle BUILD_FULLSTACK - Generate complete full-stack application
+  if (toolName === 'build_fullstack') {
+    const backendProvider = PROVIDER_MAPPING[provider] || provider.toLowerCase();
+    const backendModel = MODEL_MAPPING[modelId] || modelId;
+    
+    const fullstackPrompt = `## CREATE FULL-STACK APPLICATION
+
+Requirements: ${tool.prompt}
+
+Generate a complete full-stack application with:
+1. **Frontend (React + TypeScript)**
+2. **Backend (${tool.backendType || 'Express'} API)**
+3. **Database schema (${tool.databaseType || 'SQLite'})**
+
+Return ONLY a JSON object with this structure:
+{
+  "files": [
+    {"path": "frontend/package.json", "content": "...", "language": "json"},
+    {"path": "frontend/src/App.tsx", "content": "...", "language": "typescript"},
+    {"path": "frontend/src/index.tsx", "content": "...", "language": "typescript"},
+    {"path": "frontend/src/services/api.ts", "content": "...", "language": "typescript"},
+    {"path": "frontend/src/pages/Home.tsx", "content": "...", "language": "typescript"},
+    {"path": "backend/package.json", "content": "...", "language": "json"},
+    {"path": "backend/server.js", "content": "...", "language": "javascript"},
+    {"path": "backend/routes/api.js", "content": "...", "language": "javascript"},
+    {"path": "backend/models/schema.sql", "content": "...", "language": "sql"},
+    {"path": "docker-compose.yml", "content": "...", "language": "yaml"},
+    {"path": "README.md", "content": "...", "language": "markdown"}
+  ],
+  "mainFile": "frontend/src/App.tsx",
+  "backendType": "express",
+  "databaseType": "sqlite"
+}
+
+Create realistic, production-ready code. Frontend should call backend API endpoints.
+Return ONLY the JSON, no markdown or explanations.`;
+
+    const fullstackResult = await aiService.chat(
+      [{ role: 'user', content: fullstackPrompt }],
+      backendProvider,
+      backendModel,
+      {
+        systemPrompt: `You are a full-stack developer. Generate complete, working code for full-stack applications. Return ONLY valid JSON, no markdown code blocks.`,
+        maxTokens: 32000,
+        endpoint: 'canvas',
+      }
+    );
+
+    try {
+      let jsonStr = fullstackResult.content.trim();
+      jsonStr = jsonStr.replace(/^```json?\n?/gm, '').replace(/```$/gm, '').trim();
+      const projectData = JSON.parse(jsonStr);
+      
+      return {
+        action: 'build_project',
+        files: projectData.files,
+        mainFile: projectData.mainFile,
+        projectType: 'FULLSTACK',
+        backendType: projectData.backendType || 'express',
+        databaseType: projectData.databaseType || 'sqlite',
+        message: `✨ Created full-stack app with ${projectData.files.length} files! Frontend + ${projectData.backendType} backend + database ready.`,
+      };
+    } catch (parseError) {
+      console.error('[Canvas Agent] Failed to parse fullstack response:', parseError);
+      return {
+        action: 'chat',
+        message: 'I had trouble generating the full-stack app. Let me try building it piece by piece. What should I start with - the frontend or backend?',
+      };
+    }
   }
 
   // Handle EDIT - needs code modification

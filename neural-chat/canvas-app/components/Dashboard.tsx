@@ -2,24 +2,30 @@ import React, { useState, useEffect, useRef } from 'react';
 
 // Custom scrollbar styles
 const scrollbarStyles = `
+  .dashboard-scroll {
+    overflow-y: auto !important;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(34, 211, 238, 0.4) transparent;
+  }
   .dashboard-scroll::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
   }
   .dashboard-scroll::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 4px;
   }
   .dashboard-scroll::-webkit-scrollbar-thumb {
-    background: rgba(34, 211, 238, 0.3);
-    border-radius: 3px;
+    background: rgba(34, 211, 238, 0.4);
+    border-radius: 4px;
   }
   .dashboard-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(34, 211, 238, 0.5);
+    background: rgba(34, 211, 238, 0.6);
   }
 `;
 
 interface UsageRecord {
   id: string;
-  type: 'generation' | 'edit' | 'chat';
+  type: 'generation' | 'edit' | 'chat' | 'canvas' | 'image' | 'audio' | 'code';
   model: string;
   provider: string;
   credits: number;
@@ -39,30 +45,59 @@ interface BillingRecord {
   method: string;
 }
 
+interface DashboardData {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+  };
+  credits: {
+    balance: number;
+    lifetimeSpent: number;
+  };
+  stats: {
+    creditsUsedToday: number;
+    creditsUsedWeek: number;
+    creditsUsedMonth: number;
+    requestsToday: number;
+    requestsWeek: number;
+    requestsMonth: number;
+    weeklyChange: number;
+  };
+  apps: {
+    active: number;
+    total: number;
+    usage: Record<string, { credits: number; requests: number; percent: number }>;
+  };
+  models?: Array<{
+    provider: string;
+    model: string;
+    name: string;
+    credits: number;
+    requests: number;
+    tokens: number;
+  }>;
+  recentActivity: Array<{
+    id: string;
+    app: string;
+    icon: string;
+    action: string;
+    credits: number;
+    time: string;
+  }>;
+  transactions: Array<{
+    id: string;
+    type: string;
+    amount: number;
+    description: string;
+    createdAt: string;
+  }>;
+}
+
 interface DashboardProps {
   isDarkMode: boolean;
   onClose: () => void;
 }
-
-// Canvas App specific mock data
-const MOCK_USAGE: UsageRecord[] = [
-  { id: '1', type: 'generation', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', credits: 10, tokens: { input: 2500, output: 8500 }, timestamp: Date.now() - 300000, description: 'Generated SaaS landing page', duration: 12400, status: 'completed' },
-  { id: '2', type: 'edit', model: 'GPT-4o', provider: 'OpenAI', credits: 5, tokens: { input: 1200, output: 3200 }, timestamp: Date.now() - 900000, description: 'Added dark mode toggle', duration: 5200, status: 'completed' },
-  { id: '3', type: 'generation', model: 'Gemini 1.5 Pro', provider: 'Google', credits: 12, tokens: { input: 3100, output: 9800 }, timestamp: Date.now() - 1800000, description: 'Built analytics dashboard', duration: 18600, status: 'completed' },
-  { id: '4', type: 'chat', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', credits: 2, tokens: { input: 450, output: 1200 }, timestamp: Date.now() - 2700000, description: 'UI design discussion', duration: 2100, status: 'completed' },
-  { id: '5', type: 'edit', model: 'Mistral Large', provider: 'Mistral', credits: 5, tokens: { input: 1800, output: 4200 }, timestamp: Date.now() - 3600000, description: 'Made layout responsive', duration: 6800, status: 'completed' },
-  { id: '6', type: 'generation', model: 'GPT-4o', provider: 'OpenAI', credits: 8, tokens: { input: 2200, output: 7100 }, timestamp: Date.now() - 7200000, description: 'Created checkout flow', duration: 14200, status: 'completed' },
-  { id: '7', type: 'chat', model: 'GPT-4o', provider: 'OpenAI', credits: 3, tokens: { input: 680, output: 1850 }, timestamp: Date.now() - 14400000, description: 'API integration help', duration: 3400, status: 'completed' },
-  { id: '8', type: 'edit', model: 'Claude 3.5 Sonnet', provider: 'Anthropic', credits: 4, tokens: { input: 1100, output: 2800 }, timestamp: Date.now() - 28800000, description: 'Added animations', duration: 4800, status: 'completed' },
-  { id: '9', type: 'generation', model: 'Gemini 2.0 Flash', provider: 'Google', credits: 10, tokens: { input: 2800, output: 8200 }, timestamp: Date.now() - 43200000, description: 'Built portfolio site', duration: 11200, status: 'completed' },
-  { id: '10', type: 'edit', model: 'Grok 3', provider: 'xAI', credits: 6, tokens: { input: 1500, output: 3900 }, timestamp: Date.now() - 86400000, description: 'Refactored components', duration: 7200, status: 'completed' },
-];
-
-const MOCK_BILLING: BillingRecord[] = [
-  { id: 'b1', amount: 9.99, credits: 100, status: 'completed', date: Date.now() - 604800000, method: 'Visa •••• 4242' },
-  { id: 'b2', amount: 29.99, credits: 350, status: 'completed', date: Date.now() - 2592000000, method: 'Visa •••• 4242' },
-  { id: 'b3', amount: 49.99, credits: 600, status: 'completed', date: Date.now() - 5184000000, method: 'PayPal' },
-];
 
 const CREDIT_PACKAGES = [
   { credits: 50, price: 5.00, popular: false, savings: null },
@@ -72,24 +107,91 @@ const CREDIT_PACKAGES = [
   { credits: 1500, price: 99.99, popular: false, savings: '35% off' },
 ];
 
-type DashboardTab = 'overview' | 'requests' | 'usage' | 'billing' | 'credits';
+type DashboardTab = 'overview' | 'usage' | 'billing' | 'credits';
 
 const TABS: { id: DashboardTab; label: string; icon: string }[] = [
-  { id: 'overview', label: 'Overview', icon: '📈' },
-  { id: 'requests', label: 'Requests', icon: '🔄' },
+  { id: 'overview', label: 'S', icon: '📈' },
   { id: 'usage', label: 'Usage', icon: '⚡' },
   { id: 'billing', label: 'Billing', icon: '💳' },
   { id: 'credits', label: 'Credits', icon: '🪙' },
 ];
 
+// Map internal app names to user-friendly OneLast AI feature names
+const getFeatureName = (endpoint: string): string => {
+  const mapping: Record<string, string> = {
+    'chat': 'Neural Chat',
+    'canvas': 'Canvas Studio',
+    'image': 'Image Generation',
+    'audio': 'Voice Assistant',
+    'code': 'Code Editor',
+    'neural-chat': 'Neural Chat',
+    'canvas-studio': 'Canvas Studio',
+    'maula-editor': 'Code Editor',
+  };
+  return mapping[endpoint] || 'OneLast AI';
+};
+
+// Map model names to user-friendly names
+const getModelDisplayName = (model: string): string => {
+  // Hide actual model names, show as OneLast AI variants
+  if (model.toLowerCase().includes('claude') || model.toLowerCase().includes('anthropic')) {
+    return 'OneLast Pro';
+  }
+  if (model.toLowerCase().includes('gpt') || model.toLowerCase().includes('openai')) {
+    return 'OneLast Turbo';
+  }
+  if (model.toLowerCase().includes('gemini') || model.toLowerCase().includes('google')) {
+    return 'OneLast Flash';
+  }
+  if (model.toLowerCase().includes('grok') || model.toLowerCase().includes('xai')) {
+    return 'OneLast X';
+  }
+  if (model.toLowerCase().includes('mistral')) {
+    return 'OneLast Swift';
+  }
+  if (model.toLowerCase().includes('groq')) {
+    return 'OneLast Speed';
+  }
+  return 'OneLast AI';
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
-  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
-  const [creditBalance] = useState(247);
-  const [usageHistory] = useState<UsageRecord[]>(MOCK_USAGE);
-  const [billingHistory] = useState<BillingRecord[]>(MOCK_BILLING);
+  const [activeTab, setActiveTab] = useState<DashboardTab>('usage');
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
+
+  // Fetch dashboard data from API
+  useEffect(() => {
+    const fetchDashboard = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/dashboard', {
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch dashboard data');
+        }
+        
+        const data = await response.json();
+        if (data.success) {
+          setDashboardData(data.dashboard);
+        } else {
+          throw new Error(data.error || 'Failed to load dashboard');
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'An error occurred');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchDashboard();
+  }, []);
 
   const updateScrollButtons = () => {
     if (tabsRef.current) {
@@ -116,54 +218,58 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
     }
   };
 
-  // Calculate stats
-  const totalCreditsUsed = usageHistory.reduce((sum, u) => sum + u.credits, 0);
-  const totalTokens = usageHistory.reduce((sum, u) => sum + u.tokens.input + u.tokens.output, 0);
-  const totalRequests = usageHistory.length;
-  const todayRequests = usageHistory.filter(u => Date.now() - u.timestamp < 86400000);
-  const todayCredits = todayRequests.reduce((sum, u) => sum + u.credits, 0);
+  // Calculate stats from real data
+  const creditBalance = dashboardData?.credits?.balance ?? 0;
+  const totalCreditsUsed = dashboardData?.stats?.creditsUsedMonth ?? 0;
+  const totalRequests = dashboardData?.stats?.requestsMonth ?? 0;
 
-  // Provider breakdown
-  const providerStats = Object.entries(
-    usageHistory.reduce((acc, u) => {
-      if (!acc[u.provider]) acc[u.provider] = { credits: 0, requests: 0, tokens: 0 };
-      acc[u.provider].credits += u.credits;
-      acc[u.provider].requests += 1;
-      acc[u.provider].tokens += u.tokens.input + u.tokens.output;
-      return acc;
-    }, {} as Record<string, { credits: number; requests: number; tokens: number }>)
-  ).sort((a, b) => b[1].credits - a[1].credits);
+  // Feature/App breakdown from apps.usage
+  const featureStats = dashboardData?.apps?.usage 
+    ? Object.entries(dashboardData.apps.usage).map(([appId, data]) => ({
+        name: getFeatureName(appId),
+        credits: data.credits,
+        requests: data.requests,
+        tokens: 0,
+      }))
+    : [];
 
-  // Model breakdown
-  const modelStats = Object.entries(
-    usageHistory.reduce((acc, u) => {
-      if (!acc[u.model]) acc[u.model] = { credits: 0, requests: 0, tokens: 0, provider: u.provider };
-      acc[u.model].credits += u.credits;
-      acc[u.model].requests += 1;
-      acc[u.model].tokens += u.tokens.input + u.tokens.output;
-      return acc;
-    }, {} as Record<string, { credits: number; requests: number; tokens: number; provider: string }>)
-  ).sort((a, b) => b[1].credits - a[1].credits);
+  // Model breakdown from API
+  const modelStats = dashboardData?.models 
+    ? dashboardData.models.map(m => ({
+        name: m.model,
+        provider: m.provider,
+        credits: m.credits,
+        requests: m.requests,
+        tokens: m.tokens,
+      }))
+    : [];
+    
+  // Calculate total tokens from model stats
+  const totalTokens = modelStats.reduce((sum, m) => sum + (m.tokens || 0), 0);
 
   const getTypeIcon = (type: string) => {
     switch(type) {
+      case 'canvas': return '🎨';
+      case 'chat': return '💬';
+      case 'image': return '🖼️';
+      case 'audio': return '🎙️';
+      case 'code': return '💻';
       case 'generation': return '🚀';
       case 'edit': return '✏️';
-      case 'chat': return '💬';
       default: return '📊';
     }
   };
 
-  const getProviderColor = (provider: string) => {
+  const getFeatureColor = (feature: string) => {
     const colors: Record<string, string> = {
-      'Anthropic': '#22d3ee',
-      'OpenAI': '#10b981',
-      'Google': '#8b5cf6',
-      'Mistral': '#ec4899',
-      'xAI': '#f59e0b',
-      'Groq': '#ef4444',
+      'Neural Chat': '#22d3ee',
+      'Canvas Studio': '#8b5cf6',
+      'Image Generation': '#10b981',
+      'Voice Assistant': '#f59e0b',
+      'Code Editor': '#ec4899',
+      'OneLast AI': '#6b7280',
     };
-    return colors[provider] || '#6b7280';
+    return colors[feature] || '#22d3ee';
   };
 
   const getStatusColor = (status: string) => {
@@ -204,8 +310,34 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
     alert(`Redirecting to payment for ${pkg.credits} credits ($${pkg.price})...`);
   };
 
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full ${isDarkMode ? 'bg-[#111]/95' : 'bg-white'}`}>
+        <div className="w-10 h-10 border-3 border-cyan-900 border-t-cyan-400 rounded-full animate-spin mb-4" />
+        <p className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className={`flex flex-col items-center justify-center h-full ${isDarkMode ? 'bg-[#111]/95' : 'bg-white'} p-4`}>
+        <span className="text-3xl mb-4">⚠️</span>
+        <p className={`text-xs ${isDarkMode ? 'text-red-400' : 'text-red-600'} text-center`}>{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className={`mt-4 px-4 py-2 text-xs font-bold rounded-lg ${isDarkMode ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'bg-cyan-100 text-cyan-700'}`}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className={`flex flex-col h-full min-h-0 overflow-hidden ${isDarkMode ? 'bg-[#111]/95' : 'bg-white'}`}>
+    <div className={`flex flex-col ${isDarkMode ? 'bg-[#111]/95' : 'bg-white'}`} style={{ height: '100%', maxHeight: '100%', overflow: 'hidden' }}>
       <style>{scrollbarStyles}</style>
       {/* Header */}
       <div className={`px-4 py-3 border-b ${isDarkMode ? 'border-gray-800/50' : 'border-gray-200'} flex items-center justify-between shrink-0`}>
@@ -285,7 +417,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
       </div>
 
       {/* Content - Scrollable */}
-      <div className="flex-1 min-h-0 overflow-y-auto dashboard-scroll">
+      <div className="flex-1 overflow-y-auto dashboard-scroll" style={{ minHeight: 0 }}>
         <div className="p-4 space-y-4 pb-8">
           {/* OVERVIEW TAB */}
           {activeTab === 'overview' && (
@@ -296,7 +428,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
                   <span className="text-lg">🪙</span>
                 </div>
                 <div className="flex items-end gap-2 mb-2">
-                  <span className={`text-3xl font-black ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{creditBalance}</span>
+                  <span className={`text-3xl font-black ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{typeof creditBalance === 'number' ? creditBalance.toFixed(2) : creditBalance}</span>
                   <span className={`text-xs ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} mb-1`}>credits</span>
                 </div>
                 <div className={`h-1.5 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'} overflow-hidden`}>
@@ -310,107 +442,39 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                  <div className={`text-[8px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-wider`}>Today</div>
-                  <div className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{todayCredits}</div>
-                  <div className={`text-[9px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>credits used</div>
+                  <div className={`text-[8px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-wider`}>Total Used</div>
+                  <div className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{typeof totalCreditsUsed === 'number' ? totalCreditsUsed.toFixed(2) : totalCreditsUsed}</div>
+                  <div className={`text-[9px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>credits</div>
                 </div>
-                <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                  <div className={`text-[8px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-wider`}>Total</div>
-                  <div className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{totalCreditsUsed}</div>
-                  <div className={`text-[9px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>credits used</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
                 <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
                   <div className={`text-[8px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-wider`}>Requests</div>
                   <div className={`text-lg font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{totalRequests}</div>
                   <div className={`text-[9px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>total</div>
                 </div>
-                <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                  <div className={`text-[8px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-wider`}>Tokens</div>
-                  <div className={`text-lg font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{formatTokens(totalTokens)}</div>
-                  <div className={`text-[9px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>processed</div>
-                </div>
               </div>
 
-              <div>
-                <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest mb-2`}>Recent Activity</h4>
-                <div className="space-y-2">
-                  {usageHistory.slice(0, 3).map(record => (
-                    <div key={record.id} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'} flex items-center gap-2`}>
-                      <span className="text-base">{getTypeIcon(record.type)}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} truncate`}>{record.description}</div>
-                        <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{record.model} • {formatDate(record.timestamp)}</div>
-                      </div>
-                      <span className={`text-[10px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>-{record.credits}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* REQUESTS TAB */}
-          {activeTab === 'requests' && (
-            <>
-              <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-cyan-500/5 border-cyan-500/20' : 'bg-cyan-50 border-cyan-200'}`}>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className={`text-[8px] ${isDarkMode ? 'text-cyan-400/60' : 'text-cyan-600'} uppercase tracking-wider`}>Total Requests</div>
-                    <div className={`text-xl font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{totalRequests}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className={`text-[8px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-wider`}>Today</div>
-                    <div className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{todayRequests.length}</div>
-                  </div>
-                </div>
+              <div className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+                <div className={`text-[8px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-wider`}>Tokens Processed</div>
+                <div className={`text-lg font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{formatTokens(totalTokens)}</div>
               </div>
 
-              <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest`}>Request Log</h4>
-              
-              <div className="space-y-2">
-                {usageHistory.map(record => (
-                  <div key={record.id} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800 hover:border-cyan-500/30' : 'bg-gray-50 border-gray-200 hover:border-cyan-300'} transition-all`}>
-                    <div className="flex items-start gap-2 mb-2">
-                      <span className="text-base">{getTypeIcon(record.type)}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{record.description}</div>
-                        <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} flex items-center gap-2 mt-0.5`}>
-                          <span style={{ color: getProviderColor(record.provider) }}>{record.provider}</span>
-                          <span>•</span>
-                          <span>{record.model}</span>
+              {dashboardData?.recentActivity && dashboardData.recentActivity.length > 0 && (
+                <div>
+                  <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest mb-2`}>Recent Activity</h4>
+                  <div className="space-y-2">
+                    {dashboardData.recentActivity.slice(0, 3).map(record => (
+                      <div key={record.id} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'} flex items-center gap-2`}>
+                        <span className="text-base">{record.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'} truncate`}>{record.app}</div>
+                          <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{record.action} • {formatDate(new Date(record.time).getTime())}</div>
                         </div>
+                        <span className={`text-[10px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>-{record.credits.toFixed(2)}</span>
                       </div>
-                      <span className={`text-[8px] px-1.5 py-0.5 rounded border ${getStatusColor(record.status)} capitalize`}>{record.status}</span>
-                    </div>
-                    
-                    <div className={`grid grid-cols-4 gap-1 p-2 rounded ${isDarkMode ? 'bg-black/40' : 'bg-gray-100'}`}>
-                      <div className="text-center">
-                        <div className={`text-[7px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase`}>Credits</div>
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{record.credits}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className={`text-[7px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase`}>In</div>
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{formatTokens(record.tokens.input)}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className={`text-[7px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase`}>Out</div>
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>{formatTokens(record.tokens.output)}</div>
-                      </div>
-                      <div className="text-center">
-                        <div className={`text-[7px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase`}>Time</div>
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{formatDuration(record.duration)}</div>
-                      </div>
-                    </div>
-                    
-                    <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} mt-2 text-right`}>
-                      {formatDate(record.timestamp)}
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                </div>
+              )}
             </>
           )}
 
@@ -418,68 +482,51 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
           {activeTab === 'usage' && (
             <>
               <div>
-                <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest mb-2`}>By Provider</h4>
+                <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest mb-2`}>By Feature</h4>
                 <div className="space-y-2">
-                  {providerStats.map(([provider, data]) => (
-                    <div key={provider} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+                  {featureStats.length > 0 ? featureStats.map((feature) => (
+                    <div key={feature.name} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-[10px] font-bold" style={{ color: getProviderColor(provider) }}>{provider}</span>
-                        <span className={`text-[10px] font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{data.credits} cr</span>
+                        <span className="text-[10px] font-bold" style={{ color: getFeatureColor(feature.name) }}>{feature.name}</span>
+                        <span className={`text-[10px] font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{feature.credits} cr</span>
                       </div>
                       <div className={`h-1.5 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'} overflow-hidden mb-1`}>
-                        <div className="h-full rounded-full" style={{ width: `${(data.credits / totalCreditsUsed) * 100}%`, backgroundColor: getProviderColor(provider) }} />
+                        <div className="h-full rounded-full" style={{ width: `${totalCreditsUsed > 0 ? (feature.credits / totalCreditsUsed) * 100 : 0}%`, backgroundColor: getFeatureColor(feature.name) }} />
                       </div>
                       <div className="flex justify-between">
-                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{data.requests} req</span>
-                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{formatTokens(data.tokens)} tok</span>
+                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{feature.requests} req</span>
+                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{formatTokens(feature.tokens)} tok</span>
                       </div>
                     </div>
-                  ))}
+                  )) : (
+                    <div className={`p-4 text-center ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} text-xs`}>
+                      No usage data yet
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div>
                 <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest mb-2`}>By Model</h4>
                 <div className="space-y-2">
-                  {modelStats.slice(0, 5).map(([model, data]) => (
-                    <div key={model} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
+                  {modelStats.length > 0 ? modelStats.slice(0, 5).map((model) => (
+                    <div key={model.name} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
                       <div className="flex items-center justify-between mb-1">
                         <div>
-                          <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{model}</span>
-                          <span className="text-[8px] ml-2" style={{ color: getProviderColor(data.provider) }}>{data.provider}</span>
+                          <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{model.name}</span>
                         </div>
-                        <span className={`text-[10px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{data.credits} cr</span>
+                        <span className={`text-[10px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{model.credits} cr</span>
                       </div>
                       <div className="flex gap-3">
-                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{data.requests} req</span>
-                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{formatTokens(data.tokens)} tok</span>
+                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{model.requests} req</span>
+                        <span className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{formatTokens(model.tokens)} tok</span>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest mb-2`}>By Type</h4>
-                <div className="space-y-2">
-                  {['generation', 'edit', 'chat'].map(type => {
-                    const typeData = usageHistory.filter(u => u.type === type);
-                    const typeCredits = typeData.reduce((sum, u) => sum + u.credits, 0);
-                    return (
-                      <div key={type} className="flex items-center gap-2">
-                        <span className="text-base">{getTypeIcon(type)}</span>
-                        <div className="flex-1">
-                          <div className="flex justify-between mb-1">
-                            <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'} capitalize`}>{type}</span>
-                            <span className={`text-[10px] ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>{typeCredits} cr</span>
-                          </div>
-                          <div className={`h-1.5 rounded-full ${isDarkMode ? 'bg-gray-800' : 'bg-gray-200'} overflow-hidden`}>
-                            <div className={`h-full rounded-full ${type === 'generation' ? 'bg-cyan-500' : type === 'edit' ? 'bg-emerald-500' : 'bg-purple-500'}`} style={{ width: `${(typeCredits / totalCreditsUsed) * 100}%` }} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                  )) : (
+                    <div className={`p-4 text-center ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} text-xs`}>
+                      No model data yet
+                    </div>
+                  )}
                 </div>
               </div>
             </>
@@ -495,32 +542,16 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
                     <span className="text-base">💳</span>
                   </div>
                   <div className="flex-1">
-                    <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>Visa •••• 4242</div>
-                    <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>Expires 12/27</div>
+                    <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`}>No payment method</div>
+                    <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>Add a card to purchase credits</div>
                   </div>
-                  <button className={`text-[9px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'} uppercase`}>Change</button>
+                  <button className={`text-[9px] font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'} uppercase`}>Add</button>
                 </div>
               </div>
 
               <h4 className={`text-[9px] font-bold ${isDarkMode ? 'text-gray-500' : 'text-gray-400'} uppercase tracking-widest`}>Transactions</h4>
-              <div className="space-y-2">
-                {billingHistory.map(record => (
-                  <div key={record.id} className={`p-3 rounded-lg border ${isDarkMode ? 'bg-black/30 border-gray-800' : 'bg-gray-50 border-gray-200'}`}>
-                    <div className="flex items-center gap-2">
-                      <div className={`p-1.5 rounded-lg ${isDarkMode ? 'bg-emerald-500/10' : 'bg-emerald-50'}`}>
-                        <span className="text-base">🪙</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>{record.credits} Credits</div>
-                        <div className={`text-[8px] ${isDarkMode ? 'text-gray-600' : 'text-gray-400'}`}>{record.method} • {new Date(record.date).toLocaleDateString()}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className={`text-[10px] font-bold ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>${record.amount.toFixed(2)}</div>
-                        <span className={`text-[8px] px-1.5 py-0.5 rounded border ${getStatusColor(record.status)} capitalize`}>{record.status}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+              <div className={`p-4 text-center ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} text-xs rounded-lg border ${isDarkMode ? 'border-gray-800' : 'border-gray-200'}`}>
+                No transactions yet
               </div>
             </>
           )}
@@ -532,7 +563,7 @@ const Dashboard: React.FC<DashboardProps> = ({ isDarkMode, onClose }) => {
                 <span className="text-xl">🪙</span>
                 <div>
                   <div className={`text-[8px] ${isDarkMode ? 'text-cyan-400/60' : 'text-cyan-600'} uppercase tracking-wider`}>Balance</div>
-                  <div className={`text-lg font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{creditBalance} credits</div>
+                  <div className={`text-lg font-bold ${isDarkMode ? 'text-cyan-400' : 'text-cyan-600'}`}>{typeof creditBalance === 'number' ? creditBalance.toFixed(2) : creditBalance} credits</div>
                 </div>
               </div>
 

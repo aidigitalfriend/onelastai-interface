@@ -4,6 +4,7 @@
  */
 
 import { SettingsState, CanvasState } from "../types";
+import { PROVIDER_CONFIG } from "../constants";
 
 // API base URL - uses relative path in production (same domain)
 const API_BASE = '/api';
@@ -18,6 +19,23 @@ interface ChatResponse {
   error?: string;
 }
 
+// Build a lookup map from display name to model ID
+const buildModelLookup = (): Record<string, { provider: string; modelId: string }> => {
+  const lookup: Record<string, { provider: string; modelId: string }> = {};
+  
+  for (const provider of PROVIDER_CONFIG) {
+    for (const model of provider.models) {
+      // Map both the display name and the ID to the correct values
+      lookup[model.name] = { provider: provider.id, modelId: model.id };
+      lookup[model.id] = { provider: provider.id, modelId: model.id };
+    }
+  }
+  
+  return lookup;
+};
+
+const MODEL_LOOKUP = buildModelLookup();
+
 // Map frontend provider/model to backend provider/model
 const mapProviderModel = (provider: string, model: string): { provider: string; model: string } => {
   // Map to backend supported providers
@@ -31,7 +49,16 @@ const mapProviderModel = (provider: string, model: string): { provider: string; 
     'cerebras': 'cerebras'
   };
 
-  // Model IDs are passed directly - backend handles them
+  // Look up the model ID from display name
+  const modelInfo = MODEL_LOOKUP[model];
+  if (modelInfo) {
+    return {
+      provider: modelInfo.provider,
+      model: modelInfo.modelId
+    };
+  }
+
+  // Fallback: assume model is already an ID
   return {
     provider: providerMap[provider] || 'anthropic',
     model: model

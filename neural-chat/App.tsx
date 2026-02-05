@@ -13,6 +13,18 @@ import { ChatSession, Message, SettingsState, NavItem, CanvasState, WorkspaceMod
 import { DEFAULT_SETTINGS, NEURAL_PRESETS } from './constants';
 import { callBackendAPI, streamChat, extractFileText } from './services/apiService';
 import { useFileBridge } from './services/useFileBridge';
+import { startSTS, stopSTS, getIsSTSActive, speak, stopSpeaking } from './services/speechService';
+import { connectRealtime, disconnectRealtime, startRecording, stopRecording, isConnected as isRealtimeConnected, sendTextMessage } from './services/openaiRealtimeService';
+
+// Voice options for the call modal - matches OpenAI Realtime voices
+const VOICE_OPTIONS: Array<'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'> = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+
+interface VoiceMessage {
+  id: string;
+  text: string;
+  isUser: boolean;
+  timestamp: number;
+}
 
 const App: React.FC = () => {
   // UI State
@@ -25,6 +37,14 @@ const App: React.FC = () => {
   const [isRecordingSTT, setIsRecordingSTT] = useState(false);
   const [isLiveActive, setIsLiveActive] = useState(false);
   const [sttTranscript, setSttTranscript] = useState('');
+
+  // Voice Call Modal State
+  const [showVoiceModal, setShowVoiceModal] = useState(false);
+  const [voiceCallStatus, setVoiceCallStatus] = useState<'idle' | 'connecting' | 'active'>('idle');
+  const [selectedVoice, setSelectedVoice] = useState<'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'>('alloy');
+  const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
+  const [voiceStatusText, setVoiceStatusText] = useState('Ready to call');
+  const voiceScrollRef = useRef<HTMLDivElement>(null);
   
   // Streaming state
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
@@ -54,6 +74,15 @@ const App: React.FC = () => {
       return window.prompt(question);
     }
   });
+
+  // Expose fileBridge globally for AI agents
+  useEffect(() => {
+    (window as any).fileBridge = fileBridge;
+    console.log('[FileBridge] Initialized and exposed globally');
+    return () => {
+      delete (window as any).fileBridge;
+    };
+  }, [fileBridge]);
 
   // Gemini Live & STT Refs
   const recognitionRef = useRef<any>(null);
@@ -434,20 +463,147 @@ const App: React.FC = () => {
     }
   };
 
+  // Debounce guard for live toggle
+  const [isTogglingLive, setIsTogglingLive] = useState(false);
+  
+  // Open Voice Call Modal
   const toggleLive = async () => {
-    // Voice chat feature coming soon - requires backend integration
-    alert('🎙️ Voice chat feature coming soon! For now, please use text input.');
-    return;
+    // Prevent rapid toggling
+    if (isTogglingLive) return;
+    setIsTogglingLive(true);
+    setTimeout(() => setIsTogglingLive(false), 500);
     
-    /* Disabled: Direct Gemini API calls - needs backend integration
-    if (isLiveActive) {
-      liveSessionRef.current?.close();
-      setIsLiveActive(false);
-    } else {
-      // ... voice code ...
-    }
-    */
+    // Open the voice call modal instead of inline voice
+    setShowVoiceModal(true);
+    setVoiceCallStatus('idle');
+    setVoiceStatusText('Ready to call');
   };
+
+  // Close Voice Call Modal
+  const closeVoiceModal = () => {
+    if (voiceCallStatus === 'active') {
+      endVoiceCall();
+    }
+    setShowVoiceModal(false);
+    setVoiceMessages([]);
+  };
+
+  // Accumulator for streaming AI response text
+  const aiResponseAccumulator = useRef<string>('');
+  const lastAiMessageId = useRef<string | null>(null);
+
+  // Start Voice Call using OpenAI Realtime API
+  const startVoiceCall = async () => {
+    setVoiceCallStatus('connecting');
+    setVoiceStatusText('Connecting to OpenAI Realtime...');
+
+    try {
+      // Connect to OpenAI Realtime API (token is fetched from backend)
+      const connected = await connectRealtime({
+        voice: selectedVoice,
+        instructions: activeSession.settings.customPrompt || 'You are a helpful AI assistant. Be conversational, friendly, and concise in your responses.',
+        temperature: activeSession.settings.temperature || 0.8,
+        onConnected: () => {
+          console.log('[Voice Call] Connected to OpenAI Realtime');
+        },
+        onDisconnected: () => {
+          console.log('[Voice Call] Disconnected');
+          setVoiceCallStatus('idle');
+          setVoiceStatusText('Disconnected');
+          setIsLiveActive(false);
+        },
+        onTranscript: (text, isUser) => {
+          if (isUser) {
+            // User's transcribed speech
+            const userMsg: VoiceMessage = {
+              id: Date.now().toString(),
+              text: text,
+              isUser: true,
+              timestamp: Date.now()
+            };
+            setVoiceMessages(prev => [...prev, userMsg]);
+            // Reset AI accumulator for new response
+            aiResponseAccumulator.current = '';
+            lastAiMessageId.current = null;
+          } else {
+            // AI response streaming - accumulate text
+            aiResponseAccumulator.current += text;
+            
+            if (!lastAiMessageId.current) {
+              // Create new AI message
+              lastAiMessageId.current = Date.now().toString();
+              const aiMsg: VoiceMessage = {
+                id: lastAiMessageId.current,
+                text: aiResponseAccumulator.current,
+                isUser: false,
+                timestamp: Date.now()
+              };
+              setVoiceMessages(prev => [...prev, aiMsg]);
+            } else {
+              // Update existing AI message
+              setVoiceMessages(prev => prev.map(msg => 
+                msg.id === lastAiMessageId.current 
+                  ? { ...msg, text: aiResponseAccumulator.current }
+                  : msg
+              ));
+            }
+          }
+        },
+        onStatusChange: (status) => {
+          setVoiceStatusText(status);
+          if (status === 'Listening...') {
+            setIsRecordingSTT(true);
+          } else if (status === 'Processing...' || status === 'Speaking...') {
+            setIsRecordingSTT(false);
+          }
+        },
+        onError: (error) => {
+          console.error('[Voice Call] Error:', error);
+          setVoiceStatusText(`Error: ${error}`);
+        }
+      });
+
+      if (connected) {
+        // Start recording after connection
+        const recordingStarted = await startRecording();
+        if (recordingStarted) {
+          setVoiceCallStatus('active');
+          setVoiceStatusText('Listening...');
+          setIsLiveActive(true);
+        } else {
+          setVoiceStatusText('Failed to start microphone');
+          disconnectRealtime();
+          setVoiceCallStatus('idle');
+        }
+      } else {
+        setVoiceStatusText('Failed to connect');
+        setVoiceCallStatus('idle');
+      }
+    } catch (error) {
+      console.error('[Voice Call] Start error:', error);
+      setVoiceStatusText(`Error: ${error}`);
+      setVoiceCallStatus('idle');
+    }
+  };
+
+  // End Voice Call
+  const endVoiceCall = () => {
+    stopRecording();
+    disconnectRealtime();
+    setIsLiveActive(false);
+    setVoiceCallStatus('idle');
+    setVoiceStatusText('Call ended');
+    setIsRecordingSTT(false);
+    aiResponseAccumulator.current = '';
+    lastAiMessageId.current = null;
+  };
+
+  // Scroll voice messages to bottom
+  useEffect(() => {
+    if (voiceScrollRef.current) {
+      voiceScrollRef.current.scrollTop = voiceScrollRef.current.scrollHeight;
+    }
+  }, [voiceMessages]);
 
   const deleteSession = (id: string) => {
     setSessions(prev => {
@@ -537,6 +693,114 @@ const App: React.FC = () => {
           setIsNavDrawerOpen(false);
       }} />
       <CanvasAppDrawer isOpen={isCanvasDrawerOpen} onClose={() => setIsCanvasDrawerOpen(false)} />
+
+      {/* Voice Call Modal */}
+      {showVoiceModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4 bg-[#1a1a2e] rounded-2xl border border-purple-500/20 shadow-2xl overflow-hidden">
+            {/* Close Button */}
+            <button
+              onClick={closeVoiceModal}
+              className="absolute top-4 right-4 p-2 text-gray-400 hover:text-white transition-colors z-10"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            {/* Modal Content */}
+            <div className="p-6 pt-8 flex flex-col items-center">
+              {/* AI Avatar */}
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-teal-500/30 to-cyan-500/30 flex items-center justify-center mb-4 border-2 border-teal-500/40">
+                <span className="text-5xl">🤖</span>
+              </div>
+
+              {/* Title */}
+              <h2 className="text-xl font-bold text-white mb-1">AI Studio Assistant</h2>
+              
+              {/* Status */}
+              <p className={`text-sm mb-4 ${
+                voiceCallStatus === 'active' ? 'text-emerald-400' : 
+                voiceCallStatus === 'connecting' ? 'text-yellow-400' : 
+                voiceStatusText.includes('Error') || voiceStatusText.includes('failed') ? 'text-red-400' :
+                'text-gray-400'
+              }`}>
+                {voiceStatusText}
+              </p>
+
+              {/* Voice Selector */}
+              <div className="flex items-center gap-2 mb-6">
+                <span className="text-gray-400 text-sm">Voice:</span>
+                <select
+                  value={selectedVoice}
+                  onChange={(e) => setSelectedVoice(e.target.value)}
+                  disabled={voiceCallStatus === 'active'}
+                  className="px-3 py-1.5 bg-purple-500/20 border border-purple-500/30 rounded-lg text-purple-300 text-sm focus:outline-none focus:border-purple-500/50 disabled:opacity-50 capitalize"
+                >
+                  {VOICE_OPTIONS.map(voice => (
+                    <option key={voice} value={voice} className="bg-[#1a1a2e] capitalize">{voice}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Voice Messages Area - Only show when there are messages */}
+              {voiceMessages.length > 0 && (
+                <div 
+                  ref={voiceScrollRef}
+                  className="w-full max-h-48 overflow-y-auto mb-6 bg-[#0d0d1a] rounded-xl p-4 border border-gray-800/50"
+                >
+                  {voiceMessages.map((msg) => (
+                    <div key={msg.id} className={`flex ${msg.isUser ? 'justify-end' : 'justify-start'} mb-2`}>
+                      <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                        msg.isUser 
+                          ? 'bg-purple-500/30 text-purple-100 rounded-br-none' 
+                          : 'bg-gray-700/50 text-gray-200 rounded-bl-none'
+                      }`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Call Button */}
+              <button
+                onClick={voiceCallStatus === 'active' ? endVoiceCall : startVoiceCall}
+                disabled={voiceCallStatus === 'connecting'}
+                className={`w-20 h-20 rounded-full flex items-center justify-center transition-all transform hover:scale-105 active:scale-95 ${
+                  voiceCallStatus === 'active' 
+                    ? 'bg-red-500 hover:bg-red-600 shadow-[0_0_30px_rgba(239,68,68,0.5)]' 
+                    : voiceCallStatus === 'connecting'
+                    ? 'bg-yellow-500/50 cursor-wait'
+                    : 'bg-gradient-to-br from-gray-600 to-gray-700 hover:from-gray-500 hover:to-gray-600 shadow-[0_0_20px_rgba(0,0,0,0.5)]'
+                }`}
+              >
+                {voiceCallStatus === 'active' ? (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
+                  </svg>
+                ) : voiceCallStatus === 'connecting' ? (
+                  <svg className="animate-spin h-8 w-8 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Hint Text */}
+              <p className="text-gray-500 text-xs mt-4 text-center">
+                {voiceCallStatus === 'active' 
+                  ? 'Tap the button to end the call' 
+                  : 'Tap the button to start a voice call'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
