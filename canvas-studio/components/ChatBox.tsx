@@ -21,6 +21,7 @@ interface ChatBoxProps {
   onSendMessage: (text: string) => void;
   isGenerating: boolean;
   onNewChat?: () => void;
+  onClose?: () => void;
   models?: ModelOption[];
   selectedModel?: string;
   onModelChange?: (modelId: string) => void;
@@ -42,6 +43,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
   onSendMessage, 
   isGenerating, 
   onNewChat,
+  onClose,
   models = [],
   selectedModel = '',
   onModelChange,
@@ -195,6 +197,17 @@ const ChatBox: React.FC<ChatBoxProps> = ({
               </svg>
               New
             </button>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg text-gray-500 hover:text-cyan-400 hover:bg-cyan-500/10 border border-transparent hover:border-cyan-500/20 transition-all"
+                title="Close"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
         

@@ -1187,36 +1187,12 @@ const App: React.FC = () => {
 
               {activePanel === 'assistant' && (
                 <div className="h-full flex flex-col bg-[#111]/95">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-cyan-500/80 uppercase tracking-widest">
-                      AI Assistant
-                    </h3>
-                    <button
-                      onClick={() => setActivePanel(null)}
-                      className="text-gray-600 hover:text-cyan-400 transition-colors"
-                      title="Close"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M6 18L18 6M6 6l12 12"
-                        />
-                      </svg>
-                    </button>
-                  </div>
                   <div className="flex-1 min-h-0 overflow-hidden">
                     <ChatBox
                       messages={currentApp?.history || []}
                       onSendMessage={(text) => handleGenerate(text, false)}
                       isGenerating={genState.isGenerating}
+                      onClose={() => setActivePanel(null)}
                       onNewChat={() => {
                         if (currentApp) {
                           setHistory(prev => prev.map(app => 

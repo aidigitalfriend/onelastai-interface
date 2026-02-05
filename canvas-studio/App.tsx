@@ -3078,46 +3078,6 @@ const App: React.FC = () => {
 
               {activePanel === 'assistant' && (
                 <div className="h-full flex flex-col bg-[#111]/95">
-                  <div className="px-6 py-4 flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-cyan-500/80 uppercase tracking-widest">
-                      {conversationMode && !currentApp ? 'AI Assistant - Planning Mode' : 'AI Assistant'}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      {/* New Conversation Button */}
-                      <button
-                        onClick={() => {
-                          setConversationHistory([]);
-                          setIsReadyToBuild(false);
-                          setBuildRequirements('');
-                        }}
-                        className="text-[10px] text-gray-500 hover:text-cyan-400 px-2 py-1 rounded border border-gray-800 hover:border-cyan-500/30"
-                        title="New Conversation"
-                      >
-                        New Chat
-                      </button>
-                      <button
-                        onClick={() => setActivePanel(null)}
-                        className="text-gray-600 hover:text-cyan-400 transition-colors"
-                        title="Close"
-                      >
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-4 w-4"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                  
                   {/* Ready to Build Banner */}
                   {isReadyToBuild && !currentApp && (
                     <div className="mx-6 mb-3 p-4 bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 rounded-lg">
@@ -3142,6 +3102,7 @@ const App: React.FC = () => {
                       messages={conversationHistory}
                       onSendMessage={handleAgentMessage}
                       isGenerating={genState.isGenerating}
+                      onClose={() => setActivePanel(null)}
                       onNewChat={() => {
                         // Reset conversation
                         setConversationHistory([]);
