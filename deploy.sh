@@ -141,6 +141,20 @@ if [ -f "$NEURAL_CHAT_DIR/package.json" ]; then
     sudo rm -rf $WEB_ROOT/neural-chat/*
     sudo cp -r dist/* $WEB_ROOT/neural-chat/
     echo -e "   ${GREEN}✓ Neural Chat deployed to $WEB_ROOT/neural-chat${NC}"
+    
+    # Build and deploy canvas-app (embedded in neural-chat)
+    if [ -d "$NEURAL_CHAT_DIR/canvas-app" ] && [ -f "$NEURAL_CHAT_DIR/canvas-app/package.json" ]; then
+        echo -e "   ${YELLOW}🎨 Building Canvas App (embedded)...${NC}"
+        cd $NEURAL_CHAT_DIR/canvas-app
+        npm install
+        npm run build
+        
+        # Deploy to canvas-build folder inside neural-chat
+        sudo mkdir -p $WEB_ROOT/neural-chat/canvas-build
+        sudo rm -rf $WEB_ROOT/neural-chat/canvas-build/*
+        sudo cp -r dist/* $WEB_ROOT/neural-chat/canvas-build/
+        echo -e "   ${GREEN}✓ Canvas App deployed to $WEB_ROOT/neural-chat/canvas-build${NC}"
+    fi
 else
     echo -e "   ${YELLOW}⚠️  Skipping neural-chat build (no package.json)${NC}"
 fi
