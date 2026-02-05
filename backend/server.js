@@ -2306,10 +2306,15 @@ app.post('/api/realtime/session', requireAuth, async (req, res) => {
     
     console.log('[Realtime] Session created for user:', req.user.id);
     
+    // OpenAI returns client_secret as an object with a 'value' property
+    const clientSecret = typeof data.client_secret === 'object' 
+      ? data.client_secret.value 
+      : data.client_secret;
+    
     res.json({
       success: true,
       session: {
-        client_secret: data.client_secret,
+        client_secret: clientSecret,
         expires_at: data.expires_at,
       }
     });
