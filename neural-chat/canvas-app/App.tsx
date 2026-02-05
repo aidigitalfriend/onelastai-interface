@@ -343,12 +343,14 @@ const App: React.FC = () => {
 
     try {
       // Call the backend API instead of direct SDK
-      const response = await fetch('/api/canvas/generate', {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
+      const response = await fetch(`${API_URL}/api/canvas/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           prompt: instruction,
-          provider: selectedModel.backendProvider || 'mistral',
+          provider: selectedModel.provider,
           modelId: selectedModel.id,
           isThinking: selectedModel.isThinking || false,
           currentCode: isInitial ? undefined : currentApp?.code,
@@ -864,7 +866,7 @@ const App: React.FC = () => {
           <div className={`py-3 border-b ${isDarkMode ? 'border-gray-800/50' : 'border-gray-200'} w-full flex justify-center`}>
             <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg shadow-cyan-900/30">
               <img 
-                src="/logo.png" 
+                src="/neural-chat/canvas-build/logo.png" 
                 alt="OneLast.AI" 
                 className="w-full h-full object-cover"
               />

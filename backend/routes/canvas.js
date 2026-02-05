@@ -1103,6 +1103,13 @@ const PROVIDER_MAPPING = {
   'OpenAI': 'openai',
   'xAI': 'xai',
   'Groq': 'groq',
+  // Friendly names from canvas-app
+  'Maula AI': 'mistral',
+  'Image Generator': 'openai',
+  'Designer': 'gemini',
+  'Planner': 'anthropic',
+  'Code Builder': 'groq',
+  'Fast Coding': 'cerebras',
 };
 
 // ============================================================================
