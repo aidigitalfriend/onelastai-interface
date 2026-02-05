@@ -31,7 +31,7 @@ MAIN_APP_DIR="$PROJECT_ROOT"
 CANVAS_APP_DIR="$PROJECT_ROOT/canvas-studio"
 EDITOR_APP_DIR="$PROJECT_ROOT/maula-editor"
 WEB_ROOT="/var/www/onelastai"
-NGINX_CONF="$PROJECT_ROOT/nginx/maula.onelastai.co"
+NGINX_CONF="$PROJECT_ROOT/nginx-maula.conf"
 BACKEND_PORT=3200
 
 echo ""
