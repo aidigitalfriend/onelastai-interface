@@ -29,8 +29,9 @@ PROJECT_ROOT="/home/ubuntu/onelastai-interface"
 BACKEND_DIR="$PROJECT_ROOT/backend"
 MAIN_APP_DIR="$PROJECT_ROOT"
 CANVAS_APP_DIR="$PROJECT_ROOT/canvas-studio"
+NEURAL_CHAT_DIR="$PROJECT_ROOT/neural-chat"
 EDITOR_APP_DIR="$PROJECT_ROOT/maula-editor"
-WEB_ROOT="/var/www/onelastai"
+WEB_ROOT="/var/www/maula"
 NGINX_CONF="$PROJECT_ROOT/nginx-maula.conf"
 BACKEND_PORT=3200
 
@@ -99,9 +100,9 @@ sudo cp -r dist/* $WEB_ROOT/main/
 echo -e "   ${GREEN}✓ Main app deployed to $WEB_ROOT/main${NC}"
 
 # =============================================================================
-# STEP 4: Build Canvas App (GenCraft AI Studio)
+# STEP 4: Build Canvas Studio (GenCraft AI Studio)
 # =============================================================================
-print_step "🎨 STEP 4: Building Canvas App (GenCraft AI Studio)"
+print_step "🎨 STEP 4: Building Canvas Studio (GenCraft AI Studio)"
 
 cd $CANVAS_APP_DIR
 echo -e "   ${CYAN}App directory:${NC} $CANVAS_APP_DIR"
@@ -109,20 +110,45 @@ echo -e "   ${CYAN}App directory:${NC} $CANVAS_APP_DIR"
 echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
 npm install
 
-echo -e "   ${YELLOW}🔨 Building canvas app...${NC}"
+echo -e "   ${YELLOW}🔨 Building canvas studio...${NC}"
 npm run build
 
-# Copy to web root under /canvas
+# Copy to web root under /canvas-studio (matches nginx)
 echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
-sudo mkdir -p $WEB_ROOT/canvas
-sudo rm -rf $WEB_ROOT/canvas/*
-sudo cp -r dist/* $WEB_ROOT/canvas/
-echo -e "   ${GREEN}✓ Canvas app deployed to $WEB_ROOT/canvas${NC}"
+sudo mkdir -p $WEB_ROOT/canvas-studio
+sudo rm -rf $WEB_ROOT/canvas-studio/*
+sudo cp -r dist/* $WEB_ROOT/canvas-studio/
+echo -e "   ${GREEN}✓ Canvas Studio deployed to $WEB_ROOT/canvas-studio${NC}"
 
 # =============================================================================
-# STEP 5: Build Maula Editor (AI Code Editor)
+# STEP 5: Build Neural Chat (+ Canvas App 2-in-1)
 # =============================================================================
-print_step "💻 STEP 5: Building Maula Editor (AI Code Editor)"
+print_step "🧠 STEP 5: Building Neural Chat (+ Canvas App)"
+
+cd $NEURAL_CHAT_DIR
+echo -e "   ${CYAN}App directory:${NC} $NEURAL_CHAT_DIR"
+
+if [ -f "$NEURAL_CHAT_DIR/package.json" ]; then
+    echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
+    npm install
+
+    echo -e "   ${YELLOW}🔨 Building neural-chat...${NC}"
+    npm run build
+
+    # Copy to web root under /neural-chat (matches nginx)
+    echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
+    sudo mkdir -p $WEB_ROOT/neural-chat
+    sudo rm -rf $WEB_ROOT/neural-chat/*
+    sudo cp -r dist/* $WEB_ROOT/neural-chat/
+    echo -e "   ${GREEN}✓ Neural Chat deployed to $WEB_ROOT/neural-chat${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  Skipping neural-chat build (no package.json)${NC}"
+fi
+
+# =============================================================================
+# STEP 6: Build Maula Editor (AI Code Editor)
+# =============================================================================
+print_step "💻 STEP 6: Building Maula Editor (AI Code Editor)"
 
 cd $EDITOR_APP_DIR
 echo -e "   ${CYAN}App directory:${NC} $EDITOR_APP_DIR"
@@ -135,32 +161,32 @@ if [ -f "$EDITOR_APP_DIR/package.json" ]; then
     echo -e "   ${YELLOW}🔨 Building editor app...${NC}"
     npm run build
 
-    # Copy to web root under /editor
+    # Copy to web root under /maula-editor (matches nginx)
     echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
-    sudo mkdir -p $WEB_ROOT/editor
-    sudo rm -rf $WEB_ROOT/editor/*
-    sudo cp -r dist/* $WEB_ROOT/editor/
-    echo -e "   ${GREEN}✓ Editor app deployed to $WEB_ROOT/editor${NC}"
+    sudo mkdir -p $WEB_ROOT/maula-editor
+    sudo rm -rf $WEB_ROOT/maula-editor/*
+    sudo cp -r dist/* $WEB_ROOT/maula-editor/
+    echo -e "   ${GREEN}✓ Editor app deployed to $WEB_ROOT/maula-editor${NC}"
 elif [ -d "$EDITOR_APP_DIR/dist" ]; then
     # Use existing dist if available
     echo -e "   ${YELLOW}⚠️  No package.json found, using existing dist...${NC}"
-    sudo mkdir -p $WEB_ROOT/editor
-    sudo rm -rf $WEB_ROOT/editor/*
-    sudo cp -r dist/* $WEB_ROOT/editor/
+    sudo mkdir -p $WEB_ROOT/maula-editor
+    sudo rm -rf $WEB_ROOT/maula-editor/*
+    sudo cp -r dist/* $WEB_ROOT/maula-editor/
+    echo -e "   ${GREEN}✓ Editor app deployed from existing dist${NC}"
     echo -e "   ${GREEN}✓ Editor app deployed from existing dist${NC}"
 else
     echo -e "   ${YELLOW}⚠️  Skipping editor build (submodule not initialized)${NC}"
     echo -e "   ${CYAN}Run: git submodule update --init --recursive${NC}"
 fi
-echo -e "   ${GREEN}✓ Editor app deployed to $WEB_ROOT/editor${NC}"
 
 # Set permissions
 sudo chown -R www-data:www-data $WEB_ROOT
 
 # =============================================================================
-# STEP 6: Configure NGINX
+# STEP 7: Configure NGINX
 # =============================================================================
-print_step "🌐 STEP 6: Configuring NGINX"
+print_step "🌐 STEP 7: Configuring NGINX"
 
 # Check if SSL cert exists
 if [ ! -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
@@ -256,22 +282,31 @@ else
     echo -e "   ${YELLOW}⚠️  Main site returned status: $MAIN_STATUS${NC}"
 fi
 
-# Check canvas app
-echo -e "   ${YELLOW}Checking canvas app...${NC}"
-CANVAS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/canvas/ 2>/dev/null || echo "000")
+# Check canvas studio
+echo -e "   ${YELLOW}Checking canvas studio...${NC}"
+CANVAS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/canvas-studio/ 2>/dev/null || echo "000")
 if [ "$CANVAS_STATUS" = "200" ]; then
-    echo -e "   ${GREEN}✓ Canvas app is accessible${NC}"
+    echo -e "   ${GREEN}✓ Canvas Studio is accessible${NC}"
 else
-    echo -e "   ${YELLOW}⚠️  Canvas app returned status: $CANVAS_STATUS${NC}"
+    echo -e "   ${YELLOW}⚠️  Canvas Studio returned status: $CANVAS_STATUS${NC}"
 fi
 
-# Check editor app
-echo -e "   ${YELLOW}Checking editor app...${NC}"
-EDITOR_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/editor/ 2>/dev/null || echo "000")
-if [ "$EDITOR_STATUS" = "200" ]; then
-    echo -e "   ${GREEN}✓ Editor app is accessible${NC}"
+# Check neural chat
+echo -e "   ${YELLOW}Checking neural chat...${NC}"
+NEURAL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/neural-chat/ 2>/dev/null || echo "000")
+if [ "$NEURAL_STATUS" = "200" ]; then
+    echo -e "   ${GREEN}✓ Neural Chat is accessible${NC}"
 else
-    echo -e "   ${YELLOW}⚠️  Editor app returned status: $EDITOR_STATUS${NC}"
+    echo -e "   ${YELLOW}⚠️  Neural Chat returned status: $NEURAL_STATUS${NC}"
+fi
+
+# Check maula editor
+echo -e "   ${YELLOW}Checking maula editor...${NC}"
+EDITOR_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/maula-editor/ 2>/dev/null || echo "000")
+if [ "$EDITOR_STATUS" = "200" ]; then
+    echo -e "   ${GREEN}✓ Maula Editor is accessible${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  Maula Editor returned status: $EDITOR_STATUS${NC}"
 fi
 
 # =============================================================================
@@ -282,11 +317,12 @@ echo -e "${GREEN}═════════════════════
 echo -e "${GREEN}   ✨ DEPLOYMENT COMPLETE${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "   ${CYAN}🌐 Main App:${NC}      https://$DOMAIN"
-echo -e "   ${CYAN}🎨 Canvas App:${NC}    https://$DOMAIN/canvas/"
-echo -e "   ${CYAN}💻 Editor App:${NC}    https://$DOMAIN/editor/"
-echo -e "   ${CYAN}🔗 API:${NC}           https://$DOMAIN/api/"
-echo -e "   ${CYAN}📊 Health:${NC}        https://$DOMAIN/health"
+echo -e "   ${CYAN}🌐 Main App:${NC}        https://$DOMAIN"
+echo -e "   ${CYAN}🎨 Canvas Studio:${NC}   https://$DOMAIN/canvas-studio/"
+echo -e "   ${CYAN}🧠 Neural Chat:${NC}     https://$DOMAIN/neural-chat/"
+echo -e "   ${CYAN}💻 Maula Editor:${NC}    https://$DOMAIN/maula-editor/"
+echo -e "   ${CYAN}🔗 API:${NC}             https://$DOMAIN/api/"
+echo -e "   ${CYAN}📊 Health:${NC}          https://$DOMAIN/health"
 echo ""
 echo -e "   ${PURPLE}📝 PM2 Commands:${NC}"
 echo -e "      pm2 logs onelastai-backend    ${YELLOW}# View logs${NC}"
@@ -294,7 +330,8 @@ echo -e "      pm2 restart onelastai-backend ${YELLOW}# Restart backend${NC}"
 echo -e "      pm2 status                    ${YELLOW}# Check status${NC}"
 echo ""
 echo -e "   ${PURPLE}📁 Deployment Paths:${NC}"
-echo -e "      Main:   $WEB_ROOT/main"
-echo -e "      Canvas: $WEB_ROOT/canvas"
-echo -e "      Editor: $WEB_ROOT/editor"
+echo -e "      Main:         $WEB_ROOT/main"
+echo -e "      Canvas Studio: $WEB_ROOT/canvas-studio"
+echo -e "      Neural Chat:   $WEB_ROOT/neural-chat"
+echo -e "      Maula Editor:  $WEB_ROOT/maula-editor"
 echo ""
