@@ -680,27 +680,71 @@ const App: React.FC = () => {
     }
   };
 
-  // Text-to-Speech - for listening to agent responses
-  const speakText = (text: string) => {
-    if ('speechSynthesis' in window) {
-      // Cancel any ongoing speech
-      window.speechSynthesis.cancel();
+  // Text-to-Speech using OpenAI TTS API
+  const [ttsAudio, setTtsAudio] = useState<HTMLAudioElement | null>(null);
+  
+  const speakText = async (text: string) => {
+    // Cancel any ongoing speech
+    if (ttsAudio) {
+      ttsAudio.pause();
+      ttsAudio.currentTime = 0;
+      setTtsAudio(null);
+    }
+    window.speechSynthesis.cancel();
+    setIsSpeaking(true);
+    
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
+      const response = await fetch(`${API_URL}/api/speech/synthesize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ text, voice: 'nova', speed: 1.0 })
+      });
       
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1;
-      utterance.pitch = 1;
-      utterance.volume = 1;
+      if (!response.ok) {
+        // Fallback to browser TTS
+        console.warn('[TTS] API failed, using browser fallback');
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.onend = () => setIsSpeaking(false);
+        utterance.onerror = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
       
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
+      const data = await response.json();
+      const audio = new Audio(data.audio);
+      setTtsAudio(audio);
       
-      window.speechSynthesis.speak(utterance);
+      audio.onended = () => {
+        setIsSpeaking(false);
+        setTtsAudio(null);
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        setTtsAudio(null);
+      };
+      
+      audio.play();
+    } catch (error) {
+      console.error('[TTS] Error:', error);
+      setIsSpeaking(false);
+      // Fallback to browser TTS
+      if ('speechSynthesis' in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.onend = () => setIsSpeaking(false);
+        window.speechSynthesis.speak(utterance);
+      }
     }
   };
 
   const toggleSpeaker = () => {
     if (isSpeaking) {
+      if (ttsAudio) {
+        ttsAudio.pause();
+        ttsAudio.currentTime = 0;
+        setTtsAudio(null);
+      }
       window.speechSynthesis.cancel();
       setIsSpeaking(false);
     } else {

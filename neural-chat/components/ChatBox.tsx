@@ -651,22 +651,73 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     }
   };
 
-  // Text-to-speech
-  const handleSpeak = (messageId: string, text: string) => {
+  // Text-to-speech using OpenAI TTS API
+  const [ttsAudio, setTtsAudio] = useState<HTMLAudioElement | null>(null);
+  
+  const handleSpeak = async (messageId: string, text: string) => {
+    // Stop if already playing this message
     if (speakingMessageId === messageId) {
-      window.speechSynthesis.cancel();
+      if (ttsAudio) {
+        ttsAudio.pause();
+        ttsAudio.currentTime = 0;
+        setTtsAudio(null);
+      }
+      window.speechSynthesis.cancel(); // Also stop browser TTS if any
       setSpeakingMessageId(null);
       return;
     }
     
+    // Stop any ongoing audio
+    if (ttsAudio) {
+      ttsAudio.pause();
+      setTtsAudio(null);
+    }
     window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1;
-    utterance.pitch = 1;
-    utterance.onend = () => setSpeakingMessageId(null);
-    utterance.onerror = () => setSpeakingMessageId(null);
     setSpeakingMessageId(messageId);
-    window.speechSynthesis.speak(utterance);
+    
+    try {
+      // Use OpenAI TTS API
+      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
+      const response = await fetch(`${API_URL}/api/speech/synthesize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ text, voice: 'nova', speed: 1.0 })
+      });
+      
+      if (!response.ok) {
+        const err = await response.json();
+        // Fallback to browser TTS if API fails
+        console.warn('[TTS] API failed, using browser fallback:', err.error);
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.onend = () => setSpeakingMessageId(null);
+        utterance.onerror = () => setSpeakingMessageId(null);
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
+      
+      const data = await response.json();
+      const audio = new Audio(data.audio);
+      setTtsAudio(audio);
+      
+      audio.onended = () => {
+        setSpeakingMessageId(null);
+        setTtsAudio(null);
+      };
+      audio.onerror = () => {
+        setSpeakingMessageId(null);
+        setTtsAudio(null);
+      };
+      
+      audio.play();
+    } catch (error) {
+      console.error('[TTS] Error:', error);
+      setSpeakingMessageId(null);
+      // Fallback to browser TTS
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.onend = () => setSpeakingMessageId(null);
+      window.speechSynthesis.speak(utterance);
+    }
   };
 
   // Start editing
