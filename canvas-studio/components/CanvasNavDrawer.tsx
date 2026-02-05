@@ -259,15 +259,18 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
   useEffect(() => {
     if (isOpen) {
       fetchCredits();
-      loadLocalUsageData();
+      fetchUsageHistory();
+      fetchBillingHistory();
+      loadLocalUsageData(); // Keep local for projects/chats
     }
   }, [isOpen]);
 
   const fetchCredits = async () => {
     setIsLoadingCredits(true);
     try {
-      const userId = getUserId();
-      const res = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
+      const res = await fetch(`${API_BASE}/billing/credits`, {
+        credentials: 'include', // Send cookies for auth
+      });
       const data = await res.json();
       if (data.success) {
         setCreditBalance(data.credits || 0);
@@ -279,21 +282,44 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
     }
   };
 
+  // Fetch REAL usage history from database
+  const fetchUsageHistory = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/billing/usage`, {
+        credentials: 'include', // Send cookies for auth
+      });
+      const data = await res.json();
+      if (data.success && data.usage) {
+        setUsageHistory(data.usage);
+      }
+    } catch (error) {
+      console.error('Failed to fetch usage history:', error);
+      // Fall back to local data
+      const data = getCanvasUsageData();
+      setUsageHistory(data.history || []);
+    }
+  };
+
+  // Fetch REAL billing history from database  
+  const fetchBillingHistory = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/billing/billing-history`, {
+        credentials: 'include', // Send cookies for auth
+      });
+      const data = await res.json();
+      if (data.success && data.billing) {
+        setBillingHistory(data.billing);
+      }
+    } catch (error) {
+      console.error('Failed to fetch billing history:', error);
+    }
+  };
+
   const loadLocalUsageData = () => {
     const data = getCanvasUsageData();
-    setUsageHistory(data.history || []);
+    // Only load projects and chats from local (usage comes from API now)
     setProjectHistory(data.projects || []);
     setChatHistory(data.chats || []);
-    
-    // Load billing history from localStorage
-    const billingData = localStorage.getItem('canvas_billing_history');
-    if (billingData) {
-      try {
-        setBillingHistory(JSON.parse(billingData));
-      } catch {
-        setBillingHistory([]);
-      }
-    }
   };
 
   // Calculate usage stats

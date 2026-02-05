@@ -162,19 +162,92 @@ router.get('/packages', (req, res) => {
 });
 
 // ============================================================================
-// GET USER CREDITS
+// GET USER CREDITS (with optional auth - returns 0 if not logged in)
 // ============================================================================
 
-router.get('/credits', requireAuth, async (req, res) => {
+// Optional auth middleware - doesn't fail if not authenticated
+const optionalAuth = async (req, res, next) => {
   try {
+    // PRIORITY 1: Check main site's shared session cookie
+    const mainSiteSessionId = req.cookies?.session_id || req.cookies?.sessionId;
+    
+    if (mainSiteSessionId) {
+      const mainUser = await prisma.$queryRaw`
+        SELECT id, email, name, "sessionId", "sessionExpiry" 
+        FROM "User" 
+        WHERE "sessionId" = ${mainSiteSessionId} 
+        AND ("sessionExpiry" IS NULL OR "sessionExpiry" > NOW())
+        LIMIT 1
+      `;
+      
+      if (mainUser && mainUser.length > 0) {
+        const foundUser = mainUser[0];
+        let nlUser = await prisma.user.findUnique({
+          where: { onelastaiUserId: foundUser.id },
+          include: { credits: true },
+        });
+        
+        if (!nlUser) {
+          nlUser = await prisma.user.create({
+            data: {
+              email: foundUser.email,
+              name: foundUser.name || null,
+              onelastaiUserId: foundUser.id,
+              isVerified: true,
+              credits: {
+                create: { balance: 5.0, freeCreditsMax: 5.0 },
+              },
+            },
+            include: { credits: true },
+          });
+        }
+        
+        req.user = nlUser;
+        return next();
+      }
+    }
+    
+    // PRIORITY 2: Neural Link's own session cookie (legacy/fallback)
+    const sessionToken = req.cookies?.neural_link_session;
+    if (sessionToken) {
+      const secret = new TextEncoder().encode(SUBDOMAIN_SECRET);
+      const { payload } = await jose.jwtVerify(sessionToken, secret);
+      const user = await prisma.user.findUnique({
+        where: { id: payload.userId },
+        include: { credits: true },
+      });
+      if (user) {
+        req.user = user;
+      }
+    }
+    
+    next();
+  } catch (error) {
+    // Continue without auth
+    next();
+  }
+};
+
+router.get('/credits', optionalAuth, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.json({ 
+        success: true, 
+        credits: 0,
+        lifetimeSpent: 0,
+        isGuest: true,
+      });
+    }
+    
     const credits = await prisma.userCredits.findUnique({
       where: { userId: req.user.id },
     });
 
     res.json({ 
       success: true, 
-      credits: credits?.balance || 0,
-      lifetimeSpent: credits?.lifetimeSpent || 0,
+      credits: Number(credits?.balance) || 0,
+      lifetimeSpent: Number(credits?.lifetimeSpent) || 0,
+      isGuest: false,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get credits' });
@@ -353,6 +426,95 @@ router.get('/transactions', requireAuth, async (req, res) => {
     res.json({ success: true, transactions });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get transactions' });
+  }
+});
+
+// ============================================================================
+// GET USAGE HISTORY - Real data from database
+// ============================================================================
+
+router.get('/usage', requireAuth, async (req, res) => {
+  try {
+    const { limit = 100 } = req.query;
+    
+    // Get usage logs from database
+    const usageLogs = await prisma.usageLog.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit, 10),
+    });
+
+    // Transform to frontend format
+    const usage = usageLogs.map(log => ({
+      id: log.id,
+      type: log.endpoint === 'canvas' ? 'generation' : log.endpoint === 'chat' ? 'chat' : 'edit',
+      model: log.model,
+      provider: log.provider,
+      credits: Number(log.creditsCost),
+      timestamp: log.createdAt.getTime(),
+      description: `${log.endpoint}: ${log.inputTokens + log.outputTokens} tokens`,
+      app: 'canvas',
+      inputTokens: log.inputTokens,
+      outputTokens: log.outputTokens,
+    }));
+
+    // Calculate stats
+    const now = Date.now();
+    const oneDayAgo = now - 86400000;
+    const thirtyDaysAgo = now - 30 * 86400000;
+    
+    const todayUsage = usage.filter(u => u.timestamp > oneDayAgo).reduce((sum, u) => sum + u.credits, 0);
+    const monthUsage = usage.filter(u => u.timestamp > thirtyDaysAgo).reduce((sum, u) => sum + u.credits, 0);
+    const totalUsage = usage.reduce((sum, u) => sum + u.credits, 0);
+
+    res.json({ 
+      success: true, 
+      usage,
+      stats: {
+        today: todayUsage,
+        thisMonth: monthUsage,
+        total: totalUsage,
+        requestCount: usage.length,
+      }
+    });
+  } catch (error) {
+    console.error('[Billing] Get usage error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get usage history' });
+  }
+});
+
+// ============================================================================
+// GET BILLING HISTORY - Purchase records
+// ============================================================================
+
+router.get('/billing-history', requireAuth, async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+    
+    // Get billing records (purchases)
+    const billingHistory = await prisma.billingHistory.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: parseInt(limit, 10),
+    });
+
+    const records = billingHistory.map(record => ({
+      id: record.id,
+      amount: Number(record.amount),
+      credits: Number(record.credits),
+      status: record.status,
+      date: record.createdAt.getTime(),
+      method: record.paymentMethod || 'Card',
+      stripeSessionId: record.stripeSessionId,
+    }));
+
+    res.json({ 
+      success: true, 
+      billing: records,
+    });
+  } catch (error) {
+    console.error('[Billing] Get billing history error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get billing history' });
   }
 });
 

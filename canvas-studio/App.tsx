@@ -1728,6 +1728,7 @@ const App: React.FC = () => {
       const response = await fetch('/api/canvas/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Send cookies for auth
         body: JSON.stringify({
           prompt: instruction,
           provider: selectedModel.provider,
@@ -1848,6 +1849,7 @@ const App: React.FC = () => {
       const response = await fetch('/api/canvas/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Send cookies for auth
         body: JSON.stringify({
           message,
           currentCode: currentApp?.code || null,
@@ -2279,6 +2281,7 @@ const App: React.FC = () => {
       const response = await fetch('/api/canvas/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Send cookies for auth
         body: JSON.stringify({
           message,
           conversationHistory: conversationHistory,
@@ -2591,6 +2594,7 @@ const App: React.FC = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Send cookies for auth
         body: JSON.stringify({
           code: currentApp.code,
           name: currentApp.name || 'Untitled App',

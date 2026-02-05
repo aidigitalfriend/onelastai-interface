@@ -46,9 +46,10 @@ export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, use
   };
 
   const fetchCredits = async () => {
-    if (!userId) return;
     try {
-      const res = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
+      const res = await fetch(`${API_BASE}/billing/credits`, {
+        credentials: 'include', // Send cookies for auth
+      });
       const data = await res.json();
       if (data.success) {
         setCredits(data.credits);
@@ -59,20 +60,14 @@ export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, use
   };
 
   const handlePurchase = async (packageId: string) => {
-    if (!userId) {
-      alert('Please sign in to purchase credits');
-      return;
-    }
-
     setProcessing(packageId);
     try {
-      const res = await fetch(`${API_BASE}/billing/checkout/${APP_ID}`, {
+      const res = await fetch(`${API_BASE}/billing/checkout`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Send cookies for auth
         body: JSON.stringify({ 
-          userId, 
           packageId,
-          email: localStorage.getItem('userEmail') || undefined
         })
       });
       
