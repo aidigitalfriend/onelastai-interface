@@ -127,17 +127,31 @@ print_step "💻 STEP 5: Building Maula Editor (AI Code Editor)"
 cd $EDITOR_APP_DIR
 echo -e "   ${CYAN}App directory:${NC} $EDITOR_APP_DIR"
 
-echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
-npm install
+# Check if package.json exists (submodule may not be initialized)
+if [ -f "$EDITOR_APP_DIR/package.json" ]; then
+    echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
+    npm install
 
-echo -e "   ${YELLOW}🔨 Building editor app...${NC}"
-npm run build
+    echo -e "   ${YELLOW}🔨 Building editor app...${NC}"
+    npm run build
 
-# Copy to web root under /editor
-echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
-sudo mkdir -p $WEB_ROOT/editor
-sudo rm -rf $WEB_ROOT/editor/*
-sudo cp -r dist/* $WEB_ROOT/editor/
+    # Copy to web root under /editor
+    echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
+    sudo mkdir -p $WEB_ROOT/editor
+    sudo rm -rf $WEB_ROOT/editor/*
+    sudo cp -r dist/* $WEB_ROOT/editor/
+    echo -e "   ${GREEN}✓ Editor app deployed to $WEB_ROOT/editor${NC}"
+elif [ -d "$EDITOR_APP_DIR/dist" ]; then
+    # Use existing dist if available
+    echo -e "   ${YELLOW}⚠️  No package.json found, using existing dist...${NC}"
+    sudo mkdir -p $WEB_ROOT/editor
+    sudo rm -rf $WEB_ROOT/editor/*
+    sudo cp -r dist/* $WEB_ROOT/editor/
+    echo -e "   ${GREEN}✓ Editor app deployed from existing dist${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  Skipping editor build (submodule not initialized)${NC}"
+    echo -e "   ${CYAN}Run: git submodule update --init --recursive${NC}"
+fi
 echo -e "   ${GREEN}✓ Editor app deployed to $WEB_ROOT/editor${NC}"
 
 # Set permissions
