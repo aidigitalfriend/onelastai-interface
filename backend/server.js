@@ -2257,6 +2257,18 @@ app.use('/api/hosting', hostingRoutes);
 import chatRoutes from './routes/chat.js';
 app.use('/api/chat', chatRoutes);
 
+// Import and mount cloud deploy routes for /api/cloud-deploy endpoints (Vercel, Netlify, etc.)
+import cloudDeployRoutes from './routes/cloud-deploy.js';
+app.use('/api/cloud-deploy', cloudDeployRoutes);
+
+// Import and mount workspace routes for /api/workspace endpoints (project persistence, auto-save)
+import workspaceRoutes from './routes/workspace.js';
+app.use('/api/workspace', workspaceRoutes);
+
+// Import collaboration routes and WebSocket server
+import collaborationRoutes, { initCollaborationWS } from './routes/collaboration.js';
+app.use('/api/collaboration', collaborationRoutes);
+
 // Note: Other routes are defined inline above. Separate route files available:
 // import billingRoutes from './routes/billing.js';
 // app.use('/api/billing', billingRoutes);
@@ -2342,10 +2354,17 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================================================
-// START SERVER
+// START SERVER WITH WEBSOCKET SUPPORT
 // ============================================================================
 
-app.listen(PORT, '0.0.0.0', () => {
+import { createServer } from 'http';
+
+const server = createServer(app);
+
+// Initialize collaboration WebSocket
+initCollaborationWS(server);
+
+server.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('═══════════════════════════════════════════════════════════');
   console.log('   🧠 NEURAL LINK BACKEND');
@@ -2353,6 +2372,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`   🚀 Server running on port ${PORT}`);
   console.log(`   📊 Health: http://localhost:${PORT}/health`);
   console.log(`   🔗 API: http://localhost:${PORT}/api`);
+  console.log(`   🤝 Collaboration: ws://localhost:${PORT}/collaboration`);
   console.log('═══════════════════════════════════════════════════════════');
   console.log('');
 });

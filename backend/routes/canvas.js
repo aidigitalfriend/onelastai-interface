@@ -1431,7 +1431,7 @@ router.post('/agent', optionalAuth, async (req, res) => {
       'claude-sonnet-4-20250514',
       {
         systemPrompt: CANVAS_AGENT_SYSTEM,
-        maxTokens: 1024,
+        maxTokens: 16384, // Increased for multi-file projects
         endpoint: 'canvas',
       }
     );

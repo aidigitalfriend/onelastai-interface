@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   GeneratedApp,
   ViewMode,
@@ -15,6 +15,53 @@ import Overlay from './components/Overlay';
 import DeployPanel from './components/DeployPanel';
 import { useEditorBridge } from './services/useEditorBridge';
 import { ToolRegistry, runTool, getAvailableTools, ToolResult } from './services/toolRegistry';
+import { useAutoSave, AutoSaveIndicator } from './services/useAutoSave';
+import { workspaceService, ProjectFile as WSProjectFile } from './services/workspaceService';
+import { useCollaboration, CollaboratorsBar, Collaborator } from './services/useCollaboration';
+
+// 🔍 Auto-detect language from code content (React patterns override HTML)
+const detectLanguageFromCode = (code: string, providedLang: string = 'html'): string => {
+  if (!code) return providedLang;
+  
+  // Check for React patterns - these should override HTML
+  const hasReactPatterns = 
+    code.includes('import React') ||
+    code.includes("from 'react'") ||
+    code.includes('from "react"') ||
+    code.includes('useState') ||
+    code.includes('useEffect') ||
+    code.includes('useCallback') ||
+    code.includes('useMemo') ||
+    code.includes('useRef') ||
+    code.includes('useContext') ||
+    code.includes('export default function') ||
+    code.includes('export default class') ||
+    (code.includes('const ') && code.includes('return (') && code.includes('<') && code.includes('/>'));
+  
+  if (hasReactPatterns) {
+    return 'react';
+  }
+  
+  // Check for TypeScript patterns
+  if (code.includes(': React.FC') || 
+      code.includes(': string') || 
+      code.includes(': number') || 
+      code.includes(': boolean') ||
+      code.includes('interface ') ||
+      code.includes('type ')) {
+    return 'typescript';
+  }
+  
+  // Check for Python patterns
+  if (code.includes('def ') || 
+      code.includes('import ') && code.includes('flask') ||
+      code.includes('class ') && code.includes('self') ||
+      code.includes('print(')) {
+    return 'python';
+  }
+  
+  return providedLang;
+};
 
 // AI Models - 4 Providers, 6 Models (Gemini removed)
 const MODELS: ModelOption[] = [
@@ -1486,13 +1533,160 @@ const App: React.FC = () => {
   const [isReadyToBuild, setIsReadyToBuild] = useState(false);
   const [buildRequirements, setBuildRequirements] = useState<string>('');
   
-  // �🚀 Deploy/Hosting State
+  // 🚀 Deploy/Hosting State
   const [isDeploying, setIsDeploying] = useState(false);
   const [deployedUrl, setDeployedUrl] = useState<string | null>(null);
   const [showDeployModal, setShowDeployModal] = useState(false);
 
+  // 💾 PROJECT PERSISTENCE STATE
+  const [projectSlug, setProjectSlug] = useState<string | null>(null);
+  const [projectName, setProjectName] = useState<string>('Untitled Project');
+  const [isProjectLoading, setIsProjectLoading] = useState(false);
+
   // 🔗 EDITOR BRIDGE - Full editor integration for agent
   const editorBridge = useEditorBridge({});
+
+  // 💾 GET FILES FOR AUTO-SAVE
+  const getFilesForSave = useCallback((): WSProjectFile[] => {
+    const files = editorBridge.files;
+    const fileList = editorBridge.fileList;
+    return fileList.map(path => ({
+      path,
+      content: files.get(path) || '',
+      language: path.split('.').pop() || 'text',
+      isOpen: editorBridge.state.openFiles.includes(path),
+    }));
+  }, [editorBridge]);
+
+  const getEditorStateForSave = useCallback(() => ({
+    activeFile: editorBridge.activeFile,
+    cursor: editorBridge.cursor,
+    openFiles: editorBridge.state.openFiles,
+  }), [editorBridge]);
+
+  const getMainFileForSave = useCallback(() => {
+    return editorBridge.activeFile || 'index.html';
+  }, [editorBridge]);
+
+  // 💾 AUTO-SAVE HOOK
+  const autoSave = useAutoSave(
+    getFilesForSave,
+    getEditorStateForSave,
+    getMainFileForSave,
+    {
+      slug: projectSlug,
+      debounceMs: 2000,
+      enabled: !!projectSlug,
+      onSave: (result) => {
+        console.log('[Canvas] Auto-saved:', result.fileCount, 'files at', result.savedAt);
+      },
+      onError: (error) => {
+        console.error('[Canvas] Auto-save failed:', error);
+      },
+    }
+  );
+
+  // 🤝 COLLABORATION HOOK - Real-time multiplayer editing
+  const collaboration = useCollaboration({
+    projectSlug,
+    userName: user?.name || user?.email || `Guest ${Math.random().toString(36).slice(2, 6)}`,
+    userAvatar: user?.avatar,
+    enabled: !!projectSlug, // Only enable when we have a project
+    onSync: () => {
+      console.log('[Canvas] Collaboration synced');
+    },
+    onCollaboratorJoin: (collaborator: Collaborator) => {
+      console.log('[Canvas] Collaborator joined:', collaborator.name);
+    },
+    onCollaboratorLeave: (collaborator: Collaborator) => {
+      console.log('[Canvas] Collaborator left:', collaborator.name);
+    },
+  });
+
+  // 💾 LOAD PROJECT FROM URL PARAM
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const projectParam = params.get('project');
+    
+    if (projectParam && projectParam !== projectSlug) {
+      loadProject(projectParam);
+    }
+  }, []);
+
+  // 💾 LOAD PROJECT FUNCTION
+  const loadProject = async (slug: string) => {
+    setIsProjectLoading(true);
+    try {
+      const project = await workspaceService.load(slug);
+      if (project) {
+        setProjectSlug(project.slug);
+        setProjectName(project.name);
+        
+        // Load files into editor bridge
+        project.files.forEach(file => {
+          editorBridge.setFile(file.path, file.content);
+        });
+        
+        // Set active file
+        if (project.mainFile) {
+          editorBridge.setActiveFile(project.mainFile);
+        }
+        
+        // Set current app
+        const mainFileContent = project.files.find(f => f.path === project.mainFile)?.content || project.files[0]?.content || '';
+        setCurrentApp({
+          id: project.id,
+          code: mainFileContent,
+          language: project.language,
+          name: project.name,
+          prompt: project.originalPrompt || '',
+          timestamp: new Date(project.updatedAt).getTime(),
+          history: [],
+        });
+        
+        console.log('[Canvas] Loaded project:', project.name, 'with', project.files.length, 'files');
+      }
+    } catch (error) {
+      console.error('[Canvas] Failed to load project:', error);
+    } finally {
+      setIsProjectLoading(false);
+    }
+  };
+
+  // 💾 CREATE NEW PROJECT (when user first generates code)
+  const createProjectIfNeeded = async () => {
+    if (!projectSlug && currentApp?.code) {
+      const files = getFilesForSave();
+      if (files.length > 0) {
+        const result = await workspaceService.quickSave({
+          name: projectName,
+          files,
+          editorState: getEditorStateForSave(),
+          mainFile: getMainFileForSave(),
+          language: currentApp.language,
+          originalPrompt: currentApp.prompt,
+        });
+        
+        if (result) {
+          setProjectSlug(result.slug);
+          autoSave.setSlug(result.slug);
+          
+          // Update URL without reload
+          const newUrl = `${window.location.pathname}?project=${result.slug}`;
+          window.history.pushState({}, '', newUrl);
+          
+          console.log('[Canvas] Created project:', result.slug);
+        }
+      }
+    }
+  };
+
+  // 💾 MARK CHANGES FOR AUTO-SAVE
+  useEffect(() => {
+    if (projectSlug && currentApp?.code) {
+      autoSave.markChanged();
+    }
+  }, [currentApp?.code, projectFiles]);
 
   // Sync currentApp.code to editorBridge when it changes
   useEffect(() => {
@@ -1502,8 +1696,23 @@ const App: React.FC = () => {
                   currentApp.language === 'typescript' ? 'ts' :
                   currentApp.language === 'javascript' ? 'js' : 'html';
       const filename = `App.${ext}`;
+      
+      console.log('[Canvas] Language detected:', currentApp.language, '→ Extension:', ext, '→ Filename:', filename);
+      
+      // Clear ALL old App.* files to prevent duplicates (App.html, App.tsx, etc.)
+      const existingFiles = [...editorBridge.fileList]; // Copy to avoid mutation during iteration
+      console.log('[Canvas] Existing files before clear:', existingFiles);
+      existingFiles.forEach(file => {
+        if (file.startsWith('App.') && file !== filename) {
+          console.log('[Canvas] Deleting old file:', file);
+          editorBridge.deleteFile(file);
+        }
+      });
+      
+      // Set the new file with correct extension
       editorBridge.setFile(filename, currentApp.code);
       editorBridge.setActiveFile(filename);
+      console.log('[Canvas] Set active file:', filename);
     }
   }, [currentApp?.code, currentApp?.language]);
 
@@ -1807,6 +2016,11 @@ const App: React.FC = () => {
       setGenState({ isGenerating: false, error: null, progressMessage: '' });
       setViewMode(ViewMode.PREVIEW);
       
+      // 💾 Create project for persistence if first generation
+      if (isInitial && !projectSlug) {
+        setTimeout(() => createProjectIfNeeded(), 500);
+      }
+      
       // After successful build, switch to editing mode
       setConversationMode(true);
       setIsReadyToBuild(false);
@@ -1898,11 +2112,15 @@ const App: React.FC = () => {
           break;
 
         case 'build': {
+          // Auto-detect language from code content (React patterns should show as tsx)
+          const detectedLanguage = detectLanguageFromCode(data.code, data.language || 'html');
+          console.log('[Canvas Build] Backend language:', data.language, '→ Detected:', detectedLanguage);
+          console.log('[Canvas Build] Code snippet:', data.code?.substring(0, 200));
           const newApp: GeneratedApp = {
             id: Date.now().toString(),
             name: 'Canvas App',
             code: data.code,
-            language: data.language || 'html',
+            language: detectedLanguage,
             prompt: message,
             timestamp: Date.now(),
             history: [],
@@ -1971,10 +2189,12 @@ const App: React.FC = () => {
 
         case 'edit': {
           if (currentApp) {
+            // Auto-detect language from updated code
+            const detectedLanguage = detectLanguageFromCode(data.code, data.language || currentApp.language);
             const updatedApp: GeneratedApp = {
               ...currentApp,
               code: data.code,
-              language: data.language || currentApp.language,
+              language: detectedLanguage,
               history: [...currentApp.history],
             };
             setCurrentApp(updatedApp);
@@ -2598,10 +2818,13 @@ const App: React.FC = () => {
 
   const openInNewTab = () => {
     if (currentApp?.code) {
-      const newWindow = window.open();
+      // Create a blob URL for safe preview without document.write
+      const blob = new Blob([currentApp.code], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const newWindow = window.open(url, '_blank');
+      // Revoke the blob URL after a delay to free memory
       if (newWindow) {
-        newWindow.document.write(currentApp.code);
-        newWindow.document.close();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
       }
     }
   };
@@ -4250,6 +4473,26 @@ const App: React.FC = () => {
           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse"></div>
           <span className={`text-[10px] font-bold ${isDarkMode ? 'text-gray-600' : 'text-gray-400'} uppercase tracking-widest`}>Canvas_Protocol_v2.0</span>
         </div>
+        
+        {/* Project Name & Auto-Save Indicator */}
+        <div className="flex items-center gap-3">
+          {projectSlug && (
+            <span className={`text-[10px] ${isDarkMode ? 'text-cyan-400/70' : 'text-cyan-600'} uppercase tracking-wider`}>
+              {projectName}
+            </span>
+          )}
+          <AutoSaveIndicator status={autoSave.status} />
+          
+          {/* 🤝 Collaboration Status */}
+          {projectSlug && (
+            <CollaboratorsBar 
+              collaborators={collaboration.collaborators}
+              isConnected={collaboration.isConnected}
+              maxVisible={4}
+            />
+          )}
+        </div>
+        
         <div className="flex items-center gap-4">
           <span className={`text-[10px] ${isDarkMode ? 'text-gray-700' : 'text-gray-400'} uppercase tracking-widest`}>Neural_Sync_Active</span>
           <div className="flex items-center gap-1">

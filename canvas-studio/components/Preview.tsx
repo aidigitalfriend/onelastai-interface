@@ -5,6 +5,7 @@ import {
   SandpackCodeEditor,
   useSandpack,
 } from '@codesandbox/sandpack-react';
+import LZString from 'lz-string';
 
 interface ProjectFile {
   name: string;
@@ -182,23 +183,26 @@ const buildSandpackFiles = (projectFiles: ProjectFile[], basePath: string = ''):
 };
 
 const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange, projectFiles, onFilesGenerated }) => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [showEditor, setShowEditor] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [debouncedCode, setDebouncedCode] = useState(code);
+  const lastFilesRef = useRef<string>(''); // Track last files to prevent infinite loop
   
   const projectType = useMemo(() => detectProjectType(code, language), [code, language]);
   
-  // For HTML, use iframe directly
+  // Debounce code changes to prevent excessive re-renders
   useEffect(() => {
-    if (projectType === 'html' && iframeRef.current && code) {
-      const doc = iframeRef.current.contentWindow?.document;
-      if (doc) {
-        doc.open();
-        doc.write(code);
-        doc.close();
-      }
-    }
-  }, [code, projectType]);
+    // Only debounce if code actually changed
+    if (code === debouncedCode) return;
+    
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setDebouncedCode(code);
+      setIsLoading(false);
+    }, 300);
+    
+    return () => clearTimeout(timer);
+  }, [code, debouncedCode]);
 
   if (!code) {
     return (
@@ -225,6 +229,17 @@ const Preview: React.FC<PreviewProps> = ({ code, language = 'html', onCodeChange
 
   // React/TSX/JSX - Use Sandpack
   if (projectType === 'react') {
+    // Show loading state while debouncing
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-black/60">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-cyan-500 border-t-transparent mb-4"></div>
+          <p className="text-xs font-bold text-cyan-400 uppercase tracking-widest">Preparing React Preview...</p>
+          <p className="text-[10px] text-gray-600 mt-2">Bundling dependencies</p>
+        </div>
+      );
+    }
+    
     // Check if we have multi-file project
     let files: Record<string, string>;
     let dependencies: Record<string, string>;
@@ -308,30 +323,58 @@ body {
       }
     } else {
       // Single file project: use existing parseReactCode
-      const parsed = parseReactCode(code);
+      const parsed = parseReactCode(debouncedCode);
       files = parsed.files;
       dependencies = parsed.dependencies;
     }
     
-    // Notify parent of generated files so they can sync to EditorBridge
-    if (onFilesGenerated) {
-      onFilesGenerated(files);
+    // Notify parent of generated files (only if changed to prevent infinite loop)
+    const filesKey = JSON.stringify(Object.keys(files).sort());
+    if (onFilesGenerated && filesKey !== lastFilesRef.current) {
+      lastFilesRef.current = filesKey;
+      // Use setTimeout to avoid calling during render
+      setTimeout(() => onFilesGenerated(files), 0);
     }
     
-    // Create a CodeSandbox URL for opening in external sandbox
+    // Open in CodeSandbox using POST request
     const openInCodeSandbox = () => {
-      const parameters = {
-        files: Object.entries(files).reduce((acc, [path, content]) => {
-          acc[path.replace(/^\//, '')] = { content, isBinary: false };
-          return acc;
-        }, {} as Record<string, { content: string; isBinary: boolean }>),
-      };
-      // UTF-8 safe base64 encoding
-      const jsonStr = JSON.stringify(parameters);
-      const bytes = new TextEncoder().encode(jsonStr);
-      const binStr = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
-      const encoded = btoa(binStr);
-      window.open(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encoded}`, '_blank');
+      const sandboxFiles: Record<string, { content: string }> = {};
+      Object.entries(files).forEach(([path, content]) => {
+        sandboxFiles[path.replace(/^\//, '')] = { content };
+      });
+      
+      // Add package.json if not present
+      if (!sandboxFiles['package.json']) {
+        sandboxFiles['package.json'] = {
+          content: JSON.stringify({
+            name: 'canvas-studio-export',
+            version: '1.0.0',
+            main: 'index.tsx',
+            dependencies: dependencies,
+          }, null, 2)
+        };
+      }
+      
+      const parameters = LZString.compressToBase64(JSON.stringify({ files: sandboxFiles }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      
+      // Use POST request via form to avoid URL length limits
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://codesandbox.io/api/v1/sandboxes/define';
+      form.target = '_blank';
+      
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'parameters';
+      input.value = parameters;
+      form.appendChild(input);
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
     };
     
     return (
@@ -390,6 +433,10 @@ body {
             theme="dark"
             options={{
               externalResources: ['https://cdn.tailwindcss.com'],
+              recompileMode: 'delayed', // Prevent rapid recompilation
+              recompileDelay: 500, // 500ms delay before recompiling
+              autorun: true,
+              autoReload: false, // Don't auto-reload on every change
             }}
           >
             <div style={{ height: '100%', display: 'flex', flexDirection: showEditor ? 'row' : 'column' }}>
@@ -438,20 +485,32 @@ body {
 </html>`,
     };
     
-    // Create a CodeSandbox URL for opening in external sandbox
+    // Open in CodeSandbox using POST request
     const openInCodeSandbox = () => {
-      const parameters = {
-        files: {
-          'index.js': { content: code, isBinary: false },
-          'index.html': { content: files['/index.html'], isBinary: false },
-        },
+      const sandboxFiles = {
+        'index.js': { content: code },
+        'index.html': { content: files['/index.html'] },
       };
-      // UTF-8 safe base64 encoding
-      const jsonStr = JSON.stringify(parameters);
-      const bytes = new TextEncoder().encode(jsonStr);
-      const binStr = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
-      const encoded = btoa(binStr);
-      window.open(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encoded}`, '_blank');
+      const parameters = LZString.compressToBase64(JSON.stringify({ files: sandboxFiles }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      
+      // Use POST request via form to avoid URL length limits
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://codesandbox.io/api/v1/sandboxes/define';
+      form.target = '_blank';
+      
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'parameters';
+      input.value = parameters;
+      form.appendChild(input);
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
     };
     
     return (
@@ -492,6 +551,12 @@ body {
             template="vanilla"
             files={files}
             theme="dark"
+            options={{
+              recompileMode: 'delayed',
+              recompileDelay: 500,
+              autorun: true,
+              autoReload: false,
+            }}
           >
             {showEditor && (
               <div style={{ width: '50%', height: '100%', borderRight: '1px solid #333' }}>
@@ -515,29 +580,62 @@ body {
     );
   }
 
-  // HTML - Direct iframe
+  // HTML - Use Sandpack static template for secure sandboxed preview
   if (projectType === 'html') {
-    // Create a CodeSandbox URL for opening in external sandbox
+    // Show loading state while debouncing
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full text-gray-500 bg-black/60">
+          <div className="animate-spin rounded-full h-10 w-10 border-2 border-cyan-500 border-t-transparent mb-4"></div>
+          <p className="text-xs font-bold text-cyan-400 uppercase tracking-widest">Preparing Preview...</p>
+        </div>
+      );
+    }
+
+    const files: Record<string, string> = {
+      '/index.html': debouncedCode,
+    };
+
+    // Open in CodeSandbox using POST request
     const openInCodeSandbox = () => {
-      const parameters = {
-        files: {
-          'index.html': {
-            content: code,
-            isBinary: false,
-          },
-        },
+      const sandboxFiles = {
+        'index.html': { content: debouncedCode },
       };
-      // UTF-8 safe base64 encoding
-      const jsonStr = JSON.stringify(parameters);
-      const bytes = new TextEncoder().encode(jsonStr);
-      const binStr = Array.from(bytes, (b) => String.fromCharCode(b)).join('');
-      const encoded = btoa(binStr);
-      window.open(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encoded}`, '_blank');
+      const parameters = LZString.compressToBase64(JSON.stringify({ files: sandboxFiles }))
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+      
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = 'https://codesandbox.io/api/v1/sandboxes/define';
+      form.target = '_blank';
+      
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = 'parameters';
+      input.value = parameters;
+      form.appendChild(input);
+      
+      document.body.appendChild(form);
+      form.submit();
+      document.body.removeChild(form);
     };
     
     return (
-      <div className="w-full h-full bg-[#0a0a0a] shadow-sm overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-4 py-2 bg-black/60 border-b border-gray-800 text-xs">
+      <div className="w-full bg-[#0a0a0a] flex flex-col" style={{ height: '100%', minHeight: 0, maxHeight: '100%' }}>
+        {/* Sandpack CSS Override */}
+        <style>{`
+          .sp-wrapper { height: 100% !important; }
+          .sp-layout { height: 100% !important; }
+          .sp-stack { height: 100% !important; }
+          .sp-preview { height: 100% !important; }
+          .sp-preview-container { height: 100% !important; }
+          .sp-preview-iframe { height: 100% !important; }
+          .sp-code-editor { height: 100% !important; }
+        `}</style>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-2 bg-black/60 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="flex gap-1.5">
               <div className="w-2.5 h-2.5 rounded-full bg-red-500/80"></div>
@@ -545,7 +643,7 @@ body {
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
             </div>
             <span className="text-[10px] text-cyan-400 uppercase tracking-wider font-mono ml-2">
-              🌐 Live Preview
+              🌐 HTML Live Preview (Sandboxed)
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -561,24 +659,49 @@ body {
             </button>
             <button
               onClick={openInCodeSandbox}
-              className="px-3 py-1 text-[10px] rounded bg-gray-800 hover:bg-purple-500/20 text-gray-400 hover:text-purple-400 transition-all uppercase tracking-wider font-medium"
+              className="px-3 py-1 text-[10px] rounded bg-gray-800 hover:bg-blue-500/20 text-gray-400 hover:text-blue-400 transition-all uppercase tracking-wider font-medium"
               title="Open in CodeSandbox"
             >
-              📦 Sandbox
+              📦 CodeSandbox
             </button>
           </div>
         </div>
-        {showEditor && (
-          <div className="h-[40%] border-b border-gray-800 overflow-auto bg-[#0d0d0d]">
-            <pre className="p-4 text-xs font-mono text-gray-300 whitespace-pre-wrap">{code}</pre>
-          </div>
-        )}
-        <iframe
-          ref={iframeRef}
-          title="App Preview"
-          className={`w-full border-none bg-white ${showEditor ? 'h-[60%]' : 'h-full'}`}
-          sandbox="allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-same-origin"
-        />
+        
+        {/* Sandpack for HTML */}
+        <div className="flex-1" style={{ minHeight: 0, height: 'calc(100% - 44px)' }}>
+          <SandpackProvider
+            template="static"
+            files={files}
+            theme="dark"
+            options={{
+              recompileMode: 'delayed',
+              recompileDelay: 500,
+              autorun: true,
+              autoReload: false,
+            }}
+          >
+            <div style={{ height: '100%', display: 'flex', flexDirection: showEditor ? 'row' : 'column' }}>
+              {showEditor && (
+                <div style={{ width: '50%', height: '100%', borderRight: '1px solid #333' }}>
+                  <SandpackCodeEditor 
+                    showTabs 
+                    showLineNumbers 
+                    showInlineErrors
+                    style={{ height: '100%' }}
+                  />
+                </div>
+              )}
+              <div style={{ width: showEditor ? '50%' : '100%', height: '100%' }}>
+                <SandpackPreview 
+                  showNavigator={false}
+                  showRefreshButton
+                  showOpenInCodeSandbox
+                  style={{ height: '100%' }}
+                />
+              </div>
+            </div>
+          </SandpackProvider>
+        </div>
       </div>
     );
   }
