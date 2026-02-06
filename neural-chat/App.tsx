@@ -252,9 +252,9 @@ const App: React.FC = () => {
           // Update the message with error
           let errorText = '⚠️ An error occurred. Please try again.';
           if (error === 'auth') {
-            errorText = '⚠️ **Please sign in to continue.** Click the ↗ button in the header to go to the home page and sign in or create an account. Once logged in, return here to chat!';
+            errorText = '⚠️ Please sign in to continue.\n\n• Click the ↗ button in the header to go to the home page and sign in or create an account. Once logged in, return here to chat!';
           } else if (error === 'credits') {
-            errorText = '⚠️ **Insufficient credits.** Please go to your dashboard to purchase more credits. Click the ↗ button in the header to access billing.';
+            errorText = '⚠️ Insufficient credits.\n\n• Please go to your dashboard to purchase more credits. Click the ↗ button in the header to access billing.';
           }
           
           setSessions(prev => prev.map(s => {
