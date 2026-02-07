@@ -619,6 +619,125 @@ router.post('/status', async (req, res) => {
 });
 
 // ============================================================================
+// GITHUB PUSH — Push project files to a GitHub repository
+// ============================================================================
+
+router.post('/github', async (req, res) => {
+  try {
+    const { token, repoName, files, isPrivate = false, commitMessage = 'Deploy from Canvas Studio' } = req.body;
+
+    if (!token || !repoName || !files) {
+      return res.status(400).json({ success: false, error: 'Token, repoName, and files are required' });
+    }
+
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json',
+    };
+
+    // 1. Check if repo exists, if not create it
+    let repoFullName;
+    try {
+      const userRes = await axios.get('https://api.github.com/user', { headers });
+      const owner = userRes.data.login;
+      repoFullName = `${owner}/${repoName}`;
+
+      try {
+        await axios.get(`https://api.github.com/repos/${repoFullName}`, { headers });
+      } catch (e) {
+        // Repo doesn't exist, create it
+        await axios.post('https://api.github.com/user/repos', {
+          name: repoName,
+          private: isPrivate,
+          auto_init: true,
+          description: 'Created via Canvas Studio - One Last AI',
+        }, { headers });
+        // Wait a moment for GitHub to process
+        await new Promise(r => setTimeout(r, 1500));
+      }
+    } catch (error) {
+      return res.status(401).json({ success: false, error: 'Invalid GitHub token' });
+    }
+
+    // 2. Get the default branch ref
+    let sha;
+    try {
+      const refRes = await axios.get(`https://api.github.com/repos/${repoFullName}/git/refs/heads/main`, { headers });
+      sha = refRes.data.object.sha;
+    } catch {
+      // Try 'master' branch
+      try {
+        const refRes = await axios.get(`https://api.github.com/repos/${repoFullName}/git/refs/heads/master`, { headers });
+        sha = refRes.data.object.sha;
+      } catch {
+        // Repo might be empty, get any ref
+        sha = null;
+      }
+    }
+
+    // 3. Create blobs for each file
+    const tree = [];
+    for (const [path, content] of Object.entries(files)) {
+      const blobRes = await axios.post(`https://api.github.com/repos/${repoFullName}/git/blobs`, {
+        content: typeof content === 'string' ? content : JSON.stringify(content),
+        encoding: 'utf-8',
+      }, { headers });
+
+      tree.push({
+        path: path.replace(/^\//, ''),
+        mode: '100644',
+        type: 'blob',
+        sha: blobRes.data.sha,
+      });
+    }
+
+    // 4. Create tree
+    const treePayload = { tree };
+    if (sha) treePayload.base_tree = sha;
+
+    const treeRes = await axios.post(`https://api.github.com/repos/${repoFullName}/git/trees`, treePayload, { headers });
+
+    // 5. Create commit
+    const commitPayload = {
+      message: commitMessage,
+      tree: treeRes.data.sha,
+    };
+    if (sha) commitPayload.parents = [sha];
+
+    const commitRes = await axios.post(`https://api.github.com/repos/${repoFullName}/git/commits`, commitPayload, { headers });
+
+    // 6. Update ref
+    const branch = sha ? 'main' : 'main';
+    try {
+      await axios.patch(`https://api.github.com/repos/${repoFullName}/git/refs/heads/${branch}`, {
+        sha: commitRes.data.sha,
+      }, { headers });
+    } catch {
+      // Create the ref if it doesn't exist
+      await axios.post(`https://api.github.com/repos/${repoFullName}/git/refs`, {
+        ref: `refs/heads/${branch}`,
+        sha: commitRes.data.sha,
+      }, { headers });
+    }
+
+    res.json({
+      success: true,
+      repoUrl: `https://github.com/${repoFullName}`,
+      commitSha: commitRes.data.sha,
+      filesCount: Object.keys(files).length,
+      message: `Successfully pushed ${Object.keys(files).length} files to ${repoFullName}`,
+    });
+  } catch (error) {
+    console.error('[Cloud Deploy] GitHub push error:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data?.message || error.message || 'GitHub push failed',
+    });
+  }
+});
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 

@@ -130,6 +130,32 @@ const VALIDATORS = {
 // ============================================================================
 
 /**
+ * GET /api/credentials/status — Quick summary of which providers have valid tokens
+ * Returns a map of { VERCEL: true/false, NETLIFY: true/false, ... }
+ */
+router.get('/status', requireAuth, async (req, res) => {
+  try {
+    const credentials = await prisma.deployCredential.findMany({
+      where: { userId: req.userId },
+      select: { provider: true, isValid: true },
+    });
+
+    const statusMap = {};
+    const allProviders = ['VERCEL', 'NETLIFY', 'RAILWAY', 'CLOUDFLARE', 'GITHUB', 'RENDER', 'FIREBASE'];
+    
+    for (const p of allProviders) {
+      const cred = credentials.find(c => c.provider === p);
+      statusMap[p] = cred ? cred.isValid : false;
+    }
+
+    res.json({ success: true, status: statusMap, total: credentials.length });
+  } catch (error) {
+    console.error('[Credentials] Status error:', error);
+    res.status(500).json({ success: false, error: 'Failed to get credential status' });
+  }
+});
+
+/**
  * GET /api/credentials — List all credentials for the authenticated user
  * Returns provider, label, username, isValid — NEVER returns the actual token.
  */

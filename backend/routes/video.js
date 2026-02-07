@@ -3,22 +3,40 @@
  * Text-to-video generation using fal.ai (Minimax video-01-live)
  * 
  * Endpoints:
- *   POST /api/video/generate — Generate video from text prompt
+ *   POST /api/video/generate — Generate video from text prompt (auth required, deducts credits)
  *   GET  /api/video/status/:id — Check generation status
  */
 
 import express from 'express';
+import { PrismaClient } from '@prisma/client';
+import * as jose from 'jose';
 
 const router = express.Router();
+const prisma = new PrismaClient();
 
 const FAL_API_KEY = process.env.FAL_API_KEY || '';
 const FAL_API_BASE = 'https://queue.fal.run';
+const JWT_SECRET = process.env.NEURAL_LINK_JWT_SECRET || process.env.JWT_SECRET || 'neural-link-secret-key-2026';
+const VIDEO_CREDIT_COST = 5; // Credits per video generation
+
+// Auth middleware
+async function optionalAuth(req, res, next) {
+  try {
+    const token = req.cookies?.neural_token || req.headers.authorization?.replace('Bearer ', '');
+    if (token) {
+      const secret = new TextEncoder().encode(JWT_SECRET);
+      const { payload } = await jose.jwtVerify(token, secret);
+      req.user = { id: payload.userId || payload.sub };
+    }
+  } catch {}
+  next();
+}
 
 // ============================================================================
 // GENERATE VIDEO
 // ============================================================================
 
-router.post('/generate', async (req, res) => {
+router.post('/generate', optionalAuth, async (req, res) => {
   try {
     const { prompt, duration = 5, aspectRatio = '16:9' } = req.body;
 
@@ -28,6 +46,45 @@ router.post('/generate', async (req, res) => {
 
     if (!FAL_API_KEY) {
       return res.status(500).json({ success: false, error: 'Video generation is not configured. FAL_API_KEY is missing.' });
+    }
+
+    // Deduct credits if user is authenticated
+    if (req.user?.id) {
+      try {
+        const userCredits = await prisma.userCredits.findUnique({ where: { userId: req.user.id } });
+        if (!userCredits || userCredits.balance < VIDEO_CREDIT_COST) {
+          return res.status(402).json({ success: false, error: `Insufficient credits. Video generation costs ${VIDEO_CREDIT_COST} credits.` });
+        }
+
+        await prisma.userCredits.update({
+          where: { userId: req.user.id },
+          data: { balance: { decrement: VIDEO_CREDIT_COST }, lifetimeSpent: { increment: VIDEO_CREDIT_COST } },
+        });
+
+        await prisma.creditTransaction.create({
+          data: {
+            userCreditsId: userCredits.id,
+            type: 'USAGE',
+            amount: -VIDEO_CREDIT_COST,
+            balanceAfter: userCredits.balance - VIDEO_CREDIT_COST,
+            description: `Video generation: "${prompt.slice(0, 50)}..."`,
+            referenceType: 'video',
+          },
+        });
+
+        await prisma.usageLog.create({
+          data: {
+            userId: req.user.id,
+            provider: 'fal.ai',
+            model: 'minimax-video-01-live',
+            creditsUsed: VIDEO_CREDIT_COST,
+            endpoint: 'video/generate',
+          },
+        });
+      } catch (creditError) {
+        console.error('[Video] Credit deduction error:', creditError);
+        // Continue anyway if credit system has issues
+      }
     }
 
     console.log(`[Video] Generating video: "${prompt.slice(0, 80)}..." (${duration}s, ${aspectRatio})`);

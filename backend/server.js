@@ -2011,6 +2011,47 @@ app.post('/api/billing/add-free-credits', requireAuth, async (req, res) => {
 // DASHBOARD API - Comprehensive data for all apps
 // ============================================================================
 
+// Get billing usage history (per-request usage logs)
+app.get('/api/billing/usage', requireAuth, async (req, res) => {
+  try {
+    const usage = await prisma.usageLog.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        provider: true,
+        model: true,
+        creditsUsed: true,
+        inputTokens: true,
+        outputTokens: true,
+        endpoint: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ success: true, usage });
+  } catch (error) {
+    console.error('[Billing] Usage fetch error:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch usage history' });
+  }
+});
+
+// Alias: /api/billing/billing-history → same as /api/billing/history
+app.get('/api/billing/billing-history', requireAuth, async (req, res) => {
+  try {
+    const billing = await prisma.billingHistory.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    res.json({ success: true, billing });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to get billing history' });
+  }
+});
+
 // Get complete dashboard data
 app.get('/api/dashboard', requireAuth, async (req, res) => {
   try {
