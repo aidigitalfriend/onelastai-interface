@@ -15,7 +15,7 @@ interface BillingPanelProps {
   userId?: string;
 }
 
-const API_BASE = 'https://maula.onelastai.co/api';
+const API_BASE = '/api';
 const APP_ID = 'canvas-studio';
 
 export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, userId }) => {

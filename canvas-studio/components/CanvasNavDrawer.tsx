@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-const API_BASE = 'https://maula.onelastai.co/api';
+const API_BASE = '/api';
 
 // Get or create user ID
 const getUserId = (): string => {
@@ -125,84 +125,29 @@ interface CanvasNavDrawerProps {
   isDarkMode: boolean;
 }
 
-// LLM Providers with their models - User-friendly names
+// LLM Providers with their models
 const LLM_PROVIDERS = {
-  'Maula AI': {
-    icon: '🌟',
+  'Anthropic': {
+    icon: '🧠',
     color: '#ec4899',
-    models: ['Nova', 'Nova Pro', 'Maula Large', 'Maula Code']
+    models: ['Claude Sonnet 4', 'Claude Opus 4']
   },
-  'Image Generator': {
-    icon: '🎨',
-    color: '#22d3ee',
-    models: ['Vision Pro', 'Vision Fast']
-  },
-  'Designer': {
-    icon: '🖌️',
-    color: '#8b5cf6',
-    models: ['Design Flash', 'Design Pro']
-  },
-  'Planner': {
-    icon: '📋',
-    color: '#f59e0b',
-    models: ['Architect', 'Architect Fast']
-  },
-  'Code Builder': {
-    icon: '⚡',
+  'OpenAI': {
+    icon: '🤖',
     color: '#10b981',
-    models: ['Turbo Code', 'Turbo Instant']
+    models: ['GPT-4.1', 'GPT-4o Mini']
   },
-  'Fast Coding': {
-    icon: '✨',
-    color: '#f97316',
-    models: ['Lightning', 'Lightning Lite']
+  'xAI': {
+    icon: '⚡',
+    color: '#f59e0b',
+    models: ['Grok 3']
+  },
+  'Groq': {
+    icon: '🚀',
+    color: '#8b5cf6',
+    models: ['Llama 3.3 70B']
   }
 };
-
-// Mock data - Canvas Studio only
-const MOCK_USAGE: UsageRecord[] = [
-  { id: '1', type: 'generation', model: 'Nova Pro', provider: 'Maula AI', credits: 10, timestamp: Date.now() - 1800000, description: 'Generated SaaS landing page', app: 'canvas' },
-  { id: '2', type: 'edit', model: 'Turbo Code', provider: 'Code Builder', credits: 5, timestamp: Date.now() - 3600000, description: 'Added dark mode toggle', app: 'canvas' },
-  { id: '3', type: 'generation', model: 'Design Pro', provider: 'Designer', credits: 12, timestamp: Date.now() - 7200000, description: 'Built analytics dashboard', app: 'canvas' },
-  { id: '4', type: 'edit', model: 'Lightning', provider: 'Fast Coding', credits: 5, timestamp: Date.now() - 14400000, description: 'Made layout responsive', app: 'canvas' },
-  { id: '5', type: 'chat', model: 'Nova', provider: 'Maula AI', credits: 2, timestamp: Date.now() - 21600000, description: 'UI design discussion', app: 'canvas' },
-  { id: '6', type: 'edit', model: 'Design Flash', provider: 'Designer', credits: 3, timestamp: Date.now() - 43200000, description: 'Refactored components', app: 'canvas' },
-  { id: '7', type: 'generation', model: 'Maula Large', provider: 'Maula AI', credits: 15, timestamp: Date.now() - 129600000, description: 'Created e-commerce store', app: 'canvas' },
-  { id: '8', type: 'generation', model: 'Vision Pro', provider: 'Image Generator', credits: 10, timestamp: Date.now() - 259200000, description: 'Built portfolio site', app: 'canvas' },
-  { id: '9', type: 'edit', model: 'Turbo Instant', provider: 'Code Builder', credits: 4, timestamp: Date.now() - 432000000, description: 'Added animations', app: 'canvas' },
-  { id: '10', type: 'generation', model: 'Architect', provider: 'Planner', credits: 12, timestamp: Date.now() - 518400000, description: 'Created admin panel', app: 'canvas' },
-  { id: '11', type: 'chat', model: 'Nova Pro', provider: 'Maula AI', credits: 3, timestamp: Date.now() - 604800000, description: 'API integration help', app: 'canvas' },
-  { id: '12', type: 'generation', model: 'Vision Fast', provider: 'Image Generator', credits: 8, timestamp: Date.now() - 650000000, description: 'Built checkout flow', app: 'canvas' },
-  { id: '13', type: 'generation', model: 'Architect Fast', provider: 'Planner', credits: 8, timestamp: Date.now() - 700000000, description: 'Generated contact form', app: 'canvas' },
-  { id: '14', type: 'edit', model: 'Lightning Lite', provider: 'Fast Coding', credits: 4, timestamp: Date.now() - 800000000, description: 'Optimized performance', app: 'canvas' },
-];
-
-// Project History - Canvas Studio only
-const MOCK_PROJECTS: ProjectHistory[] = [
-  { id: 'p1', name: 'SaaS Landing Page', type: 'canvas', createdAt: Date.now() - 1800000, lastModified: Date.now() - 1800000, status: 'active', creditsUsed: 15 },
-  { id: 'p2', name: 'Analytics Dashboard', type: 'canvas', createdAt: Date.now() - 86400000, lastModified: Date.now() - 43200000, status: 'active', creditsUsed: 25 },
-  { id: 'p3', name: 'E-commerce Store', type: 'canvas', createdAt: Date.now() - 172800000, lastModified: Date.now() - 129600000, status: 'active', creditsUsed: 42 },
-  { id: 'p4', name: 'Portfolio Website', type: 'canvas', createdAt: Date.now() - 345600000, lastModified: Date.now() - 259200000, status: 'archived', creditsUsed: 18 },
-  { id: 'p5', name: 'Admin Panel', type: 'canvas', createdAt: Date.now() - 604800000, lastModified: Date.now() - 518400000, status: 'active', creditsUsed: 35 },
-  { id: 'p6', name: 'Checkout Flow', type: 'canvas', createdAt: Date.now() - 700000000, lastModified: Date.now() - 650000000, status: 'active', creditsUsed: 22 },
-  { id: 'p7', name: 'Contact Form', type: 'canvas', createdAt: Date.now() - 800000000, lastModified: Date.now() - 750000000, status: 'active', creditsUsed: 12 },
-];
-
-// Chat History - Canvas Studio only
-const MOCK_CHATS: ChatHistory[] = [
-  { id: 'c1', title: 'UI Design discussion', app: 'canvas', model: 'Nova', provider: 'Maula AI', messages: 5, timestamp: Date.now() - 3600000, creditsUsed: 2 },
-  { id: 'c2', title: 'API integration help', app: 'canvas', model: 'Turbo Code', provider: 'Code Builder', messages: 18, timestamp: Date.now() - 172800000, creditsUsed: 6 },
-  { id: 'c3', title: 'Layout improvements', app: 'canvas', model: 'Design Pro', provider: 'Designer', messages: 12, timestamp: Date.now() - 345600000, creditsUsed: 4 },
-  { id: 'c4', title: 'Animation ideas', app: 'canvas', model: 'Nova Pro', provider: 'Maula AI', messages: 8, timestamp: Date.now() - 518400000, creditsUsed: 5 },
-  { id: 'c5', title: 'Color scheme review', app: 'canvas', model: 'Vision Pro', provider: 'Image Generator', messages: 6, timestamp: Date.now() - 700000000, creditsUsed: 3 },
-];
-
-const MOCK_BILLING: BillingRecord[] = [
-  { id: 'b1', amount: 9.99, credits: 100, status: 'completed', date: Date.now() - 604800000, method: 'Visa •••• 4242' },
-  { id: 'b2', amount: 29.99, credits: 350, status: 'completed', date: Date.now() - 2592000000, method: 'Visa •••• 4242' },
-  { id: 'b3', amount: 49.99, credits: 600, status: 'completed', date: Date.now() - 5184000000, method: 'PayPal' },
-  { id: 'b4', amount: 99.99, credits: 1500, status: 'completed', date: Date.now() - 7776000000, method: 'Visa •••• 4242' },
-];
 
 const CREDIT_PACKAGES = [
   { credits: 50, price: 5.00, popular: false, savings: null },
@@ -214,33 +159,12 @@ const CREDIT_PACKAGES = [
 
 // Model colors for charts
 const MODEL_COLORS: Record<string, string> = {
-  'Nova': '#ec4899',
-  'Nova Pro': '#f472b6',
-  'Maula Large': '#db2777',
-  'Maula Code': '#be185d',
-  'Vision Pro': '#22d3ee',
-  'Vision Fast': '#06b6d4',
-  'Design Flash': '#8b5cf6',
-  'Design Pro': '#7c3aed',
-  'Architect': '#f59e0b',
-  'Architect Fast': '#d97706',
-  'Turbo Code': '#10b981',
-  'Turbo Instant': '#059669',
-  'Lightning': '#f97316',
-  'Lightning Lite': '#ea580c',
-  'Gemini 1.5 Pro': '#8b5cf6',
-  'Gemini 1.5 Flash': '#a78bfa',
-  'Gemini 2.0 Flash': '#7c3aed',
+  'Claude Sonnet 4': '#ec4899',
+  'Claude Opus 4': '#db2777',
+  'GPT-4.1': '#10b981',
+  'GPT-4o Mini': '#059669',
   'Grok 3': '#f59e0b',
-  'Grok 2': '#d97706',
   'Llama 3.3 70B': '#ef4444',
-  'Llama 3.1 70B': '#dc2626',
-  'Mistral Large': '#ec4899',
-  'Mixtral 8x7B': '#db2777',
-  'Codestral': '#be185d',
-  'Command R+': '#06b6d4',
-  'DeepSeek V3': '#84cc16',
-  'Sonar Large': '#6366f1',
 };
 
 type DashboardTab = 'overview' | 'analytics' | 'history' | 'usage' | 'billing' | 'credits';

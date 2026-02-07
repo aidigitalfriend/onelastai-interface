@@ -227,9 +227,9 @@ sudo systemctl reload nginx
 echo -e "   ${GREEN}✓ NGINX configured and reloaded${NC}"
 
 # =============================================================================
-# STEP 7: Start/Restart Backend with PM2
+# STEP 8: Start/Restart Backend with PM2
 # =============================================================================
-print_step "🚀 STEP 7: Starting Backend Services"
+print_step "🚀 STEP 8: Starting Backend Services"
 
 cd $PROJECT_ROOT
 
@@ -271,9 +271,9 @@ pm2 save
 echo -e "   ${GREEN}✓ Backend running on port $BACKEND_PORT${NC}"
 
 # =============================================================================
-# STEP 8: Verify Deployment
+# STEP 9: Verify Deployment
 # =============================================================================
-print_step "🔍 STEP 8: Verifying Deployment"
+print_step "🔍 STEP 9: Verifying Deployment"
 
 sleep 3
 

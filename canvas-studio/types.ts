@@ -25,6 +25,7 @@ export interface ModelOption {
   provider: ModelProvider;
   description: string;
   isThinking?: boolean;
+  costPer1k?: number;
 }
 
 export interface GeneratedApp {
