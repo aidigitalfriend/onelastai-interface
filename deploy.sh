@@ -31,6 +31,7 @@ MAIN_APP_DIR="$PROJECT_ROOT"
 CANVAS_APP_DIR="$PROJECT_ROOT/canvas-studio"
 NEURAL_CHAT_DIR="$PROJECT_ROOT/neural-chat"
 EDITOR_APP_DIR="$PROJECT_ROOT/maula-editor"
+GENCRAFT_DIR="$PROJECT_ROOT/gen-craft-pro"
 WEB_ROOT="/var/www/maula"
 NGINX_CONF="$PROJECT_ROOT/nginx-maula.conf"
 BACKEND_PORT=3200
@@ -194,11 +195,32 @@ else
     echo -e "   ${CYAN}Run: git submodule update --init --recursive${NC}"
 fi
 
+# =============================================================================
+# STEP 6.5: Build GenCraft Pro (AI App Builder)
+# =============================================================================
+print_step "⚡ STEP 6.5: Building GenCraft Pro (AI App Builder)"
+
+cd $GENCRAFT_DIR
+echo -e "   ${CYAN}App directory:${NC} $GENCRAFT_DIR"
+
+if [ -f "$GENCRAFT_DIR/package.json" ]; then
+    echo -e "   ${YELLOW}📦 Installing dependencies...${NC}"
+    npm install
+
+    echo -e "   ${YELLOW}🔨 Building GenCraft Pro...${NC}"
+    npm run build
+
+    echo -e "   ${YELLOW}📁 Deploying to web root...${NC}"
+    sudo mkdir -p $WEB_ROOT/gen-craft-pro
+    sudo rm -rf $WEB_ROOT/gen-craft-pro/*
+    sudo cp -r dist/* $WEB_ROOT/gen-craft-pro/
+    echo -e "   ${GREEN}✓ GenCraft Pro deployed to $WEB_ROOT/gen-craft-pro${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  Skipping GenCraft Pro build (package.json not found)${NC}"
+fi
+
 # Set permissions
 sudo chown -R www-data:www-data $WEB_ROOT
-
-# =============================================================================
-# STEP 7: Configure NGINX
 # =============================================================================
 print_step "🌐 STEP 7: Configuring NGINX"
 
@@ -323,6 +345,15 @@ else
     echo -e "   ${YELLOW}⚠️  Maula Editor returned status: $EDITOR_STATUS${NC}"
 fi
 
+# Check gen-craft-pro
+echo -e "   ${YELLOW}Checking GenCraft Pro...${NC}"
+GENCRAFT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$DOMAIN/gen-craft-pro/ 2>/dev/null || echo "000")
+if [ "$GENCRAFT_STATUS" = "200" ]; then
+    echo -e "   ${GREEN}✓ GenCraft Pro is accessible${NC}"
+else
+    echo -e "   ${YELLOW}⚠️  GenCraft Pro returned status: $GENCRAFT_STATUS${NC}"
+fi
+
 # =============================================================================
 # DEPLOYMENT COMPLETE
 # =============================================================================
@@ -333,6 +364,7 @@ echo -e "${GREEN}═════════════════════
 echo ""
 echo -e "   ${CYAN}🌐 Main App:${NC}        https://$DOMAIN"
 echo -e "   ${CYAN}🎨 Canvas Studio:${NC}   https://$DOMAIN/canvas-studio/"
+echo -e "   ${CYAN}⚡ GenCraft Pro:${NC}    https://$DOMAIN/gen-craft-pro/"
 echo -e "   ${CYAN}🧠 Neural Chat:${NC}     https://$DOMAIN/neural-chat/"
 echo -e "   ${CYAN}💻 Maula Editor:${NC}    https://$DOMAIN/maula-editor/"
 echo -e "   ${CYAN}🔗 API:${NC}             https://$DOMAIN/api/"
@@ -344,8 +376,9 @@ echo -e "      pm2 restart onelastai-backend ${YELLOW}# Restart backend${NC}"
 echo -e "      pm2 status                    ${YELLOW}# Check status${NC}"
 echo ""
 echo -e "   ${PURPLE}📁 Deployment Paths:${NC}"
-echo -e "      Main:         $WEB_ROOT/main"
-echo -e "      Canvas Studio: $WEB_ROOT/canvas-studio"
-echo -e "      Neural Chat:   $WEB_ROOT/neural-chat"
-echo -e "      Maula Editor:  $WEB_ROOT/maula-editor"
+echo -e "      Main:           $WEB_ROOT/main"
+echo -e "      Canvas Studio:  $WEB_ROOT/canvas-studio"
+echo -e "      GenCraft Pro:   $WEB_ROOT/gen-craft-pro"
+echo -e "      Neural Chat:    $WEB_ROOT/neural-chat"
+echo -e "      Maula Editor:   $WEB_ROOT/maula-editor"
 echo ""

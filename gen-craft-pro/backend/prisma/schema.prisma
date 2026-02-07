@@ -1,0 +1,355 @@
+// Prisma schema for GenCraft Pro platform
+// Full database schema covering all phases
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ──────── EXISTING MODELS (Phase 1) ────────
+
+model User {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  password         String
+  name             String?
+  avatar           String?
+  role             String    @default("user")
+  plan             String?   // weekly | monthly | yearly
+  stripeCustomerId String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  // Relations
+  sessions           Session[]
+  transactions        Transaction[]
+  canvasApps         CanvasApp[]
+  agentSubscriptions AgentSubscription[]
+  projects           Project[]
+  sandboxes          Sandbox[]
+  builds             Build[]
+  deployments        Deployment[]
+  domains            Domain[]
+  assets             Asset[]
+  alerts             Alert[]
+
+  @@map("users")
+}
+
+model Agent {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  systemPrompt String?
+  model       String  @default("claude-sonnet-4-20250514")
+  category    String?
+  pricing     Json?
+  createdBy   String?
+  isPublic    Boolean @default(false)
+  createdAt   DateTime @default(now())
+
+  subscriptions AgentSubscription[]
+
+  @@map("agents")
+}
+
+model AgentSubscription {
+  id              String    @id @default(cuid())
+  userId          String
+  agentId         String
+  plan            String    // weekly | monthly | yearly
+  status          String    @default("active") // active | cancelled | expired
+  stripeSessionId String?
+  expiryDate      DateTime?
+  amount          Float?
+  currency        String?   @default("usd")
+  createdAt       DateTime  @default(now())
+  cancelledAt     DateTime?
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields: [agentId], references: [id])
+
+  @@map("agent_subscriptions")
+}
+
+model CanvasApp {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  prompt    String?
+  code      String?  @db.Text
+  language  String?  @default("html")
+  provider  String?
+  modelId   String?
+  thumbnail String?
+  history   Json?    // JSON array of code versions
+  metadata  Json?
+  isPublic  Boolean  @default(false)
+  isFavorite Boolean @default(false)
+  viewCount Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("canvas_apps")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  sessionId String   @unique
+  userId    String
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Transaction {
+  id                    String   @id @default(cuid())
+  transactionId         String   @unique @default(cuid())
+  userId                String
+  stripePaymentIntentId String?
+  type                  String   // subscription | one-time
+  item                  String   // canvas-studio-weekly | canvas-studio-monthly | etc
+  amount                Float
+  currency              String   @default("usd")
+  status                String   @default("pending") // pending | succeeded | failed | refunded
+  createdAt             DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("transactions")
+}
+
+// ──────── NEW MODELS (Phase 2-7) ────────
+
+model Project {
+  id            String   @id @default(cuid())
+  userId        String
+  name          String
+  description   String?
+  framework     String?  // nextjs | vite | express | node
+  templateId    String?
+  gitRepo       String?  // GitHub/GitLab repo URL
+  defaultBranch String   @default("main")
+  envVars       Json?    // Encrypted env variables
+  status        String   @default("created") // created | active | archived | deleted
+
+  settings      Json?    // Auto-build, auto-save preferences
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  files        ProjectFile[]
+  sandboxes    Sandbox[]
+  builds       Build[]
+  deployments  Deployment[]
+  assets       Asset[]
+  database     ProjectDatabase?
+  alerts       Alert[]
+  events       MonitoringEvent[]
+
+  @@map("projects")
+}
+
+model ProjectFile {
+  id        String   @id @default(cuid())
+  projectId String
+  path      String   // e.g. "src/App.tsx"
+  content   String?  @db.Text
+  language  String?
+  size      Int      @default(0)
+  hash      String?  // Content hash for change detection
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, path])
+  @@map("project_files")
+}
+
+model Sandbox {
+  id           String   @id @default(cuid())
+  projectId    String
+  userId       String
+  containerId  String?
+  status       String   @default("creating") // creating | pulling | starting | running | stopped | destroyed | error
+  template     String?  // node-18 | next-app | vite-app | etc
+  port         Int?
+  previewUrl   String?
+  memory       Int?     // MB allocated
+  cpu          Float?   // CPU shares
+  storageUsed  Int?     // Bytes
+  lastActivity DateTime @default(now())
+  expiresAt    DateTime?
+  error        String?
+  createdAt    DateTime @default(now())
+  destroyedAt  DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("sandboxes")
+}
+
+model Build {
+  id            String   @id @default(cuid())
+  projectId     String
+  userId        String
+  branch        String   @default("main")
+  commitHash    String?
+  commitMessage String?
+  status        String   @default("queued") // queued | installing | linting | testing | building | scanning | deploying | success | failed | cancelled
+  stages        Json?    // JSON array of build stages
+  logs          String?  @db.Text
+  totalDuration Int?     // milliseconds
+  artifactUrl   String?
+  previewUrl    String?
+  triggeredBy   String   @default("manual") // manual | auto-save | git-push | webhook
+  error         String?
+  createdAt     DateTime @default(now())
+  completedAt   DateTime?
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deployments Deployment[]
+
+  @@map("builds")
+}
+
+model Deployment {
+  id               String   @id @default(cuid())
+  projectId        String
+  userId           String
+  buildId          String?
+  environment      String   @default("preview") // preview | staging | production
+  url              String?
+  domain           String?
+  status           String   @default("deploying") // deploying | live | rolled-back | failed | removed | superseded
+  version          Int      @default(1)
+  previousDeployId String?
+  healthStatus     String?  @default("pending") // pending | healthy | unhealthy | degraded
+  healthChecks     Json?    // JSON array of health check results
+  stages           Json?    // JSON array of deploy stages
+  metadata         Json?    // CDN distribution ID, etc
+  createdAt        DateTime @default(now())
+  destroyedAt      DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  build   Build?  @relation(fields: [buildId], references: [id])
+  domains Domain[]
+
+  @@map("deployments")
+}
+
+model Domain {
+  id               String   @id @default(cuid())
+  deploymentId     String
+  userId           String
+  domain           String   @unique
+  sslStatus        String   @default("none") // none | pending | provisioning | active | expired
+  sslExpiresAt     DateTime?
+  dnsVerified      Boolean  @default(false)
+  dnsRecords       Json?    // Required DNS records
+  verificationToken String?
+  createdAt        DateTime @default(now())
+  verifiedAt       DateTime?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@map("domains")
+}
+
+model Asset {
+  id            String   @id @default(cuid())
+  projectId     String
+  userId        String
+  type          String   // image | video | font | file
+  originalName  String
+  originalSize  Int
+  optimizedSize Int?
+  mimeType      String?
+  s3Key         String?
+  cdnUrl        String?
+  thumbnailUrl  String?
+  variants      Json?    // { original, thumb, medium, large }
+  metadata      Json?    // width, height, duration, format
+  optimized     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("assets")
+}
+
+model ProjectDatabase {
+  id             String   @id @default(cuid())
+  projectId      String   @unique
+  engine         String   @default("postgres") // postgres | mysql | sqlite
+  host           String?
+  port           Int?
+  name           String?
+  connectionUrl  String?  // Encrypted
+  status         String   @default("creating") // creating | active | suspended | destroyed
+  sizeBytes      BigInt?
+  backupSchedule String?  @default("daily") // daily | weekly | manual
+  lastBackup     DateTime?
+  createdAt      DateTime @default(now())
+  destroyedAt    DateTime?
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_databases")
+}
+
+model Alert {
+  id            String   @id @default(cuid())
+  projectId     String
+  userId        String
+  type          String   // error | performance | security
+  condition     String   @default("threshold_exceeded")
+  threshold     Int      @default(5)
+  channel       String   @default("email") // email | webhook | slack
+  webhookUrl    String?
+  isActive      Boolean  @default(true)
+  lastTriggered DateTime?
+  triggerCount  Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("alerts")
+}
+
+model MonitoringEvent {
+  id           String   @id @default(cuid())
+  projectId    String
+  deploymentId String?
+  type         String   // error | crash | slow_response | high_cpu | disk_full
+  severity     String   @default("info") // info | warning | error | critical
+  message      String
+  metadata     Json?
+  resolved     Boolean  @default(false)
+  resolvedAt   DateTime?
+  createdAt    DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("monitoring_events")
+}

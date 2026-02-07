@@ -1729,6 +1729,18 @@ const APP_CONFIGS = {
       { id: 'me-600', name: '600 Credits', credits: 600, price: 4999, priceDisplay: '$49.99', savings: '20% off', description: 'Heavy usage' },
       { id: 'me-1500', name: '1,500 Credits', credits: 1500, price: 9999, priceDisplay: '$99.99', savings: '35% off', description: 'Enterprise' },
     ]
+  },
+  'gen-craft-pro': {
+    name: 'GenCraft Pro',
+    description: 'AI App Builder',
+    icon: '🚀',
+    packages: [
+      { id: 'gp-50', name: '50 Credits', credits: 50, price: 500, priceDisplay: '$5.00', description: 'Starter pack' },
+      { id: 'gp-100', name: '100 Credits', credits: 100, price: 999, priceDisplay: '$9.99', savings: '5% off', description: 'Regular usage' },
+      { id: 'gp-350', name: '350 Credits', credits: 350, price: 2999, priceDisplay: '$29.99', savings: '15% off', popular: true, description: 'Best value' },
+      { id: 'gp-600', name: '600 Credits', credits: 600, price: 4999, priceDisplay: '$49.99', savings: '20% off', description: 'Heavy usage' },
+      { id: 'gp-1500', name: '1,500 Credits', credits: 1500, price: 9999, priceDisplay: '$99.99', savings: '35% off', description: 'Enterprise' },
+    ]
   }
 };
 
@@ -1883,7 +1895,8 @@ app.post('/api/billing/checkout/:appId', requireAuth, async (req, res) => {
     const appUrls = {
       'neural-chat': '/neural-chat/',
       'canvas-studio': '/canvas-studio/',
-      'maula-editor': '/maula-editor/'
+      'maula-editor': '/maula-editor/',
+      'gen-craft-pro': '/gen-craft-pro/'
     };
     const baseUrl = process.env.FRONTEND_URL || 'https://maula.onelastai.co';
     const appPath = appUrls[appId] || '/';
