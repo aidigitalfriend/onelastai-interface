@@ -88,33 +88,44 @@ async function optionalAuth(req, res, next) {
 }
 
 /**
- * Required auth middleware
+ * Required auth middleware - checks cookie + bearer token
  */
 async function requireAuth(req, res, next) {
   try {
+    // Check cookie-based auth first (main site session)
+    const mainSessionId = req.cookies?.session_id || req.cookies?.sessionId;
+    if (mainSessionId) {
+      const mainUser = await prisma.$queryRaw`SELECT id, email, name FROM "User" WHERE "sessionId" = ${mainSessionId} AND ("sessionExpiry" IS NULL OR "sessionExpiry" > NOW()) LIMIT 1`;
+      if (mainUser?.length > 0) {
+        let nlUser = await prisma.user.findUnique({ where: { onelastaiUserId: mainUser[0].id } });
+        if (nlUser) { req.user = nlUser; return next(); }
+      }
+    }
+
+    // Check neural_link_session cookie
+    const sessionToken = req.cookies?.neural_link_session;
+    if (sessionToken) {
+      const { payload } = await import('jose').then(jose =>
+        jose.jwtVerify(sessionToken, new TextEncoder().encode(process.env.JWT_SECRET || 'neural-link-secret-key-2026'))
+      );
+      const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+      if (user) { req.user = user; return next(); }
+    }
+
+    // Fallback: Bearer token
     const authHeader = req.headers.authorization;
     const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication required' });
+    if (token) {
+      const { payload } = await import('jose').then(jose =>
+        jose.jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET || 'neural-link-secret-key-2026'))
+      );
+      const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+      if (user) { req.user = user; return next(); }
     }
-    
-    const { payload } = await import('jose').then(jose => 
-      jose.jwtVerify(token, new TextEncoder().encode(process.env.JWT_SECRET || 'neural-link-secret-key-2026'))
-    );
-    
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId }
-    });
-    
-    if (!user) {
-      return res.status(401).json({ error: 'User not found' });
-    }
-    
-    req.user = user;
-    next();
+
+    return res.status(401).json({ error: 'Authentication required', requiresLogin: true });
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({ error: 'Authentication failed', requiresLogin: true });
   }
 }
 
@@ -173,7 +184,7 @@ router.get('/projects', requireAuth, async (req, res) => {
 /**
  * POST /api/workspace/projects - Create new project
  */
-router.post('/projects', optionalAuth, async (req, res) => {
+router.post('/projects', requireAuth, async (req, res) => {
   try {
     const {
       name = 'Untitled Project',
@@ -238,7 +249,7 @@ router.post('/projects', optionalAuth, async (req, res) => {
 /**
  * GET /api/workspace/projects/:slug - Get project with files
  */
-router.get('/projects/:slug', optionalAuth, async (req, res) => {
+router.get('/projects/:slug', requireAuth, async (req, res) => {
   try {
     const { slug } = req.params;
     
@@ -350,7 +361,7 @@ router.delete('/projects/:slug', requireAuth, async (req, res) => {
  * POST /api/workspace/projects/:slug/save - Auto-save all files
  * This is the main auto-save endpoint called by the frontend
  */
-router.post('/projects/:slug/save', optionalAuth, async (req, res) => {
+router.post('/projects/:slug/save', requireAuth, async (req, res) => {
   try {
     const { slug } = req.params;
     const { files, editorState, mainFile } = req.body;
@@ -452,7 +463,7 @@ router.post('/projects/:slug/save', optionalAuth, async (req, res) => {
 /**
  * POST /api/workspace/projects/:slug/file - Save single file
  */
-router.post('/projects/:slug/file', optionalAuth, async (req, res) => {
+router.post('/projects/:slug/file', requireAuth, async (req, res) => {
   try {
     const { slug } = req.params;
     const { path, content, language, isOpen } = req.body;
@@ -707,7 +718,7 @@ router.post('/projects/:slug/restore/:version', requireAuth, async (req, res) =>
 /**
  * POST /api/workspace/quick-save - Save project and get shareable slug
  */
-router.post('/quick-save', optionalAuth, async (req, res) => {
+router.post('/quick-save', requireAuth, async (req, res) => {
   try {
     const { name, files, editorState, mainFile, language, framework, originalPrompt } = req.body;
     

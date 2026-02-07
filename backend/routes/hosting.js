@@ -1,8 +1,38 @@
 import express from 'express';
 import crypto from 'crypto';
+import * as jose from 'jose';
 import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
+
+const JWT_SECRET = process.env.NEURAL_LINK_JWT_SECRET || process.env.JWT_SECRET || 'neural-link-secret-key-2026';
+
+// Auth middleware for hosting routes
+const requireAuth = async (req, res, next) => {
+  try {
+    const sessionToken = req.cookies?.neural_link_session;
+    const mainSessionId = req.cookies?.session_id || req.cookies?.sessionId;
+    
+    if (sessionToken) {
+      const secret = new TextEncoder().encode(JWT_SECRET);
+      const { payload } = await jose.jwtVerify(sessionToken, secret);
+      const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+      if (user) { req.user = user; return next(); }
+    }
+    
+    if (mainSessionId) {
+      const mainUser = await prisma.$queryRaw`SELECT id, email FROM "User" WHERE "sessionId" = ${mainSessionId} LIMIT 1`;
+      if (mainUser?.length > 0) {
+        let nlUser = await prisma.user.findUnique({ where: { onelastaiUserId: mainUser[0].id } });
+        if (nlUser) { req.user = nlUser; return next(); }
+      }
+    }
+    
+    return res.status(401).json({ error: 'Authentication required', requiresLogin: true });
+  } catch {
+    return res.status(401).json({ error: 'Authentication failed', requiresLogin: true });
+  }
+};
 
 // =============================================================================
 // HELPER FUNCTIONS
@@ -207,7 +237,7 @@ router.get('/health', (req, res) => {
  * Build/bundle a project before deployment
  * Handles multi-file projects and prepares them for hosting
  */
-router.post('/build', async (req, res) => {
+router.post('/build', requireAuth, async (req, res) => {
   try {
     const {
       files,           // Array of {path, content, language}
@@ -296,7 +326,7 @@ router.post('/build', async (req, res) => {
  * POST /api/hosting/deploy-project
  * Deploy a multi-file project (build + deploy in one step)
  */
-router.post('/deploy-project', async (req, res) => {
+router.post('/deploy-project', requireAuth, async (req, res) => {
   try {
     const {
       name,
@@ -426,7 +456,7 @@ router.post('/deploy-project', async (req, res) => {
  * POST /api/hosting/deploy
  * Deploy/publish an app to get a shareable URL
  */
-router.post('/deploy', async (req, res) => {
+router.post('/deploy', requireAuth, async (req, res) => {
   try {
     const { 
       code, 
@@ -652,7 +682,7 @@ router.get('/render/:slug', async (req, res) => {
  * GET /api/hosting/my-apps
  * Get all apps for authenticated user
  */
-router.get('/my-apps', async (req, res) => {
+router.get('/my-apps', requireAuth, async (req, res) => {
   try {
     const userId = req.query.userId;
     
@@ -706,7 +736,7 @@ router.get('/my-apps', async (req, res) => {
  * PUT /api/hosting/app/:id
  * Update an existing hosted app
  */
-router.put('/app/:id', async (req, res) => {
+router.put('/app/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { code, name, description, isPublic, userId } = req.body;
@@ -785,7 +815,7 @@ router.put('/app/:id', async (req, res) => {
  * DELETE /api/hosting/app/:id
  * Soft delete an app
  */
-router.delete('/app/:id', async (req, res) => {
+router.delete('/app/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { userId } = req.query;
@@ -826,7 +856,7 @@ router.delete('/app/:id', async (req, res) => {
  * POST /api/hosting/app/:id/domain
  * Set custom domain for an app
  */
-router.post('/app/:id/domain', async (req, res) => {
+router.post('/app/:id/domain', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { domain, userId } = req.body;
@@ -921,7 +951,7 @@ router.get('/app/:id/versions', async (req, res) => {
  * POST /api/hosting/app/:id/rollback/:version
  * Rollback to a specific version
  */
-router.post('/app/:id/rollback/:version', async (req, res) => {
+router.post('/app/:id/rollback/:version', requireAuth, async (req, res) => {
   try {
     const { id, version } = req.params;
     const { userId } = req.body;

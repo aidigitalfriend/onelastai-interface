@@ -1231,43 +1231,57 @@ app.get('/api/chat/providers', (req, res) => {
       name: 'Maula AI', 
       models: [
         { id: 'claude-sonnet-4-20250514', name: 'Code Expert Pro' },
-        { id: 'claude-3-5-sonnet-20241022', name: 'Deep Thinker' }
+        { id: 'claude-opus-4-20250514', name: 'Deep Thinker' },
+        { id: 'claude-3-5-haiku-20241022', name: 'Fast Claude' }
       ], 
       available: !!process.env.ANTHROPIC_API_KEY 
     },
     { 
-      id: 'openai', 
-      name: 'One Last AI', 
-      models: [
-        { id: 'gpt-4o', name: 'Vision Master' },
-        { id: 'gpt-4o-mini', name: 'Fast Code' }
-      ], 
-      available: !!process.env.OPENAI_API_KEY 
-    },
-    { 
-      id: 'gemini', 
-      name: 'Planner', 
-      models: [
-        { id: 'gemini-2.0-flash', name: 'Flash Think' },
-        { id: 'gemini-1.5-pro', name: 'Strategic Mind' }
-      ], 
-      available: !!process.env.GEMINI_API_KEY 
-    },
-    { 
       id: 'mistral', 
-      name: 'Code Expert', 
+      name: 'Code Engine', 
       models: [
-        { id: 'mistral-large-latest', name: 'Master Coder' }
+        { id: 'mistral-large-2501', name: 'Master Coder' },
+        { id: 'codestral-latest', name: 'Codestral' },
+        { id: 'mistral-small-latest', name: 'Fast Code' }
       ], 
       available: !!process.env.MISTRAL_API_KEY 
+    },
+    { 
+      id: 'xai', 
+      name: 'Grok AI', 
+      models: [
+        { id: 'grok-3', name: 'Grok 3' },
+        { id: 'grok-3-fast', name: 'Grok Fast' },
+        { id: 'grok-3-mini', name: 'Grok Mini' }
+      ], 
+      available: !!process.env.XAI_API_KEY 
+    },
+    { 
+      id: 'cerebras', 
+      name: 'Cerebras', 
+      models: [
+        { id: 'llama-3.3-70b', name: 'Llama 70B' },
+        { id: 'llama-3.1-8b', name: 'Llama 8B' }
+      ], 
+      available: !!process.env.CEREBRAS_API_KEY 
     },
     { 
       id: 'groq', 
       name: 'Speed AI', 
       models: [
-        { id: 'llama-3.3-70b-versatile', name: 'Ultra Fast' }
+        { id: 'llama-3.3-70b-versatile', name: 'Ultra Fast' },
+        { id: 'llama-3.1-8b-instant', name: 'Instant' }
       ], 
       available: !!process.env.GROQ_API_KEY 
+    },
+    { 
+      id: 'gemini', 
+      name: 'Gemini', 
+      models: [
+        { id: 'gemini-2.5-pro-preview-06-05', name: 'Gemini Pro' },
+        { id: 'gemini-2.0-flash', name: 'Flash' }
+      ], 
+      available: !!process.env.GEMINI_API_KEY 
     },
   ];
   res.json({ success: true, providers: providers.filter(p => p.available) });

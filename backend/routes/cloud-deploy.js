@@ -5,15 +5,46 @@ import FormData from 'form-data';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import crypto from 'crypto';
+import * as jose from 'jose';
+import { prisma } from '../lib/prisma.js';
 
 const router = express.Router();
+
+const JWT_SECRET = process.env.NEURAL_LINK_JWT_SECRET || process.env.JWT_SECRET || 'neural-link-secret-key-2026';
+
+// Auth middleware for cloud deploy routes
+const requireAuth = async (req, res, next) => {
+  try {
+    const sessionToken = req.cookies?.neural_link_session;
+    const mainSessionId = req.cookies?.session_id || req.cookies?.sessionId;
+    
+    if (sessionToken) {
+      const secret = new TextEncoder().encode(JWT_SECRET);
+      const { payload } = await jose.jwtVerify(sessionToken, secret);
+      const user = await prisma.user.findUnique({ where: { id: payload.userId } });
+      if (user) { req.user = user; return next(); }
+    }
+    
+    if (mainSessionId) {
+      const mainUser = await prisma.$queryRaw`SELECT id, email FROM "User" WHERE "sessionId" = ${mainSessionId} LIMIT 1`;
+      if (mainUser?.length > 0) {
+        let nlUser = await prisma.user.findUnique({ where: { onelastaiUserId: mainUser[0].id } });
+        if (nlUser) { req.user = nlUser; return next(); }
+      }
+    }
+    
+    return res.status(401).json({ error: 'Authentication required', requiresLogin: true });
+  } catch {
+    return res.status(401).json({ error: 'Authentication failed', requiresLogin: true });
+  }
+};
 
 // ============================================================================
 // VERCEL DEPLOYMENT
 // ============================================================================
 
 // Validate Vercel token
-router.post('/vercel/validate', async (req, res) => {
+router.post('/vercel/validate', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
     
@@ -36,7 +67,7 @@ router.post('/vercel/validate', async (req, res) => {
 });
 
 // Deploy to Vercel
-router.post('/vercel/deploy', async (req, res) => {
+router.post('/vercel/deploy', requireAuth, async (req, res) => {
   try {
     const { token, projectName, files, framework, buildCommand, outputDir, envVars } = req.body;
 
@@ -89,7 +120,7 @@ router.post('/vercel/deploy', async (req, res) => {
 });
 
 // Get Vercel deployment status
-router.get('/vercel/status/:deploymentId', async (req, res) => {
+router.get('/vercel/status/:deploymentId', requireAuth, async (req, res) => {
   try {
     const { deploymentId } = req.params;
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -110,7 +141,7 @@ router.get('/vercel/status/:deploymentId', async (req, res) => {
 });
 
 // List Vercel deployments
-router.get('/vercel/deployments', async (req, res) => {
+router.get('/vercel/deployments', requireAuth, async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     const { projectName } = req.query;
@@ -131,7 +162,7 @@ router.get('/vercel/deployments', async (req, res) => {
 // ============================================================================
 
 // Validate Netlify token
-router.post('/netlify/validate', async (req, res) => {
+router.post('/netlify/validate', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -154,7 +185,7 @@ router.post('/netlify/validate', async (req, res) => {
 });
 
 // Deploy to Netlify
-router.post('/netlify/deploy', async (req, res) => {
+router.post('/netlify/deploy', requireAuth, async (req, res) => {
   try {
     const { token, projectName, files, siteId } = req.body;
 
@@ -230,7 +261,7 @@ router.post('/netlify/deploy', async (req, res) => {
 });
 
 // Get Netlify deployment status
-router.get('/netlify/status/:deployId', async (req, res) => {
+router.get('/netlify/status/:deployId', requireAuth, async (req, res) => {
   try {
     const { deployId } = req.params;
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -251,7 +282,7 @@ router.get('/netlify/status/:deployId', async (req, res) => {
 });
 
 // List Netlify sites
-router.get('/netlify/sites', async (req, res) => {
+router.get('/netlify/sites', requireAuth, async (req, res) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
 
@@ -270,7 +301,7 @@ router.get('/netlify/sites', async (req, res) => {
 // ============================================================================
 
 // Validate Railway token
-router.post('/railway/validate', async (req, res) => {
+router.post('/railway/validate', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -300,7 +331,7 @@ router.post('/railway/validate', async (req, res) => {
 });
 
 // Deploy to Railway
-router.post('/railway/deploy', async (req, res) => {
+router.post('/railway/deploy', requireAuth, async (req, res) => {
   try {
     const { token, projectName, files, envVars } = req.body;
 
@@ -375,7 +406,7 @@ router.post('/railway/deploy', async (req, res) => {
 // ============================================================================
 
 // Validate Render token
-router.post('/render/validate', async (req, res) => {
+router.post('/render/validate', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -402,7 +433,7 @@ router.post('/render/validate', async (req, res) => {
 });
 
 // Deploy to Render (static site)
-router.post('/render/deploy', async (req, res) => {
+router.post('/render/deploy', requireAuth, async (req, res) => {
   try {
     const { token, projectName, files, repoUrl, branch, buildCommand, publishPath } = req.body;
 
@@ -444,7 +475,7 @@ router.post('/render/deploy', async (req, res) => {
 // ============================================================================
 
 // Validate Cloudflare token
-router.post('/cloudflare/validate', async (req, res) => {
+router.post('/cloudflare/validate', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -471,7 +502,7 @@ router.post('/cloudflare/validate', async (req, res) => {
 });
 
 // Deploy to Cloudflare Pages (Direct Upload)
-router.post('/cloudflare/deploy', async (req, res) => {
+router.post('/cloudflare/deploy', requireAuth, async (req, res) => {
   try {
     const { token, accountId, projectName, files } = req.body;
 
@@ -555,7 +586,7 @@ router.post('/cloudflare/deploy', async (req, res) => {
 // ============================================================================
 
 // Validate Firebase token
-router.post('/firebase/validate', async (req, res) => {
+router.post('/firebase/validate', requireAuth, async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -579,7 +610,7 @@ router.post('/firebase/validate', async (req, res) => {
 // GENERIC PROVIDER STATUS CHECK
 // ============================================================================
 
-router.post('/status', async (req, res) => {
+router.post('/status', requireAuth, async (req, res) => {
   try {
     const { provider, deploymentId, token, ...extraParams } = req.body;
 
@@ -622,7 +653,7 @@ router.post('/status', async (req, res) => {
 // GITHUB PUSH — Push project files to a GitHub repository
 // ============================================================================
 
-router.post('/github', async (req, res) => {
+router.post('/github', requireAuth, async (req, res) => {
   try {
     const { token, repoName, files, isPrivate = false, commitMessage = 'Deploy from Canvas Studio' } = req.body;
 

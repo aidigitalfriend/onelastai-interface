@@ -20,23 +20,26 @@ const JWT_SECRET = process.env.NEURAL_LINK_JWT_SECRET || process.env.JWT_SECRET 
 const VIDEO_CREDIT_COST = 5; // Credits per video generation
 
 // Auth middleware
-async function optionalAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   try {
-    const token = req.cookies?.neural_token || req.headers.authorization?.replace('Bearer ', '');
+    const token = req.cookies?.neural_link_session || req.cookies?.neural_token || req.headers.authorization?.replace('Bearer ', '');
     if (token) {
       const secret = new TextEncoder().encode(JWT_SECRET);
       const { payload } = await jose.jwtVerify(token, secret);
       req.user = { id: payload.userId || payload.sub };
+      return next();
     }
-  } catch {}
-  next();
+    return res.status(401).json({ success: false, error: 'Authentication required', requiresLogin: true });
+  } catch {
+    return res.status(401).json({ success: false, error: 'Authentication failed', requiresLogin: true });
+  }
 }
 
 // ============================================================================
 // GENERATE VIDEO
 // ============================================================================
 
-router.post('/generate', optionalAuth, async (req, res) => {
+router.post('/generate', requireAuth, async (req, res) => {
   try {
     const { prompt, duration = 5, aspectRatio = '16:9' } = req.body;
 

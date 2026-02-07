@@ -1736,16 +1736,15 @@ function fixReactImports(code) {
 }
 
 // ============================================================================
-// AUTH MIDDLEWARE (optional for canvas - uses cookies)
+// AUTH MIDDLEWARE (required for canvas — uses cookies)
 // ============================================================================
 
-const optionalAuth = async (req, res, next) => {
+const requireAuth = async (req, res, next) => {
   try {
     // PRIORITY 1: Check main site's shared session cookie
     const mainSiteSessionId = req.cookies?.session_id || req.cookies?.sessionId;
     
     if (mainSiteSessionId) {
-      // Look up user in main database by session ID
       const mainUser = await prisma.$queryRaw`
         SELECT id, email, name, "sessionId", "sessionExpiry" 
         FROM "User" 
@@ -1757,7 +1756,6 @@ const optionalAuth = async (req, res, next) => {
       if (mainUser && mainUser.length > 0) {
         const foundUser = mainUser[0];
         
-        // Find or create Neural Link user
         let nlUser = await prisma.user.findUnique({
           where: { onelastaiUserId: foundUser.id },
           include: { credits: true },
@@ -1786,7 +1784,7 @@ const optionalAuth = async (req, res, next) => {
       }
     }
     
-    // PRIORITY 2: Neural Link's own session cookie (legacy/fallback)
+    // PRIORITY 2: Neural Link's own session cookie
     const sessionToken = req.cookies?.neural_link_session;
     
     if (sessionToken) {
@@ -1800,13 +1798,13 @@ const optionalAuth = async (req, res, next) => {
 
       if (user) {
         req.user = user;
+        return next();
       }
     }
     
-    next();
+    return res.status(401).json({ success: false, error: 'Authentication required', requiresLogin: true });
   } catch (error) {
-    // Continue without auth for demo mode
-    next();
+    return res.status(401).json({ success: false, error: 'Authentication failed', requiresLogin: true });
   }
 };
 
@@ -2095,7 +2093,7 @@ User: "open in sandbox"
 4. If unsure, chat to clarify
 5. You ARE Canvas Studio - act like it!`;
 
-router.post('/agent', optionalAuth, async (req, res) => {
+router.post('/agent', requireAuth, async (req, res) => {
   try {
     const { 
       message, 
@@ -2546,7 +2544,7 @@ Return the COMPLETE updated code with the modification applied. Return ONLY code
 // GENERATE APP CODE (Legacy - kept for compatibility)
 // ============================================================================
 
-router.post('/generate', optionalAuth, async (req, res) => {
+router.post('/generate', requireAuth, async (req, res) => {
   try {
     const { 
       prompt, 
@@ -2904,7 +2902,7 @@ router.post('/detect-intent', (req, res) => {
 // CANVAS CHAT - For conversational flow
 // ============================================================================
 
-router.post('/chat', optionalAuth, async (req, res) => {
+router.post('/chat', requireAuth, async (req, res) => {
   try {
     const { 
       message, 
@@ -3018,7 +3016,7 @@ const BLOCKED_PATTERNS = [
   /useradd|userdel|passwd/, // user management
 ];
 
-router.post('/exec', optionalAuth, async (req, res) => {
+router.post('/exec', requireAuth, async (req, res) => {
   try {
     const { command } = req.body;
     
