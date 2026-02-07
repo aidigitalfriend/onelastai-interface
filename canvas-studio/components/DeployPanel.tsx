@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Rocket,
   Globe,
@@ -27,9 +27,32 @@ import {
   CloudProvider,
   ProviderConfig,
   deployToProvider,
-  validateToken,
   DeploymentResult,
 } from '../services/cloudDeploy';
+
+// ============================================================================
+// SERVER-SIDE CREDENTIAL TYPES
+// ============================================================================
+
+interface ServerCredential {
+  id: string;
+  provider: string;
+  username: string | null;
+  isValid: boolean;
+  lastValidatedAt: string | null;
+}
+
+// Map cloudDeploy provider IDs → server credential provider IDs
+const PROVIDER_MAP: Record<string, string> = {
+  vercel: 'VERCEL',
+  netlify: 'NETLIFY',
+  railway: 'RAILWAY',
+  cloudflare: 'CLOUDFLARE',
+  render: 'RENDER',
+};
+const REVERSE_PROVIDER_MAP: Record<string, CloudProvider> = Object.fromEntries(
+  Object.entries(PROVIDER_MAP).map(([k, v]) => [v, k as CloudProvider])
+);
 
 // ============================================================================
 // TYPES
@@ -86,13 +109,9 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   const [selectedProvider, setSelectedProvider] = useState<CloudProvider | null>(null);
   const [providerCategory, setProviderCategory] = useState<'all' | 'builtin' | 'frontend' | 'fullstack' | 'cloud'>('all');
   
-  // Token management
-  const [tokens, setTokens] = useState<Record<string, string>>({});
-  const [validatedUsers, setValidatedUsers] = useState<Record<string, string>>({});
-  const [validatingToken, setValidatingToken] = useState(false);
-  
-  // AWS specific
-  const [awsSecretKey, setAwsSecretKey] = useState('');
+  // Server-side credential status (replaces localStorage tokens)
+  const [serverCredentials, setServerCredentials] = useState<Record<string, ServerCredential>>({});
+  const [loadingCredentials, setLoadingCredentials] = useState(true);
   
   // Deploy state
   const [activeTab, setActiveTab] = useState<DeployTab>('deploy');
@@ -119,52 +138,39 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
   // Clipboard
   const [copied, setCopied] = useState(false);
 
-  // Load tokens from localStorage
-  useEffect(() => {
-    const savedTokens = localStorage.getItem('canvas-deploy-tokens');
-    if (savedTokens) {
-      try {
-        setTokens(JSON.parse(savedTokens));
-      } catch {}
+  // Fetch server-side credentials on mount
+  const fetchCredentials = useCallback(async () => {
+    try {
+      const res = await fetch('/api/credentials', { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const credMap: Record<string, ServerCredential> = {};
+        (data.credentials || []).forEach((c: ServerCredential) => {
+          credMap[c.provider] = c;
+        });
+        setServerCredentials(credMap);
+      }
+    } catch (err) {
+      console.error('[DeployPanel] Credential fetch error:', err);
+    } finally {
+      setLoadingCredentials(false);
     }
   }, []);
 
-  // Save tokens to localStorage
   useEffect(() => {
-    if (Object.keys(tokens).length > 0) {
-      localStorage.setItem('canvas-deploy-tokens', JSON.stringify(tokens));
-    }
-  }, [tokens]);
+    fetchCredentials();
+  }, [fetchCredentials]);
 
-  // Validate token when provider changes
-  useEffect(() => {
-    if (selectedProvider && tokens[selectedProvider] && !validatedUsers[selectedProvider]) {
-      handleValidateToken(selectedProvider, tokens[selectedProvider]);
-    }
-  }, [selectedProvider, tokens]);
+  // Check if a cloud provider has a valid credential
+  const hasCredential = (provider: CloudProvider): boolean => {
+    if (provider === 'onelastai') return true;
+    const serverKey = PROVIDER_MAP[provider];
+    return !!(serverKey && serverCredentials[serverKey]?.isValid);
+  };
 
-  const handleValidateToken = async (provider: CloudProvider, token: string) => {
-    setValidatingToken(true);
-    try {
-      const result = await validateToken(token, provider);
-      if (result.valid && result.user) {
-        setValidatedUsers(prev => ({ ...prev, [provider]: result.user! }));
-      } else {
-        setValidatedUsers(prev => {
-          const next = { ...prev };
-          delete next[provider];
-          return next;
-        });
-      }
-    } catch {
-      setValidatedUsers(prev => {
-        const next = { ...prev };
-        delete next[provider];
-        return next;
-      });
-    } finally {
-      setValidatingToken(false);
-    }
+  const getCredentialUser = (provider: CloudProvider): string | null => {
+    const serverKey = PROVIDER_MAP[provider];
+    return serverKey ? serverCredentials[serverKey]?.username || null : null;
   };
 
   const addLog = (message: string) => {
@@ -183,7 +189,8 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
     setDeployLogs([]);
     setActiveTab('logs');
 
-    addLog(`🚀 Starting deployment to ${cloudProviders.find(p => p.id === selectedProvider)?.name}...`);
+    const providerInfo = cloudProviders.find(p => p.id === selectedProvider);
+    addLog(`🚀 Starting deployment to ${providerInfo?.name}...`);
     addLog(`📦 Project: ${projectName}`);
     addLog(`🔤 Language: ${language}`);
 
@@ -193,43 +200,114 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         return acc;
       }, {} as Record<string, string>);
 
-      const result = await deployToProvider(code, files || null, language, {
-        provider: selectedProvider,
-        token: tokens[selectedProvider],
-        awsSecretKey: selectedProvider.startsWith('aws') ? awsSecretKey : undefined,
-        projectName,
-        buildCommand,
-        outputDir,
-        envVars: envVarsObj,
-      });
-
-      // Add logs from result
-      if (result.logs) {
-        result.logs.forEach(log => addLog(log));
-      }
-
-      if (result.success) {
-        addLog(`✅ Deployment successful!`);
-        addLog(`🌐 URL: ${result.url}`);
-        setDeployResult(result);
-        
-        if (onDeploySuccess && result.url) {
-          onDeploySuccess({
-            id: result.deploymentId || Date.now().toString(),
-            slug: projectName,
-            name: projectName,
-            url: result.url,
-            previewUrl: result.previewUrl,
-            status: 'ACTIVE',
-            language,
-            viewCount: 0,
-            createdAt: new Date().toISOString(),
-            sslEnabled: true,
-          });
+      // For OneLast AI built-in, use the old flow
+      if (selectedProvider === 'onelastai') {
+        const result = await deployToProvider(code, files || null, language, {
+          provider: selectedProvider,
+          projectName,
+          buildCommand,
+          outputDir,
+          envVars: envVarsObj,
+        });
+        if (result.logs) result.logs.forEach(log => addLog(log));
+        if (result.success) {
+          addLog(`✅ Deployment successful!`);
+          addLog(`🌐 URL: ${result.url}`);
+          setDeployResult(result);
+          if (onDeploySuccess && result.url) {
+            onDeploySuccess({
+              id: result.deploymentId || Date.now().toString(),
+              slug: projectName,
+              name: projectName,
+              url: result.url,
+              previewUrl: result.previewUrl,
+              status: 'ACTIVE',
+              language,
+              viewCount: 0,
+              createdAt: new Date().toISOString(),
+              sslEnabled: true,
+            });
+          }
+        } else {
+          addLog(`❌ Deployment failed: ${result.error}`);
+          setDeployResult(result);
         }
       } else {
-        addLog(`❌ Deployment failed: ${result.error}`);
-        setDeployResult(result);
+        // Use server-side credentials for external providers
+        const serverProviderKey = PROVIDER_MAP[selectedProvider];
+        if (!serverProviderKey) {
+          throw new Error(`Provider ${selectedProvider} not supported for server-side deploy`);
+        }
+
+        addLog('🔐 Using server-encrypted credentials...');
+
+        // Build files map
+        const deployFiles: Record<string, string> = {};
+        if (files && Object.keys(files).length > 0) {
+          Object.entries(files).forEach(([path, content]) => {
+            deployFiles[path.replace(/^\//, '')] = content;
+          });
+        } else {
+          const isHtml = code.includes('<!DOCTYPE') || code.includes('<html');
+          const filename = isHtml ? 'index.html' : 'index.tsx';
+          deployFiles[filename] = code;
+          if (!isHtml) {
+            deployFiles['package.json'] = JSON.stringify({
+              name: projectName || 'canvas-app',
+              version: '1.0.0',
+              private: true,
+              scripts: { dev: 'vite', build: 'vite build', preview: 'vite preview' },
+              dependencies: { react: '^18.2.0', 'react-dom': '^18.2.0' },
+              devDependencies: {
+                '@types/react': '^18.2.0', '@types/react-dom': '^18.2.0',
+                '@vitejs/plugin-react': '^4.0.0', typescript: '^5.0.0', vite: '^5.0.0',
+              },
+            }, null, 2);
+            deployFiles['vite.config.ts'] = `import { defineConfig } from 'vite';\nimport react from '@vitejs/plugin-react';\nexport default defineConfig({ plugins: [react()] });`;
+            deployFiles['index.html'] = `<!DOCTYPE html>\n<html lang="en">\n<head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>${projectName}</title></head>\n<body><div id="root"></div><script type="module" src="/index.tsx"></script></body>\n</html>`;
+          }
+        }
+
+        addLog(`📦 Preparing ${Object.keys(deployFiles).length} files...`);
+
+        const res = await fetch('/api/credentials/deploy', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            provider: serverProviderKey,
+            projectName,
+            files: deployFiles,
+            buildCommand,
+            outputDir,
+            envVars: envVarsObj,
+          }),
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          addLog('✅ Deployment successful!');
+          if (data.url) addLog(`🌐 URL: ${data.url}`);
+          if (data.message) addLog(`💬 ${data.message}`);
+          setDeployResult({ success: true, url: data.url, deploymentId: data.deploymentId, logs: deployLogs });
+          if (onDeploySuccess && data.url) {
+            onDeploySuccess({
+              id: data.deploymentId || Date.now().toString(),
+              slug: projectName,
+              name: projectName,
+              url: data.url,
+              status: 'ACTIVE',
+              language,
+              viewCount: 0,
+              createdAt: new Date().toISOString(),
+              sslEnabled: true,
+            });
+          }
+        } else {
+          addLog(`❌ Deployment failed: ${data.error}`);
+          setDeployResult({ success: false, error: data.error });
+        }
       }
     } catch (error: any) {
       addLog(`❌ Error: ${error.message}`);
@@ -344,7 +422,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
                     }`}>
                       {p.category === 'builtin' ? 'FREE' : p.category}
                     </span>
-                    {tokens[p.id] && validatedUsers[p.id] && (
+                    {hasCredential(p.id) && p.id !== 'onelastai' && (
                       <CheckCircle className="w-4 h-4 text-green-400" />
                     )}
                   </div>
@@ -434,64 +512,45 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         {/* Deploy Tab */}
         {activeTab === 'deploy' && (
           <div className="space-y-4">
-            {/* Token Input (for external providers) */}
+            {/* Credential Status (for external providers) */}
             {provider && provider.id !== 'onelastai' && (
-              <div className="p-4 rounded-lg border border-[#1c1c1c] bg-[#0d0d0d]">
-                <label className="block text-xs font-medium text-white mb-2">
-                  {provider.tokenLabel}
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={tokens[selectedProvider] || ''}
-                    onChange={(e) => {
-                      setTokens(prev => ({ ...prev, [selectedProvider]: e.target.value }));
-                    }}
-                    onBlur={() => {
-                      if (tokens[selectedProvider]) {
-                        handleValidateToken(selectedProvider, tokens[selectedProvider]);
-                      }
-                    }}
-                    placeholder={provider.tokenPlaceholder}
-                    className="w-full px-3 py-2 pr-10 rounded bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
-                  />
-                  {validatingToken && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 animate-spin" />
-                  )}
-                  {!validatingToken && tokens[selectedProvider] && validatedUsers[selectedProvider] && (
-                    <CheckCircle className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-green-400" />
-                  )}
-                </div>
-                {validatedUsers[selectedProvider] && (
-                  <p className="text-xs text-green-400 mt-1">
-                    ✓ Connected as {validatedUsers[selectedProvider]}
-                  </p>
+              <div className={`p-4 rounded-lg border ${
+                hasCredential(selectedProvider)
+                  ? 'border-green-500/30 bg-green-500/5'
+                  : 'border-yellow-500/30 bg-yellow-500/5'
+              }`}>
+                {hasCredential(selectedProvider) ? (
+                  <div className="flex items-center gap-2">
+                    <CheckCircle className="w-4 h-4 text-green-400" />
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-green-400">
+                        ✓ Connected{getCredentialUser(selectedProvider) ? ` as ${getCredentialUser(selectedProvider)}` : ''}
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        Token encrypted on server · Ready to deploy
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => fetchCredentials()}
+                      className="p-1.5 rounded hover:bg-[#2a2a2a] text-gray-500 hover:text-cyan-400 transition-colors"
+                      title="Refresh status"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle className="w-4 h-4 text-yellow-400" />
+                      <p className="text-xs font-medium text-yellow-400">
+                        No token configured for {provider.name}
+                      </p>
+                    </div>
+                    <p className="text-[10px] text-gray-500 mb-2">
+                      Go to Deploy Credentials panel to securely add your {provider.name} token.
+                    </p>
+                  </div>
                 )}
-                <a
-                  href={provider.tokenHelpUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-cyan-400 hover:underline mt-2"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                  How to get token ↗
-                </a>
-              </div>
-            )}
-
-            {/* AWS Secret Key (for AWS providers) */}
-            {selectedProvider?.startsWith('aws') && (
-              <div className="p-4 rounded-lg border border-[#1c1c1c] bg-[#0d0d0d]">
-                <label className="block text-xs font-medium text-white mb-2">
-                  AWS Secret Access Key
-                </label>
-                <input
-                  type="password"
-                  value={awsSecretKey}
-                  onChange={(e) => setAwsSecretKey(e.target.value)}
-                  placeholder="Enter AWS secret access key"
-                  className="w-full px-3 py-2 rounded bg-[#1a1a1a] border border-[#2a2a2a] text-white text-sm placeholder-gray-500 focus:border-cyan-500 focus:outline-none"
-                />
               </div>
             )}
 
@@ -724,7 +783,7 @@ const DeployPanel: React.FC<DeployPanelProps> = ({
         <div className="p-4 border-t border-[#1c1c1c] bg-[#0d0d0d]">
           <button
             onClick={handleDeploy}
-            disabled={isDeploying || (provider?.id !== 'onelastai' && !tokens[selectedProvider])}
+            disabled={isDeploying || !hasCredential(selectedProvider)}
             className={`w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-medium text-sm transition-all ${
               isDeploying
                 ? 'bg-gray-600 text-gray-300 cursor-not-allowed'

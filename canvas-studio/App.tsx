@@ -13,6 +13,8 @@ import CanvasNavDrawer from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
 import Overlay from './components/Overlay';
 import DeployPanel from './components/DeployPanel';
+import CredentialsPanel from './components/CredentialsPanel';
+import VideoPanel from './components/VideoPanel';
 import { useEditorBridge } from './services/useEditorBridge';
 import { useAutoSave, AutoSaveIndicator } from './services/useAutoSave';
 import { useAgent } from './hooks/useAgent';
@@ -32,7 +34,7 @@ import {
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 
 type ConversationPhase = 'initial' | 'gathering' | 'confirming' | 'building' | 'editing';
-type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | 'templates' | 'deploy' | null;
+type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | 'templates' | 'deploy' | 'credentials' | 'video' | null;
 
 const App: React.FC = () => {
   const [isOverlayActive, setIsOverlayActive] = useState(true);
@@ -1060,6 +1062,20 @@ const App: React.FC = () => {
               </svg>
             </button>
 
+            {/* Deploy Credentials - Key Icon */}
+            <button onClick={() => togglePanel('credentials')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'credentials' ? 'bg-violet-500/20 text-violet-400 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.2)]' : 'text-gray-500 hover:text-violet-400 hover:bg-violet-500/10 border-transparent hover:border-violet-500/20'}`} title="Deploy Credentials">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+            </button>
+
+            {/* Video Generation - Film Icon */}
+            <button onClick={() => togglePanel('video')} className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${activePanel === 'video' ? 'bg-pink-500/20 text-pink-400 border-pink-500/30 shadow-[0_0_10px_rgba(236,72,153,0.2)]' : 'text-gray-500 hover:text-pink-400 hover:bg-pink-500/10 border-transparent hover:border-pink-500/20'}`} title="Generate Video">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </button>
+
             {/* Dark/Light Mode */}
             <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all w-full flex justify-center" title={isDarkMode ? 'Light Mode' : 'Dark Mode'}>
               {isDarkMode ? (
@@ -1704,13 +1720,77 @@ const App: React.FC = () => {
                     <div className="p-4 bg-black/30 border border-gray-800 rounded-lg">
                       <p className="text-xs font-bold text-gray-300 mb-3 uppercase tracking-wider">Export Options</p>
                       <div className="space-y-2">
-                        <button className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { default: JSZip } = await import('jszip');
+                              const zip = new JSZip();
+                              const allFiles = editorBridge.files;
+                              allFiles.forEach((content, path) => {
+                                zip.file(path, content);
+                              });
+                              const blob = await zip.generateAsync({ type: 'blob' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${projectName.replace(/\s+/g, '-').toLowerCase()}-export.zip`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            } catch (err: any) {
+                              console.error('[Export] ZIP failed:', err);
+                              alert('ZIP export failed: ' + err.message);
+                            }
+                          }}
+                          className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                        >
                           Download as ZIP
                         </button>
-                        <button className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider">
+                        <button
+                          onClick={async () => {
+                            try {
+                              const filesObj: Record<string, { content: string }> = {};
+                              editorBridge.files.forEach((content, path) => {
+                                filesObj[path] = { content };
+                              });
+                              const params = new URLSearchParams();
+                              params.set('parameters', JSON.stringify({ files: filesObj }));
+                              window.open(`https://codesandbox.io/api/v1/sandboxes/define?${params.toString()}`, '_blank');
+                            } catch (err: any) {
+                              console.error('[Export] CodeSandbox failed:', err);
+                              alert('CodeSandbox export failed: ' + err.message);
+                            }
+                          }}
+                          className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                        >
                           Export to CodeSandbox
                         </button>
-                        <button className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider">
+                        <button
+                          onClick={async () => {
+                            const repoName = window.prompt('Enter GitHub repo name:', projectName.replace(/\s+/g, '-').toLowerCase());
+                            if (!repoName) return;
+                            try {
+                              const filesObj: Record<string, string> = {};
+                              editorBridge.files.forEach((content, path) => {
+                                filesObj[path] = content;
+                              });
+                              const res = await fetch('/api/credentials/deploy', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ provider: 'GITHUB', projectName: repoName, files: filesObj }),
+                              });
+                              const data = await res.json();
+                              if (data.success) {
+                                window.open(data.url, '_blank');
+                              } else {
+                                alert(data.error || 'Push to GitHub failed. Make sure your GitHub token is configured in Deploy Credentials.');
+                              }
+                            } catch (err: any) {
+                              alert('GitHub push failed: ' + err.message);
+                            }
+                          }}
+                          className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                        >
                           Push to GitHub
                         </button>
                       </div>
@@ -1718,8 +1798,11 @@ const App: React.FC = () => {
                     {/* API Keys */}
                     <div className="p-4 bg-black/30 border border-gray-800 rounded-lg">
                       <p className="text-xs font-bold text-gray-300 mb-3 uppercase tracking-wider">API Configuration</p>
-                      <button className="w-full py-2 text-xs font-bold bg-gradient-to-r from-cyan-600 to-emerald-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all uppercase tracking-wider">
-                        Manage API Keys
+                      <button
+                        onClick={() => setActivePanel('credentials')}
+                        className="w-full py-2 text-xs font-bold bg-gradient-to-r from-violet-600 to-cyan-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all uppercase tracking-wider"
+                      >
+                        Manage Deploy Tokens
                       </button>
                     </div>
                   </div>
@@ -2150,6 +2233,20 @@ const App: React.FC = () => {
                     setDeployedUrl(app.url);
                     setShowDeployModal(true);
                   }}
+                  onClose={() => setActivePanel(null)}
+                />
+              )}
+
+              {/* Credentials Panel */}
+              {activePanel === 'credentials' && (
+                <CredentialsPanel
+                  onClose={() => setActivePanel(null)}
+                />
+              )}
+
+              {/* Video Generation Panel */}
+              {activePanel === 'video' && (
+                <VideoPanel
                   onClose={() => setActivePanel(null)}
                 />
               )}

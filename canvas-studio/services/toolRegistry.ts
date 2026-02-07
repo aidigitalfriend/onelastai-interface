@@ -541,6 +541,79 @@ const editorStateTools: Record<string, ToolDefinition> = {
 };
 
 // ============================================================================
+// DEPLOY & EXPORT TOOLS (async — return __ASYNC_TOOL__ sentinel)
+// ============================================================================
+
+const deployTools: Record<string, ToolDefinition> = {
+  // Check credential status for all providers
+  getCredentialsStatus: {
+    name: 'getCredentialsStatus',
+    description: 'Check which deploy providers have valid tokens configured (Vercel, Netlify, Railway, Cloudflare, GitHub)',
+    parameters: [],
+    execute: (): ToolResult => {
+      // Async tool — agent will process via fetch
+      return { success: true, data: '__ASYNC_TOOL__:getCredentialsStatus:{}', message: 'Fetching credential status...' };
+    }
+  },
+
+  // Deploy project to a cloud platform
+  deployToplatform: {
+    name: 'deployToplatform',
+    description: 'Deploy the current project to a cloud provider (VERCEL, NETLIFY, RAILWAY, CLOUDFLARE). Requires token to be configured first via Credentials panel.',
+    parameters: [
+      { name: 'provider', type: 'string', required: true, description: 'Provider ID: VERCEL, NETLIFY, RAILWAY, or CLOUDFLARE' },
+      { name: 'projectName', type: 'string', required: true, description: 'Project name (lowercase, hyphens only)' },
+    ],
+    execute: (provider: string, projectName: string): ToolResult => {
+      if (!['VERCEL', 'NETLIFY', 'RAILWAY', 'CLOUDFLARE'].includes(provider)) {
+        return { success: false, error: `Invalid provider: ${provider}. Use VERCEL, NETLIFY, RAILWAY, or CLOUDFLARE.` };
+      }
+      const safeName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      return { success: true, data: `__ASYNC_TOOL__:deployToplatform:${JSON.stringify({ provider, projectName: safeName })}`, message: `Deploying to ${provider}...` };
+    }
+  },
+
+  // Export project as ZIP
+  exportAsZip: {
+    name: 'exportAsZip',
+    description: 'Export the current project files as a downloadable ZIP archive',
+    parameters: [
+      { name: 'filename', type: 'string', required: false, description: 'Optional ZIP filename (default: project-export.zip)' },
+    ],
+    execute: (filename?: string): ToolResult => {
+      return { success: true, data: `__ASYNC_TOOL__:exportAsZip:${JSON.stringify({ filename: filename || 'project-export.zip' })}`, message: 'Preparing ZIP...' };
+    }
+  },
+
+  // Push project to GitHub
+  pushToGithub: {
+    name: 'pushToGithub',
+    description: 'Push the current project to a GitHub repository. Requires GitHub token configured via Credentials panel.',
+    parameters: [
+      { name: 'repoName', type: 'string', required: true, description: 'Repository name on GitHub' },
+      { name: 'isPrivate', type: 'boolean', required: false, description: 'Whether the repo should be private (default: false)' },
+    ],
+    execute: (repoName: string, isPrivate: boolean = false): ToolResult => {
+      return { success: true, data: `__ASYNC_TOOL__:pushToGithub:${JSON.stringify({ repoName, isPrivate })}`, message: `Pushing to GitHub: ${repoName}...` };
+    }
+  },
+
+  // Generate video from prompt
+  generateVideo: {
+    name: 'generateVideo',
+    description: 'Generate a video from a text prompt using AI video generation. Returns a video URL.',
+    parameters: [
+      { name: 'prompt', type: 'string', required: true, description: 'Description of the video to generate' },
+      { name: 'duration', type: 'number', required: false, description: 'Video duration in seconds (default: 5)' },
+      { name: 'aspectRatio', type: 'string', required: false, description: 'Aspect ratio: 16:9, 9:16, or 1:1 (default: 16:9)' },
+    ],
+    execute: (prompt: string, duration: number = 5, aspectRatio: string = '16:9'): ToolResult => {
+      return { success: true, data: `__ASYNC_TOOL__:generateVideo:${JSON.stringify({ prompt, duration, aspectRatio })}`, message: 'Generating video...' };
+    }
+  },
+};
+
+// ============================================================================
 // UNIFIED TOOL REGISTRY
 // ============================================================================
 
@@ -548,6 +621,7 @@ const allTools: Record<string, ToolDefinition> = {
   ...fileSystemTools,
   ...cursorTools,
   ...editorStateTools,
+  ...deployTools,
 };
 
 // ============================================================================
@@ -642,6 +716,7 @@ export const ToolRegistry = {
   fileSystemTools: Object.keys(fileSystemTools),
   cursorTools: Object.keys(cursorTools),
   editorStateTools: Object.keys(editorStateTools),
+  deployTools: Object.keys(deployTools),
   
   // All tool names
   allToolNames: Object.keys(allTools),

@@ -149,13 +149,31 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     recognition.start();
   };
 
-  // File upload handler
+  // File upload handler — reads actual file content
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // For now, just add the filename to input - in production, would upload and process
-      setInput(prev => prev + ` [Attached: ${file.name}]`);
-    }
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = reader.result as string;
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const isCode = ['ts', 'tsx', 'js', 'jsx', 'html', 'css', 'json', 'py', 'md', 'txt', 'yaml', 'yml', 'toml', 'xml', 'sql', 'sh'].includes(ext);
+
+      if (isCode || file.type.startsWith('text/')) {
+        // Append the full file content for code/text files
+        setInput(prev => prev + `\n\n--- ${file.name} ---\n${content}\n---\n`);
+      } else if (file.type.startsWith('image/')) {
+        // For images, base64 encode and attach reference
+        setInput(prev => prev + ` [Image: ${file.name}]`);
+      } else {
+        setInput(prev => prev + ` [File: ${file.name} (${(file.size / 1024).toFixed(1)}KB)]`);
+      }
+    };
+    reader.onerror = () => {
+      setInput(prev => prev + ` [Failed to read: ${file.name}]`);
+    };
+    reader.readAsText(file);
   };
 
   return (

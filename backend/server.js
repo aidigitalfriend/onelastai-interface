@@ -2265,6 +2265,10 @@ app.use('/api/cloud-deploy', cloudDeployRoutes);
 import credentialsRoutes from './routes/credentials.js';
 app.use('/api/credentials', credentialsRoutes);
 
+// Import and mount video generation routes for /api/video endpoints (text-to-video)
+import videoRoutes from './routes/video.js';
+app.use('/api/video', videoRoutes);
+
 // Import and mount workspace routes for /api/workspace endpoints (project persistence, auto-save)
 import workspaceRoutes from './routes/workspace.js';
 app.use('/api/workspace', workspaceRoutes);
