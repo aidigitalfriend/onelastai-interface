@@ -343,8 +343,7 @@ const App: React.FC = () => {
 
     try {
       // Call the backend API instead of direct SDK
-      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
-      const response = await fetch(`${API_URL}/api/canvas/generate`, {
+      const response = await fetch('/api/canvas/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -696,8 +695,7 @@ const App: React.FC = () => {
     setIsSpeaking(true);
     
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
-      const response = await fetch(`${API_URL}/api/speech/synthesize`, {
+      const response = await fetch('/api/speech/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -795,9 +793,7 @@ const App: React.FC = () => {
     setShowDeployModal(true);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
-      
-      const response = await fetch(`${API_URL}/api/hosting/deploy`, {
+      const response = await fetch('/api/hosting/deploy', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

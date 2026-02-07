@@ -677,8 +677,7 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     
     try {
       // Use OpenAI TTS API
-      const API_URL = import.meta.env.VITE_API_URL || 'https://maula.onelastai.co';
-      const response = await fetch(`${API_URL}/api/speech/synthesize`, {
+      const response = await fetch('/api/speech/synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

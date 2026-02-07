@@ -4,7 +4,7 @@ import { ChatMessage } from '../types';
 import { speak } from '../services/speechService';
 
 // Voice options for the call modal
-const VOICE_OPTIONS = ['Alloy', 'Echo', 'Fable', 'Onyx', 'Nova', 'Shimmer'];
+const VOICE_OPTIONS = ['Alloy', 'Ash', 'Ballad', 'Coral', 'Echo', 'Sage', 'Shimmer', 'Verse'];
 
 interface VoiceMessage {
   id: string;

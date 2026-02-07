@@ -4,7 +4,7 @@ import { X, Cpu, Activity, Zap, ChevronRight, Check, TrendingUp, Clock, Server, 
 import { NAV_ITEMS } from '../constants';
 import { NavItem, SettingsState } from '../types';
 
-const API_BASE = 'https://maula.onelastai.co/api';
+const API_BASE = '/api';
 
 // Get or create user ID
 const getUserId = (): string => {

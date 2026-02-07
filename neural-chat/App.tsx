@@ -17,7 +17,8 @@ import { startSTS, stopSTS, getIsSTSActive, speak, stopSpeaking } from './servic
 import { connectRealtime, disconnectRealtime, startRecording, stopRecording, isConnected as isRealtimeConnected, sendTextMessage } from './services/openaiRealtimeService';
 
 // Voice options for the call modal - matches OpenAI Realtime voices
-const VOICE_OPTIONS: Array<'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'> = ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+type RealtimeVoice = 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse';
+const VOICE_OPTIONS: RealtimeVoice[] = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
 
 interface VoiceMessage {
   id: string;
@@ -41,7 +42,7 @@ const App: React.FC = () => {
   // Voice Call Modal State
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const [voiceCallStatus, setVoiceCallStatus] = useState<'idle' | 'connecting' | 'active'>('idle');
-  const [selectedVoice, setSelectedVoice] = useState<'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer'>('alloy');
+  const [selectedVoice, setSelectedVoice] = useState<RealtimeVoice>('alloy');
   const [voiceMessages, setVoiceMessages] = useState<VoiceMessage[]>([]);
   const [voiceStatusText, setVoiceStatusText] = useState('Ready to call');
   const voiceScrollRef = useRef<HTMLDivElement>(null);

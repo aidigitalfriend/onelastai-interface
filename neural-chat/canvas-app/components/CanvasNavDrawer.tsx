@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 
-const API_BASE = 'https://maula.onelastai.co/api';
+const API_BASE = '/api';
 
 // Get or create user ID
 const getUserId = (): string => {

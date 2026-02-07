@@ -6,7 +6,7 @@
 
 // Types for OpenAI Realtime API
 interface RealtimeConfig {
-  voice?: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
+  voice?: 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse';
   instructions?: string;
   temperature?: number;
   onConnected?: () => void;
