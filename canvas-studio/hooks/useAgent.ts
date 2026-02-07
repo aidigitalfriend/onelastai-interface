@@ -10,6 +10,103 @@ import { getAvailableTools, runTool, ToolResult } from '../services/toolRegistry
 import { trackCanvasUsage } from '../components/CanvasNavDrawer';
 import { MODELS } from '../constants';
 
+// 🔄 Resolve __ASYNC_TOOL__ sentinels — routes to actual backend endpoints
+const resolveAsyncTool = async (result: ToolResult): Promise<ToolResult> => {
+  if (!result.success || typeof result.data !== 'string' || !result.data.startsWith('__ASYNC_TOOL__:')) {
+    return result;
+  }
+
+  const parts = result.data.split(':', 3);
+  const toolName = parts[1];
+  const args = JSON.parse(parts[2] || '{}');
+  const API_BASE = (import.meta as any).env?.VITE_API_URL || '';
+
+  try {
+    switch (toolName) {
+      case 'runCommand': {
+        const resp = await fetch(`${API_BASE}/api/canvas/exec`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: args.command }),
+        });
+        const data = await resp.json();
+        return {
+          success: data.success,
+          data: data.stdout || data.stderr || '',
+          message: data.success ? `✅ Command output:\n${data.stdout}` : `❌ ${data.stderr || data.error}`,
+          error: data.success ? undefined : (data.stderr || data.error),
+        };
+      }
+
+      case 'getCredentialsStatus': {
+        const resp = await fetch(`${API_BASE}/api/credentials/status`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await resp.json();
+        return { success: true, data: data, message: '✅ Credential status retrieved' };
+      }
+
+      case 'deployToplatform': {
+        const resp = await fetch(`${API_BASE}/api/credentials/deploy`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args),
+        });
+        const data = await resp.json();
+        return {
+          success: data.success,
+          data: data,
+          message: data.success ? `✅ Deployed to ${args.provider}` : `❌ Deploy failed: ${data.error}`,
+        };
+      }
+
+      case 'generateVideo': {
+        const resp = await fetch(`${API_BASE}/api/video/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args),
+        });
+        const data = await resp.json();
+        return {
+          success: data.success,
+          data: data,
+          message: data.success ? `✅ Video generated` : `❌ Video generation failed`,
+        };
+      }
+
+      case 'exportAsZip': {
+        // Handled client-side — return sentinel for ChatBox to process
+        return { success: true, data: { action: 'exportAsZip', ...args }, message: '📦 Preparing ZIP export...' };
+      }
+
+      case 'pushToGithub': {
+        const resp = await fetch(`${API_BASE}/api/cloud-deploy/github`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(args),
+        });
+        const data = await resp.json();
+        return {
+          success: data.success,
+          data: data,
+          message: data.success ? `✅ Pushed to GitHub: ${args.repoName}` : `❌ GitHub push failed`,
+        };
+      }
+
+      case 'askUser':
+      case 'requestApproval':
+        // These need UI interaction — pass through for the chat handler
+        return { success: true, data: { action: toolName, ...args }, message: args.question || args.action };
+
+      default:
+        return { success: false, error: `Unknown async tool: ${toolName}` };
+    }
+  } catch (err: any) {
+    return { success: false, error: `Async tool "${toolName}" failed: ${err.message}` };
+  }
+};
+
 // 🔍 Auto-detect language from code content (React patterns override HTML)
 const detectLanguageFromCode = (code: string, providedLang: string = 'html'): string => {
   if (!code) return providedLang;
@@ -539,7 +636,14 @@ export function useAgent(deps: UseAgentDeps) {
               const { tool, args } = toolCall;
               console.log(`[Tool Registry] Executing: ${tool}`, args);
               
-              const result = runTool(tool, args || []);
+              let result = runTool(tool, args || []);
+              
+              // Resolve async tools (deploy, runCommand, etc.)
+              if (result.success && typeof result.data === 'string' && result.data.startsWith('__ASYNC_TOOL__:')) {
+                console.log(`[Tool Registry] Resolving async tool: ${tool}`);
+                result = await resolveAsyncTool(result);
+              }
+              
               results.push(result);
               
               if (result.success) {
@@ -570,7 +674,12 @@ export function useAgent(deps: UseAgentDeps) {
         case 'run_tool': {
           if (data.tool) {
             console.log(`[Canvas Agent] Running single tool: ${data.tool}`);
-            const result = runTool(data.tool, data.args || []);
+            let result = runTool(data.tool, data.args || []);
+            
+            // Resolve async tools
+            if (result.success && typeof result.data === 'string' && result.data.startsWith('__ASYNC_TOOL__:')) {
+              result = await resolveAsyncTool(result);
+            }
             
             if (result.success) {
               addAIMessage(data.message || result.message || `✅ ${data.tool} completed`);

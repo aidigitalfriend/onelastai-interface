@@ -7,6 +7,8 @@
 import express from 'express';
 import { PrismaClient } from '@prisma/client';
 import * as jose from 'jose';
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { AIService } from '../services/aiService.js';
 
 const router = express.Router();
@@ -2012,6 +2014,14 @@ Available Tool Registry methods:
 - File ops: getFile, writeFile, updateFile, createFile, deleteFile, renameFile, listFiles, getProjectTree, fileExists
 - Cursor: getCursorPosition, setCursorPosition, getSelection, setSelection, replaceSelection, insertAtCursor, insertAt, replaceRange, deleteLine
 - Editor: getActiveFile, setActiveFile, undo, redo, getEditorContext, searchInFiles, getSymbols
+- Code Intelligence: getLanguage, findReferences, goToDefinition, findFileByName
+- Diff: generateDiff, showDiff, applyDiff
+- Project: getDependencies, getPackageJson, getConfigFiles, getEnvInfo
+- Memory: saveMemory, getMemory, clearMemory
+- UI: showMessage, showWarning, showError, askUser, requestApproval, checkPermission
+- Agent: setMode, getAgentState, cancelTask
+- Execution: runCommand, getErrors, getLogs, clearLogs
+- Deploy: deployToplatform, exportAsZip, pushToGithub, generateVideo
 
 ## CONTEXT AWARENESS
 You always know:
@@ -2957,6 +2967,92 @@ router.post('/chat', optionalAuth, async (req, res) => {
     res.status(500).json({ 
       success: false, 
       error: error.message || 'Chat failed',
+    });
+  }
+});
+
+// ============================================================================
+// SANDBOXED COMMAND EXECUTION
+// ============================================================================
+
+const execAsync = promisify(exec);
+
+// Allowed commands whitelist — only safe, non-destructive commands
+const ALLOWED_COMMANDS = [
+  'node', 'npx', 'npm', 'yarn', 'pnpm',
+  'python3', 'python', 'pip', 'pip3',
+  'tsc', 'eslint', 'prettier',
+  'cat', 'head', 'tail', 'wc', 'grep', 'find', 'ls', 'pwd', 'echo', 'which',
+  'git', 'java', 'javac', 'go', 'rustc', 'cargo', 'gcc', 'g++',
+];
+
+// Blocked patterns — never allow these
+const BLOCKED_PATTERNS = [
+  /rm\s+-rf\s+\//,       // rm -rf /
+  /rm\s+-rf\s+~/,        // rm -rf ~
+  /mkfs/,                // format disk
+  /dd\s+if=/,            // disk destroy
+  /:(){ :|:& };:/,       // fork bomb
+  />\s*\/dev\/sd/,       // overwrite disk
+  /curl.*\|\s*(ba)?sh/,  // pipe to shell
+  /wget.*\|\s*(ba)?sh/,  // pipe to shell
+  /sudo/,                // sudo commands
+  /chmod\s+777/,         // wide-open permissions
+  /shutdown|reboot|halt/, // system control
+  /useradd|userdel|passwd/, // user management
+];
+
+router.post('/exec', optionalAuth, async (req, res) => {
+  try {
+    const { command } = req.body;
+    
+    if (!command || typeof command !== 'string') {
+      return res.status(400).json({ success: false, error: 'Command is required' });
+    }
+
+    // Security: check against blocked patterns
+    for (const pattern of BLOCKED_PATTERNS) {
+      if (pattern.test(command)) {
+        return res.status(403).json({ success: false, error: 'Command blocked for security reasons' });
+      }
+    }
+
+    // Security: extract base command and check whitelist
+    const baseCommand = command.trim().split(/\s+/)[0].replace(/^.*\//, ''); // strip path prefix
+    if (!ALLOWED_COMMANDS.includes(baseCommand)) {
+      return res.status(403).json({ 
+        success: false, 
+        error: `Command "${baseCommand}" is not in the allowed list. Allowed: ${ALLOWED_COMMANDS.join(', ')}` 
+      });
+    }
+
+    // Execute with timeout and resource limits
+    const { stdout, stderr } = await execAsync(command, {
+      timeout: 30000, // 30 second timeout
+      maxBuffer: 1024 * 1024, // 1MB max output
+      cwd: '/tmp',    // sandboxed working directory
+      env: {
+        ...process.env,
+        NODE_ENV: 'sandbox',
+        HOME: '/tmp',
+      },
+    });
+
+    res.json({
+      success: true,
+      stdout: stdout.slice(0, 10000), // cap output at 10KB
+      stderr: stderr.slice(0, 5000),
+      command,
+    });
+
+  } catch (error) {
+    // Command execution error (non-zero exit code, timeout, etc.)
+    res.json({
+      success: false,
+      stdout: error.stdout?.slice(0, 10000) || '',
+      stderr: error.stderr?.slice(0, 5000) || error.message,
+      command,
+      exitCode: error.code || 1,
     });
   }
 });

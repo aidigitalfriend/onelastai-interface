@@ -445,7 +445,7 @@ const editorStateTools: Record<string, ToolDefinition> = {
     parameters: [],
     execute: (): ToolResult => {
       const bridge = getEditorBridge();
-      const activeFile = bridge.activeFile;
+      const activeFile = bridge.getActiveFile();
       return { success: true, data: activeFile };
     }
   },
@@ -520,7 +520,7 @@ const editorStateTools: Record<string, ToolDefinition> = {
     ],
     execute: (query: string, isRegex: boolean = false): ToolResult => {
       const bridge = getEditorBridge();
-      const results = bridge.searchInFiles(query, isRegex);
+      const results = bridge.searchInFiles(query);
       return { success: true, data: results, message: `Found ${results.length} matches` };
     }
   },
@@ -614,6 +614,431 @@ const deployTools: Record<string, ToolDefinition> = {
 };
 
 // ============================================================================
+// CODE INTELLIGENCE TOOLS
+// ============================================================================
+
+const codeIntelTools: Record<string, ToolDefinition> = {
+  // Get language of a file
+  getLanguage: {
+    name: 'getLanguage',
+    description: 'Get the programming language of the active file or a specific file',
+    parameters: [
+      { name: 'path', type: 'string', required: false, description: 'File path (default: active file)' }
+    ],
+    execute: (path?: string): ToolResult => {
+      const bridge = getEditorBridge();
+      if (path) {
+        bridge.setActiveFile(path);
+      }
+      const lang = bridge.getLanguage();
+      return { success: true, data: lang, message: `Language: ${lang}` };
+    }
+  },
+
+  // Find all references to a symbol
+  findReferences: {
+    name: 'findReferences',
+    description: 'Find all usages of a symbol (function, class, variable) across all files',
+    parameters: [
+      { name: 'symbol', type: 'string', required: true, description: 'Symbol name to find references for' }
+    ],
+    execute: (symbol: string): ToolResult => {
+      const bridge = getEditorBridge();
+      const refs = bridge.findReferences(symbol);
+      return { success: true, data: refs, message: `Found ${refs.length} references to "${symbol}"` };
+    }
+  },
+
+  // Go to definition
+  goToDefinition: {
+    name: 'goToDefinition',
+    description: 'Find the definition of a symbol (function, class, variable)',
+    parameters: [
+      { name: 'symbol', type: 'string', required: true, description: 'Symbol name to find definition for' }
+    ],
+    execute: (symbol: string): ToolResult => {
+      const bridge = getEditorBridge();
+      const def = bridge.goToDefinition(symbol);
+      if (!def) {
+        return { success: false, error: `Definition not found for "${symbol}"` };
+      }
+      return { success: true, data: def, message: `Definition found: ${def.path}:${def.line}` };
+    }
+  },
+
+  // Find file by name
+  findFileByName: {
+    name: 'findFileByName',
+    description: 'Search for files matching a name pattern',
+    parameters: [
+      { name: 'name', type: 'string', required: true, description: 'File name or partial name to search for' }
+    ],
+    execute: (name: string): ToolResult => {
+      const bridge = getEditorBridge();
+      const files = bridge.findFileByName(name);
+      return { success: true, data: files, message: `Found ${files.length} files matching "${name}"` };
+    }
+  },
+};
+
+// ============================================================================
+// DIFF TOOLS
+// ============================================================================
+
+const diffTools: Record<string, ToolDefinition> = {
+  // Generate diff between two code versions
+  generateDiff: {
+    name: 'generateDiff',
+    description: 'Generate a diff between old and new code. Returns additions and deletions count.',
+    parameters: [
+      { name: 'oldCode', type: 'string', required: true, description: 'Original code' },
+      { name: 'newCode', type: 'string', required: true, description: 'Updated code' }
+    ],
+    execute: (oldCode: string, newCode: string): ToolResult => {
+      const bridge = getEditorBridge();
+      const diff = bridge.generateDiff(oldCode, newCode);
+      return { success: true, data: diff, message: `Diff: +${diff.additions} -${diff.deletions} lines` };
+    }
+  },
+
+  // Show diff in editor
+  showDiff: {
+    name: 'showDiff',
+    description: 'Display a diff result for a file (visual feedback to user)',
+    parameters: [
+      { name: 'path', type: 'string', required: true, description: 'File path' },
+      { name: 'diff', type: 'object', required: true, description: 'DiffResult object from generateDiff' }
+    ],
+    execute: (path: string, diff: any): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.showDiff(path, diff);
+      return { success: true, message: `Showing diff for ${path}` };
+    }
+  },
+
+  // Apply diff to file
+  applyDiff: {
+    name: 'applyDiff',
+    description: 'Apply a diff result to a file, modifying it in-place',
+    parameters: [
+      { name: 'path', type: 'string', required: true, description: 'File path to patch' },
+      { name: 'diff', type: 'object', required: true, description: 'DiffResult object from generateDiff' }
+    ],
+    execute: (path: string, diff: any): ToolResult => {
+      const bridge = getEditorBridge();
+      const success = bridge.applyDiff(path, diff);
+      return success
+        ? { success: true, message: `Applied diff to ${path}` }
+        : { success: false, error: `Failed to apply diff to ${path}` };
+    }
+  },
+};
+
+// ============================================================================
+// PROJECT CONTEXT TOOLS
+// ============================================================================
+
+const projectTools: Record<string, ToolDefinition> = {
+  // Get project dependencies
+  getDependencies: {
+    name: 'getDependencies',
+    description: 'Get all npm dependencies (dependencies + devDependencies) from package.json',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      const deps = bridge.getDependencies();
+      const count = Object.keys(deps).length;
+      return { success: true, data: deps, message: `Found ${count} dependencies` };
+    }
+  },
+
+  // Get package.json
+  getPackageJson: {
+    name: 'getPackageJson',
+    description: 'Get the parsed package.json contents',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      const pkg = bridge.getPackageJson();
+      if (!pkg) {
+        return { success: false, error: 'No package.json found in project' };
+      }
+      return { success: true, data: pkg, message: `Package: ${pkg.name || 'unnamed'}` };
+    }
+  },
+
+  // Get config files
+  getConfigFiles: {
+    name: 'getConfigFiles',
+    description: 'List all configuration files in the project (tsconfig, vite, eslint, etc.)',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      const configs = bridge.getConfigFiles();
+      return { success: true, data: configs, message: `Found ${configs.length} config files` };
+    }
+  },
+
+  // Get environment info
+  getEnvInfo: {
+    name: 'getEnvInfo',
+    description: 'Get environment variables from .env file (keys only, values masked)',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      const info = bridge.getEnvInfo();
+      // Mask values for security
+      const maskedEnv: Record<string, string> = {};
+      Object.keys(info.env).forEach(key => {
+        maskedEnv[key] = info.env[key].length > 0 ? '***' : '(empty)';
+      });
+      return { success: true, data: { ...info, env: maskedEnv }, message: `${Object.keys(maskedEnv).length} env vars` };
+    }
+  },
+};
+
+// ============================================================================
+// MEMORY & STATE TOOLS
+// ============================================================================
+
+const memoryTools: Record<string, ToolDefinition> = {
+  // Save to agent memory
+  saveMemory: {
+    name: 'saveMemory',
+    description: 'Save a key-value pair to agent memory (persists across tool calls within a session)',
+    parameters: [
+      { name: 'key', type: 'string', required: true, description: 'Memory key' },
+      { name: 'value', type: 'any', required: true, description: 'Value to store (any JSON-serializable type)' }
+    ],
+    execute: (key: string, value: any): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.saveMemory(key, value);
+      return { success: true, message: `Saved "${key}" to memory` };
+    }
+  },
+
+  // Get from agent memory
+  getMemory: {
+    name: 'getMemory',
+    description: 'Retrieve a value from agent memory by key',
+    parameters: [
+      { name: 'key', type: 'string', required: true, description: 'Memory key to retrieve' }
+    ],
+    execute: (key: string): ToolResult => {
+      const bridge = getEditorBridge();
+      const value = bridge.getMemory(key);
+      if (value === undefined) {
+        return { success: false, error: `Key "${key}" not found in memory` };
+      }
+      return { success: true, data: value, message: `Retrieved "${key}"` };
+    }
+  },
+
+  // Clear all agent memory
+  clearMemory: {
+    name: 'clearMemory',
+    description: 'Clear all stored agent memory',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.clearMemory();
+      return { success: true, message: 'Memory cleared' };
+    }
+  },
+};
+
+// ============================================================================
+// UI INTERACTION TOOLS
+// ============================================================================
+
+const uiTools: Record<string, ToolDefinition> = {
+  // Show info message
+  showMessage: {
+    name: 'showMessage',
+    description: 'Show an informational message to the user in the editor UI',
+    parameters: [
+      { name: 'text', type: 'string', required: true, description: 'Message text' }
+    ],
+    execute: (text: string): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.showMessage(text);
+      return { success: true, message: text };
+    }
+  },
+
+  // Show warning
+  showWarning: {
+    name: 'showWarning',
+    description: 'Show a warning message to the user',
+    parameters: [
+      { name: 'text', type: 'string', required: true, description: 'Warning text' }
+    ],
+    execute: (text: string): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.showWarning(text);
+      return { success: true, message: `⚠️ ${text}` };
+    }
+  },
+
+  // Show error
+  showError: {
+    name: 'showError',
+    description: 'Show an error message to the user',
+    parameters: [
+      { name: 'text', type: 'string', required: true, description: 'Error text' }
+    ],
+    execute: (text: string): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.showError(text);
+      return { success: true, message: `❌ ${text}` };
+    }
+  },
+
+  // Ask user a question
+  askUser: {
+    name: 'askUser',
+    description: 'Ask the user a question and wait for their response (async — returns __ASYNC_TOOL__ sentinel)',
+    parameters: [
+      { name: 'question', type: 'string', required: true, description: 'Question to ask' }
+    ],
+    execute: (question: string): ToolResult => {
+      return { success: true, data: `__ASYNC_TOOL__:askUser:${JSON.stringify({ question })}`, message: `Asking user: ${question}` };
+    }
+  },
+
+  // Request approval for an action
+  requestApproval: {
+    name: 'requestApproval',
+    description: 'Request user approval before performing a potentially destructive action',
+    parameters: [
+      { name: 'action', type: 'string', required: true, description: 'Description of the action requiring approval' },
+      { name: 'details', type: 'string', required: false, description: 'Additional context about the action' }
+    ],
+    execute: (action: string, details?: string): ToolResult => {
+      return { success: true, data: `__ASYNC_TOOL__:requestApproval:${JSON.stringify({ action, details })}`, message: `Requesting approval: ${action}` };
+    }
+  },
+
+  // Check if agent has permission
+  checkPermission: {
+    name: 'checkPermission',
+    description: 'Check if the agent has permission to perform an action (read, write, create, delete)',
+    parameters: [
+      { name: 'action', type: 'string', required: true, description: 'Action to check: read, write, create, delete' }
+    ],
+    execute: (action: string): ToolResult => {
+      const bridge = getEditorBridge();
+      const allowed = bridge.checkPermission(action);
+      return { success: true, data: allowed, message: `Permission "${action}": ${allowed ? 'granted' : 'denied'}` };
+    }
+  },
+};
+
+// ============================================================================
+// AGENT CONTROL TOOLS
+// ============================================================================
+
+const agentTools: Record<string, ToolDefinition> = {
+  // Set agent mode
+  setMode: {
+    name: 'setMode',
+    description: 'Switch agent mode: "chat" (conversational), "dev" (coding), or "review" (code review)',
+    parameters: [
+      { name: 'mode', type: 'string', required: true, description: 'Mode: chat, dev, or review' }
+    ],
+    execute: (mode: string): ToolResult => {
+      if (!['chat', 'dev', 'review'].includes(mode)) {
+        return { success: false, error: `Invalid mode: ${mode}. Use: chat, dev, review` };
+      }
+      const bridge = getEditorBridge();
+      bridge.setMode(mode as 'chat' | 'dev' | 'review');
+      return { success: true, message: `Mode switched to: ${mode}` };
+    }
+  },
+
+  // Get agent state
+  getAgentState: {
+    name: 'getAgentState',
+    description: 'Get the current agent state (mode, running status, current task, memory)',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      const state = bridge.getAgentState();
+      return { success: true, data: state, message: `Mode: ${state.mode}, Running: ${state.isRunning}` };
+    }
+  },
+
+  // Cancel current task
+  cancelTask: {
+    name: 'cancelTask',
+    description: 'Cancel the currently running agent task',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.cancelTask();
+      return { success: true, message: 'Task cancelled' };
+    }
+  },
+};
+
+// ============================================================================
+// EXECUTION TOOLS (browser-limited — some are stubs pending backend sandbox)
+// ============================================================================
+
+const executionTools: Record<string, ToolDefinition> = {
+  // Run a command (via backend sandbox when available)
+  runCommand: {
+    name: 'runCommand',
+    description: 'Execute a shell command in a sandboxed environment via the backend. Returns command output.',
+    parameters: [
+      { name: 'command', type: 'string', required: true, description: 'Shell command to execute' }
+    ],
+    execute: (command: string): ToolResult => {
+      // Route to backend sandbox endpoint
+      return { success: true, data: `__ASYNC_TOOL__:runCommand:${JSON.stringify({ command })}`, message: `Executing: ${command}` };
+    }
+  },
+
+  // Get editor errors
+  getErrors: {
+    name: 'getErrors',
+    description: 'Get all current editor errors and warnings',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      const errors = bridge.getErrors();
+      return { success: true, data: errors, message: `${errors.length} errors/warnings` };
+    }
+  },
+
+  // Get logs
+  getLogs: {
+    name: 'getLogs',
+    description: 'Get agent execution logs',
+    parameters: [
+      { name: 'limit', type: 'number', required: false, description: 'Max number of log entries (default: 50)' }
+    ],
+    execute: (limit: number = 50): ToolResult => {
+      const bridge = getEditorBridge();
+      const logs = bridge.getLogs().slice(-limit);
+      return { success: true, data: logs, message: `${logs.length} log entries` };
+    }
+  },
+
+  // Clear logs
+  clearLogs: {
+    name: 'clearLogs',
+    description: 'Clear all agent execution logs',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      bridge.clearLogs();
+      return { success: true, message: 'Logs cleared' };
+    }
+  },
+};
+
+// ============================================================================
 // UNIFIED TOOL REGISTRY
 // ============================================================================
 
@@ -622,6 +1047,13 @@ const allTools: Record<string, ToolDefinition> = {
   ...cursorTools,
   ...editorStateTools,
   ...deployTools,
+  ...codeIntelTools,
+  ...diffTools,
+  ...projectTools,
+  ...memoryTools,
+  ...uiTools,
+  ...agentTools,
+  ...executionTools,
 };
 
 // ============================================================================

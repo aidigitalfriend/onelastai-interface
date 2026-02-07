@@ -504,6 +504,11 @@ export class EditorBridge implements EditorBridgeAPI {
     this.insertAt(this.cursor, text);
   }
   
+  getSelectedText(): string {
+    if (!this.selection) return '';
+    return this.selection.text || '';
+  }
+
   replaceSelection(text: string): void {
     if (!this.activeFile || !this.selection) {
       this.insertAtCursor(text);
@@ -1191,12 +1196,42 @@ export class EditorBridge implements EditorBridgeAPI {
       'jsx': 'react',
       'ts': 'typescript',
       'js': 'javascript',
+      'mjs': 'javascript',
+      'cjs': 'javascript',
       'py': 'python',
+      'java': 'java',
+      'cs': 'csharp',
+      'go': 'go',
+      'rs': 'rust',
+      'php': 'php',
+      'rb': 'ruby',
+      'swift': 'swift',
+      'kt': 'kotlin',
+      'kts': 'kotlin',
+      'cpp': 'cpp',
+      'cc': 'cpp',
+      'cxx': 'cpp',
+      'c': 'cpp',
+      'h': 'cpp',
+      'hpp': 'cpp',
+      'sql': 'sql',
+      'sh': 'shell',
+      'bash': 'shell',
+      'zsh': 'shell',
       'css': 'css',
+      'scss': 'css',
+      'less': 'css',
       'json': 'json',
+      'yaml': 'yaml',
+      'yml': 'yaml',
+      'toml': 'toml',
+      'xml': 'xml',
       'md': 'markdown',
+      'mdx': 'markdown',
+      'dockerfile': 'shell',
+      'makefile': 'shell',
     };
-    return langMap[ext] || 'html';
+    return langMap[ext] || 'text';
   }
   
   // ========== SERIALIZATION FOR AGENT ==========
