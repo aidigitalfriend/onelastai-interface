@@ -2,6 +2,9 @@
  * NEURAL CHAT - OPENAI REALTIME API SERVICE
  * Real-time voice conversations using WebSocket
  * wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview
+ *
+ * Key design: Gapless audio playback using a single persistent AudioContext
+ * with scheduled buffer sources for smooth, natural-sounding AI speech.
  */
 
 // Types for OpenAI Realtime API
@@ -19,10 +22,10 @@ interface RealtimeConfig {
 
 interface RealtimeSession {
   ws: WebSocket | null;
-  audioContext: AudioContext | null;
+  inputAudioContext: AudioContext | null;
   mediaStream: MediaStream | null;
-  mediaRecorder: MediaRecorder | null;
-  audioChunks: Blob[];
+  sourceNode: MediaStreamAudioSourceNode | null;
+  processorNode: ScriptProcessorNode | null;
   isConnected: boolean;
   isRecording: boolean;
   config: RealtimeConfig;
@@ -31,20 +34,129 @@ interface RealtimeSession {
 // Session state
 let session: RealtimeSession | null = null;
 
-// Audio playback queue
-let audioQueue: ArrayBuffer[] = [];
-let isPlaying = false;
+// ============================================================================
+// AUDIO PLAYBACK ENGINE - Gapless streaming via scheduled buffers
+// ============================================================================
+
+// Persistent playback context (reused across the entire call)
+let playbackCtx: AudioContext | null = null;
+// The time at which the next chunk should start playing
+let nextPlayTime = 0;
+// Gain node for smooth volume control and interruption
+let gainNode: GainNode | null = null;
+// Track if AI is currently speaking (for interruption)
+let isSpeaking = false;
+
+function ensurePlaybackContext(): AudioContext {
+  if (!playbackCtx || playbackCtx.state === 'closed') {
+    playbackCtx = new AudioContext({ sampleRate: 24000 });
+    gainNode = playbackCtx.createGain();
+    gainNode.connect(playbackCtx.destination);
+    nextPlayTime = 0;
+  }
+  if (playbackCtx.state === 'suspended') {
+    playbackCtx.resume();
+  }
+  return playbackCtx;
+}
 
 /**
- * Get ephemeral session token from backend
+ * Schedule a PCM16 audio chunk for gapless playback.
+ * Instead of await-ing each chunk, we schedule them at precise
+ * times so they play back-to-back with zero gaps.
  */
-async function getSessionToken(voice: string, instructions: string): Promise<{ client_secret: string; expires_at: number } | null> {
+function scheduleAudioChunk(pcmData: ArrayBuffer): void {
+  const ctx = ensurePlaybackContext();
+  if (!gainNode) return;
+
+  const int16 = new Int16Array(pcmData);
+  if (int16.length === 0) return;
+
+  // Convert Int16 -> Float32
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) {
+    float32[i] = int16[i] / 32768.0;
+  }
+
+  // Create buffer
+  const buffer = ctx.createBuffer(1, float32.length, 24000);
+  buffer.getChannelData(0).set(float32);
+
+  // Create source
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(gainNode);
+
+  // Schedule: if nextPlayTime is in the past, start now
+  const now = ctx.currentTime;
+  if (nextPlayTime < now) {
+    nextPlayTime = now;
+  }
+
+  source.start(nextPlayTime);
+  isSpeaking = true;
+
+  // Advance the schedule by this chunk's duration
+  nextPlayTime += buffer.duration;
+
+  // When this chunk finishes, check if AI has stopped speaking
+  source.onended = () => {
+    if (ctx.currentTime >= nextPlayTime - 0.01) {
+      isSpeaking = false;
+    }
+  };
+}
+
+/**
+ * Interrupt AI speech immediately (e.g., when user starts talking)
+ */
+function interruptPlayback(): void {
+  if (gainNode && playbackCtx) {
+    // Quick fade out to avoid pop
+    gainNode.gain.setValueAtTime(gainNode.gain.value, playbackCtx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0, playbackCtx.currentTime + 0.05);
+
+    // After fade, reset
+    setTimeout(() => {
+      if (gainNode && playbackCtx) {
+        // Disconnect and recreate gain to cancel all scheduled sources
+        gainNode.disconnect();
+        gainNode = playbackCtx.createGain();
+        gainNode.connect(playbackCtx.destination);
+        nextPlayTime = 0;
+        isSpeaking = false;
+      }
+    }, 60);
+  }
+}
+
+/**
+ * Close the playback context entirely
+ */
+function closePlayback(): void {
+  if (playbackCtx && playbackCtx.state !== 'closed') {
+    playbackCtx.close().catch(() => {});
+  }
+  playbackCtx = null;
+  gainNode = null;
+  nextPlayTime = 0;
+  isSpeaking = false;
+}
+
+// ============================================================================
+// SESSION TOKEN
+// ============================================================================
+
+async function getSessionToken(
+  voice: string,
+  instructions: string
+): Promise<{ client_secret: string; expires_at: number } | null> {
   try {
     const response = await fetch('/api/realtime/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'include',
-      body: JSON.stringify({ voice, instructions })
+      body: JSON.stringify({ voice, instructions }),
     });
 
     if (!response.ok) {
@@ -60,26 +172,29 @@ async function getSessionToken(voice: string, instructions: string): Promise<{ c
   }
 }
 
-/**
- * Initialize and connect to OpenAI Realtime API
- */
+// ============================================================================
+// CONNECT
+// ============================================================================
+
 export async function connectRealtime(config: RealtimeConfig): Promise<boolean> {
   try {
     // Close existing session
     if (session?.ws) {
       session.ws.close();
     }
+    closePlayback();
 
     config.onStatusChange?.('Getting session token...');
 
-    // Get ephemeral token from backend
     const sessionToken = await getSessionToken(
       config.voice || 'alloy',
       config.instructions || 'You are a helpful AI assistant.'
     );
 
     if (!sessionToken) {
-      config.onError?.('Failed to get session token. Please sign in and ensure you have credits.');
+      config.onError?.(
+        'Failed to get session token. Please sign in and ensure you have credits.'
+      );
       return false;
     }
 
@@ -91,18 +206,18 @@ export async function connectRealtime(config: RealtimeConfig): Promise<boolean> 
     const ws = new WebSocket(wsUrl, [
       'realtime',
       `openai-insecure-api-key.${sessionToken.client_secret}`,
-      'openai-beta.realtime-v1'
+      'openai-beta.realtime-v1',
     ]);
 
     session = {
       ws,
-      audioContext: null,
+      inputAudioContext: null,
       mediaStream: null,
-      mediaRecorder: null,
-      audioChunks: [],
+      sourceNode: null,
+      processorNode: null,
       isConnected: false,
       isRecording: false,
-      config
+      config,
     };
 
     return new Promise((resolve, reject) => {
@@ -112,26 +227,28 @@ export async function connectRealtime(config: RealtimeConfig): Promise<boolean> 
         config.onConnected?.();
         config.onStatusChange?.('Connected');
 
-        // Send session configuration
+        // Configure the session for natural conversation
         const sessionConfig = {
           type: 'session.update',
           session: {
             modalities: ['text', 'audio'],
-            instructions: config.instructions || 'You are a helpful AI assistant. Be conversational and friendly.',
+            instructions:
+              config.instructions ||
+              'You are a helpful AI assistant. Be conversational and friendly.',
             voice: config.voice || 'alloy',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: {
-              model: 'whisper-1'
+              model: 'whisper-1',
             },
             turn_detection: {
               type: 'server_vad',
-              threshold: 0.5,
+              threshold: 0.4,
               prefix_padding_ms: 300,
-              silence_duration_ms: 500
+              silence_duration_ms: 800,
             },
             temperature: config.temperature || 0.8,
-          }
+          },
         };
         ws.send(JSON.stringify(sessionConfig));
         resolve(true);
@@ -150,13 +267,12 @@ export async function connectRealtime(config: RealtimeConfig): Promise<boolean> 
 
       ws.onclose = (event) => {
         console.log('[OpenAI Realtime] Disconnected:', event.code, event.reason);
-        session!.isConnected = false;
+        if (session) session.isConnected = false;
         config.onDisconnected?.();
         config.onStatusChange?.('Disconnected');
         stopRecording();
       };
 
-      // Timeout for connection
       setTimeout(() => {
         if (!session?.isConnected) {
           ws.close();
@@ -171,13 +287,14 @@ export async function connectRealtime(config: RealtimeConfig): Promise<boolean> 
   }
 }
 
-/**
- * Handle incoming WebSocket messages
- */
+// ============================================================================
+// WEBSOCKET MESSAGE HANDLER
+// ============================================================================
+
 function handleRealtimeMessage(data: string) {
   try {
     const message = JSON.parse(data);
-    
+
     switch (message.type) {
       case 'session.created':
         console.log('[OpenAI Realtime] Session created');
@@ -189,6 +306,8 @@ function handleRealtimeMessage(data: string) {
         break;
 
       case 'input_audio_buffer.speech_started':
+        // User started talking - interrupt AI if it is speaking
+        interruptPlayback();
         session?.config.onStatusChange?.('Listening...');
         break;
 
@@ -197,40 +316,45 @@ function handleRealtimeMessage(data: string) {
         break;
 
       case 'conversation.item.input_audio_transcription.completed':
-        // User's speech transcribed
         if (message.transcript) {
           session?.config.onTranscript?.(message.transcript, true);
         }
         break;
 
       case 'response.audio_transcript.delta':
-        // AI response text streaming
         if (message.delta) {
           session?.config.onTranscript?.(message.delta, false);
         }
         break;
 
       case 'response.audio_transcript.done':
-        // AI response text complete
-        console.log('[OpenAI Realtime] Audio transcript done');
         break;
 
       case 'response.audio.delta':
-        // AI audio response chunk
+        // AI audio chunk - schedule for gapless playback
         if (message.delta) {
           const audioData = base64ToArrayBuffer(message.delta);
-          playAudioChunk(audioData);
+          scheduleAudioChunk(audioData);
           session?.config.onStatusChange?.('Speaking...');
         }
         break;
 
       case 'response.audio.done':
-        console.log('[OpenAI Realtime] Audio response done');
+        console.log('[OpenAI Realtime] Audio response complete');
         break;
 
-      case 'response.done':
-        session?.config.onStatusChange?.('Listening...');
+      case 'response.done': {
+        // AI finished its full response - wait for playback to end
+        const checkDone = () => {
+          if (!isSpeaking) {
+            session?.config.onStatusChange?.('Listening...');
+          } else {
+            setTimeout(checkDone, 100);
+          }
+        };
+        setTimeout(checkDone, 100);
         break;
+      }
 
       case 'error':
         console.error('[OpenAI Realtime] Error:', message.error);
@@ -238,7 +362,6 @@ function handleRealtimeMessage(data: string) {
         break;
 
       default:
-        // console.log('[OpenAI Realtime] Message:', message.type);
         break;
     }
   } catch (error) {
@@ -246,9 +369,10 @@ function handleRealtimeMessage(data: string) {
   }
 }
 
-/**
- * Start recording and streaming audio
- */
+// ============================================================================
+// MICROPHONE RECORDING
+// ============================================================================
+
 export async function startRecording(): Promise<boolean> {
   if (!session?.isConnected || !session.ws) {
     console.error('[OpenAI Realtime] Not connected');
@@ -256,39 +380,42 @@ export async function startRecording(): Promise<boolean> {
   }
 
   try {
-    // Get microphone access
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
         channelCount: 1,
         sampleRate: 24000,
         echoCancellation: true,
-        noiseSuppression: true
-      }
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
     });
 
     session.mediaStream = stream;
-    session.audioContext = new AudioContext({ sampleRate: 24000 });
+    session.inputAudioContext = new AudioContext({ sampleRate: 24000 });
 
-    // Create audio worklet for processing
-    const source = session.audioContext.createMediaStreamSource(stream);
-    const processor = session.audioContext.createScriptProcessor(4096, 1, 1);
+    const source = session.inputAudioContext.createMediaStreamSource(stream);
+    const processor = session.inputAudioContext.createScriptProcessor(4096, 1, 1);
+
+    session.sourceNode = source;
+    session.processorNode = processor;
 
     processor.onaudioprocess = (e) => {
-      if (!session?.isConnected || !session.ws) return;
+      if (!session?.isConnected || !session.ws || session.ws.readyState !== WebSocket.OPEN) return;
 
       const inputData = e.inputBuffer.getChannelData(0);
       const pcm16 = floatTo16BitPCM(inputData);
       const base64 = arrayBufferToBase64(pcm16.buffer);
 
-      // Send audio to OpenAI
-      session.ws.send(JSON.stringify({
-        type: 'input_audio_buffer.append',
-        audio: base64
-      }));
+      session.ws.send(
+        JSON.stringify({
+          type: 'input_audio_buffer.append',
+          audio: base64,
+        })
+      );
     };
 
     source.connect(processor);
-    processor.connect(session.audioContext.destination);
+    processor.connect(session.inputAudioContext.destination);
 
     session.isRecording = true;
     session.config.onStatusChange?.('Listening...');
@@ -301,86 +428,82 @@ export async function startRecording(): Promise<boolean> {
   }
 }
 
-/**
- * Stop recording
- */
 export function stopRecording(): void {
+  if (session?.processorNode) {
+    session.processorNode.disconnect();
+    session.processorNode = null;
+  }
+  if (session?.sourceNode) {
+    session.sourceNode.disconnect();
+    session.sourceNode = null;
+  }
   if (session?.mediaStream) {
-    session.mediaStream.getTracks().forEach(track => track.stop());
+    session.mediaStream.getTracks().forEach((track) => track.stop());
     session.mediaStream = null;
   }
-  if (session?.audioContext) {
-    session.audioContext.close();
-    session.audioContext = null;
+  if (session?.inputAudioContext) {
+    session.inputAudioContext.close().catch(() => {});
+    session.inputAudioContext = null;
   }
   if (session) {
     session.isRecording = false;
   }
 }
 
-/**
- * Disconnect from realtime API
- */
+// ============================================================================
+// DISCONNECT
+// ============================================================================
+
 export function disconnectRealtime(): void {
   stopRecording();
+  closePlayback();
   if (session?.ws) {
     session.ws.close();
     session.ws = null;
   }
   session = null;
-  audioQueue = [];
-  isPlaying = false;
 }
 
-/**
- * Send text message (for testing or hybrid mode)
- */
+// ============================================================================
+// TEXT MESSAGE (hybrid mode)
+// ============================================================================
+
 export function sendTextMessage(text: string): void {
   if (!session?.isConnected || !session.ws) {
     console.error('[OpenAI Realtime] Not connected');
     return;
   }
 
-  // Create conversation item
-  session.ws.send(JSON.stringify({
-    type: 'conversation.item.create',
-    item: {
-      type: 'message',
-      role: 'user',
-      content: [{
-        type: 'input_text',
-        text: text
-      }]
-    }
-  }));
+  session.ws.send(
+    JSON.stringify({
+      type: 'conversation.item.create',
+      item: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text }],
+      },
+    })
+  );
 
-  // Request response
-  session.ws.send(JSON.stringify({
-    type: 'response.create'
-  }));
+  session.ws.send(JSON.stringify({ type: 'response.create' }));
 }
 
-/**
- * Check connection status
- */
+// ============================================================================
+// STATUS HELPERS
+// ============================================================================
+
 export function isConnected(): boolean {
   return session?.isConnected || false;
 }
 
-/**
- * Check recording status
- */
 export function isRecordingActive(): boolean {
   return session?.isRecording || false;
 }
 
 // ============================================================================
-// AUDIO UTILITIES
+// AUDIO CONVERSION UTILITIES
 // ============================================================================
 
-/**
- * Convert Float32Array to 16-bit PCM
- */
 function floatTo16BitPCM(float32Array: Float32Array): Int16Array {
   const int16Array = new Int16Array(float32Array.length);
   for (let i = 0; i < float32Array.length; i++) {
@@ -390,9 +513,6 @@ function floatTo16BitPCM(float32Array: Float32Array): Int16Array {
   return int16Array;
 }
 
-/**
- * Convert ArrayBuffer to base64
- */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let binary = '';
@@ -402,9 +522,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-/**
- * Convert base64 to ArrayBuffer
- */
 function base64ToArrayBuffer(base64: string): ArrayBuffer {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -412,62 +529,6 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes.buffer;
-}
-
-/**
- * Play audio chunk (PCM16 at 24kHz)
- */
-async function playAudioChunk(pcmData: ArrayBuffer): Promise<void> {
-  audioQueue.push(pcmData);
-  
-  if (!isPlaying) {
-    processAudioQueue();
-  }
-}
-
-/**
- * Process audio queue for smooth playback
- */
-async function processAudioQueue(): Promise<void> {
-  if (isPlaying || audioQueue.length === 0) return;
-  
-  isPlaying = true;
-  
-  try {
-    const audioContext = new AudioContext({ sampleRate: 24000 });
-    
-    while (audioQueue.length > 0) {
-      const pcmData = audioQueue.shift()!;
-      const int16Array = new Int16Array(pcmData);
-      
-      // Convert to float32
-      const float32Array = new Float32Array(int16Array.length);
-      for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768.0;
-      }
-      
-      // Create audio buffer
-      const audioBuffer = audioContext.createBuffer(1, float32Array.length, 24000);
-      audioBuffer.getChannelData(0).set(float32Array);
-      
-      // Play
-      const source = audioContext.createBufferSource();
-      source.buffer = audioBuffer;
-      source.connect(audioContext.destination);
-      source.start();
-      
-      // Wait for playback
-      await new Promise(resolve => {
-        source.onended = resolve;
-      });
-    }
-    
-    await audioContext.close();
-  } catch (error) {
-    console.error('[OpenAI Realtime] Playback error:', error);
-  }
-  
-  isPlaying = false;
 }
 
 // Export types
