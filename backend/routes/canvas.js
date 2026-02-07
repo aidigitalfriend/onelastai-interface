@@ -1814,32 +1814,48 @@ const optionalAuth = async (req, res, next) => {
 const MODEL_MAPPING = {
   // Anthropic
   'claude-3-5-sonnet': 'claude-sonnet-4-20250514',
-  'claude-3-opus': 'claude-3-opus-20240229',
+  'claude-3-opus': 'claude-opus-4-20250514',
   'claude-sonnet-4': 'claude-sonnet-4-20250514',
-  'claude-opus-4': 'claude-sonnet-4-20250514',
+  'claude-opus-4': 'claude-opus-4-20250514',
+  'claude-sonnet-4-20250514': 'claude-sonnet-4-20250514',
+  'claude-opus-4-20250514': 'claude-opus-4-20250514',
+  'claude-3-5-haiku-20241022': 'claude-3-5-haiku-20241022',
   // OpenAI
   'gpt-4o': 'gpt-4o',
   'gpt-4o-mini': 'gpt-4o-mini',
   'gpt-4.1': 'gpt-4.1',
+  // Mistral
+  'mistral-large-2501': 'mistral-large-2501',
+  'codestral-latest': 'codestral-latest',
+  'mistral-small-latest': 'mistral-small-latest',
   // xAI
   'grok-3': 'grok-3',
+  'grok-3-fast': 'grok-3-fast',
+  'grok-3-mini': 'grok-3-mini',
   // Groq
   'llama-3.3-70b': 'llama-3.3-70b-versatile',
+  'llama-3.3-70b-versatile': 'llama-3.3-70b-versatile',
+  // Cerebras
+  'llama-3.3-70b': 'llama-3.3-70b',
 };
 
 // Map frontend provider names to backend provider IDs
 const PROVIDER_MAPPING = {
   'Anthropic': 'anthropic',
   'OpenAI': 'openai',
+  'Mistral': 'mistral',
   'xAI': 'xai',
   'Groq': 'groq',
-  // Friendly names from canvas-app
-  'Maula AI': 'mistral',
-  'Image Generator': 'openai',
-  'Designer': 'gemini',
-  'Planner': 'anthropic',
+  'Cerebras': 'cerebras',
+  // Branded names from canvas-app
+  'Maula AI': 'anthropic',
+  'Code Engine': 'mistral',
+  'Planner': 'xai',
   'Code Builder': 'groq',
   'Fast Coding': 'cerebras',
+  // Legacy names
+  'Image Generator': 'openai',
+  'Designer': 'gemini',
 };
 
 // ============================================================================

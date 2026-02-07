@@ -16,30 +16,40 @@ import DeployPanel from './components/DeployPanel';
 import { useEditorBridge } from './services/useEditorBridge';
 import { ToolRegistry, runTool, getAvailableTools, ToolResult } from './services/toolRegistry';
 
-// AI Models - 7 Providers, 14 Models with friendly names
+// AI Models - Anthropic (primary) + Mistral (primary) + xAI (fallback)
+// No OpenAI or Gemini in Canvas App
 const MODELS: ModelOption[] = [
-  // Maula AI (Mistral backend)
+  // Maula AI (Anthropic backend) — PRIMARY
   {
-    id: 'mistral-large-2501',
+    id: 'claude-sonnet-4-20250514',
     name: 'Nova',
     provider: 'Maula AI',
-    backendProvider: 'mistral',
+    backendProvider: 'anthropic',
     description: 'Best for coding - highly recommended.',
     icon: '🌟',
   },
   {
-    id: 'mistral-large-2501',
+    id: 'claude-sonnet-4-20250514',
     name: 'Nova Pro',
     provider: 'Maula AI',
-    backendProvider: 'mistral',
+    backendProvider: 'anthropic',
     description: 'Most powerful reasoning model.',
     isThinking: true,
     icon: '💫',
   },
   {
-    id: 'codestral-latest',
-    name: 'Maula Large',
+    id: 'claude-3-5-haiku-20241022',
+    name: 'Nova Fast',
     provider: 'Maula AI',
+    backendProvider: 'anthropic',
+    description: 'Fast and affordable.',
+    icon: '⚡',
+  },
+  // Code Engine (Mistral backend) — PRIMARY
+  {
+    id: 'mistral-large-2501',
+    name: 'Maula Large',
+    provider: 'Code Engine',
     backendProvider: 'mistral',
     description: 'Advanced multilingual model.',
     icon: '🔮',
@@ -47,60 +57,25 @@ const MODELS: ModelOption[] = [
   {
     id: 'codestral-latest',
     name: 'Maula Code',
-    provider: 'Maula AI',
+    provider: 'Code Engine',
     backendProvider: 'mistral',
     description: 'Specialized for code generation.',
     icon: '💻',
   },
-  // Image Generator (OpenAI backend)
+  // Planner (xAI backend) — FALLBACK
   {
-    id: 'gpt-4o',
-    name: 'Vision Pro',
-    provider: 'Image Generator',
-    backendProvider: 'openai',
-    description: 'Best for visual tasks and images.',
-    icon: '🎨',
-  },
-  {
-    id: 'gpt-4o-mini',
-    name: 'Vision Fast',
-    provider: 'Image Generator',
-    backendProvider: 'openai',
-    description: 'Quick image understanding.',
-    icon: '⚡',
-  },
-  // Designer (Gemini backend)
-  {
-    id: 'gemini-2.0-flash',
-    name: 'Design Flash',
-    provider: 'Designer',
-    backendProvider: 'gemini',
-    description: 'Fast multimodal design.',
-    icon: '🎯',
-  },
-  {
-    id: 'gemini-2.5-pro-preview',
-    name: 'Design Pro',
-    provider: 'Designer',
-    backendProvider: 'gemini',
-    description: 'Advanced design capabilities.',
-    isThinking: true,
-    icon: '🧠',
-  },
-  // Planner (Anthropic backend)
-  {
-    id: 'claude-sonnet-4-20250514',
+    id: 'grok-3',
     name: 'Architect',
     provider: 'Planner',
-    backendProvider: 'anthropic',
+    backendProvider: 'xai',
     description: 'Strategic planning and reasoning.',
     icon: '📐',
   },
   {
-    id: 'claude-sonnet-4-20250514',
+    id: 'grok-3-mini',
     name: 'Architect Fast',
     provider: 'Planner',
-    backendProvider: 'anthropic',
+    backendProvider: 'xai',
     description: 'Quick planning assistance.',
     icon: '🚀',
   },
@@ -113,14 +88,6 @@ const MODELS: ModelOption[] = [
     description: 'Ultra-fast code generation.',
     icon: '⚡',
   },
-  {
-    id: 'llama-3.1-8b-instant',
-    name: 'Turbo Instant',
-    provider: 'Code Builder',
-    backendProvider: 'groq',
-    description: 'Lightning fast responses.',
-    icon: '💨',
-  },
   // Fast Coding (Cerebras backend)
   {
     id: 'llama-3.3-70b',
@@ -129,14 +96,6 @@ const MODELS: ModelOption[] = [
     backendProvider: 'cerebras',
     description: 'Fastest inference speed.',
     icon: '⚡',
-  },
-  {
-    id: 'llama3.1-8b',
-    name: 'Lightning Lite',
-    provider: 'Fast Coding',
-    backendProvider: 'cerebras',
-    description: 'Quick lightweight coding.',
-    icon: '✨',
   },
 ];
 
@@ -182,7 +141,7 @@ interface ProjectFile {
 const App: React.FC = () => {
   const [prompt, setPrompt] = useState('');
   const [selectedModel, setSelectedModel] = useState<ModelOption>(MODELS[0]);
-  const [selectedProvider, setSelectedProvider] = useState('Anthropic');
+  const [selectedProvider, setSelectedProvider] = useState('Maula AI');
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.PREVIEW);
   const [currentApp, setCurrentApp] = useState<GeneratedApp | null>(null);
   const [history, setHistory] = useState<GeneratedApp[]>([]);
@@ -311,9 +270,9 @@ const App: React.FC = () => {
 
   // Filter models by selected provider
   const filteredModels = MODELS.filter(m => m.provider.toLowerCase() === selectedProvider.toLowerCase() || 
-    (selectedProvider === 'Gemini' && m.provider === 'google') ||
     (selectedProvider === 'xAI' && m.provider === 'xai') ||
-    (selectedProvider === 'Groq' && m.provider === 'groq'));
+    (selectedProvider === 'Maula AI' && m.backendProvider === 'anthropic') ||
+    (selectedProvider === 'Code Engine' && m.backendProvider === 'mistral'));
 
   useEffect(() => {
     const saved = localStorage.getItem('gencraft_v4_history');

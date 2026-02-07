@@ -1,68 +1,52 @@
-
-import { GoogleGenAI, Modality } from "@google/genai";
-
-function decode(base64: string) {
-  const binaryString = atob(base64);
-  const len = binaryString.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) {
-      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-    }
-  }
-  return buffer;
-}
+/**
+ * Canvas App Speech Service
+ * Routes TTS through the backend API instead of direct Gemini SDK calls
+ */
 
 export async function speak(text: string): Promise<void> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
-  
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-preview-tts",
-      contents: [{ parts: [{ text: `Say clearly: ${text}` }] }],
-      config: {
-        responseModalities: [Modality.AUDIO],
-        speechConfig: {
-          voiceConfig: {
-            prebuiltVoiceConfig: { voiceName: 'Kore' },
-          },
-        },
-      },
+    // Use backend speech synthesis endpoint
+    const response = await fetch('/api/speech/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        text,
+        voice: 'nova', // OpenAI TTS voice
+      }),
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (!base64Audio) throw new Error("No audio data received");
+    if (!response.ok) {
+      // Fallback to browser's built-in speech synthesis
+      fallbackSpeak(text);
+      return;
+    }
 
-    const outputAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-    const audioBuffer = await decodeAudioData(
-      decode(base64Audio),
-      outputAudioContext,
-      24000,
-      1,
-    );
-
-    const source = outputAudioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(outputAudioContext.destination);
-    source.start();
+    const data = await response.json();
+    
+    if (data.audio) {
+      // Play base64 audio from backend
+      const audioBytes = Uint8Array.from(atob(data.audio), c => c.charCodeAt(0));
+      const audioBlob = new Blob([audioBytes], { type: 'audio/mp3' });
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      await audio.play();
+    } else {
+      fallbackSpeak(text);
+    }
   } catch (error) {
     console.error("TTS Error:", error);
+    // Fallback to browser TTS
+    fallbackSpeak(text);
+  }
+}
+
+function fallbackSpeak(text: string): void {
+  if ('speechSynthesis' in window) {
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    window.speechSynthesis.speak(utterance);
   }
 }

@@ -1,5 +1,8 @@
-
-import { GoogleGenAI } from "@google/genai";
+/**
+ * Canvas App AI Service
+ * Routes all AI calls through the backend API (no direct SDK calls)
+ * Supports: Anthropic (primary), Mistral (primary), xAI (fallback)
+ */
 
 const SYSTEM_INSTRUCTION = `You are a world-class senior frontend engineer and UI/UX designer. 
 Your task is to generate or modify a complete, high-quality, single-file HTML application.
@@ -20,44 +23,44 @@ export async function generateAppCode(
   currentCode?: string, 
   history: any[] = []
 ): Promise<string> {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
-  
-  const contents: any[] = [];
-  
-  if (currentCode) {
-    contents.push({ role: 'user', parts: [{ text: `Current code:\n${currentCode}` }] });
-  }
-
-  history.forEach(msg => {
-    contents.push({
-      role: msg.role === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.text }]
-    });
-  });
-
-  contents.push({ role: 'user', parts: [{ text: prompt }] });
-
-  const config: any = {
-    systemInstruction: SYSTEM_INSTRUCTION,
-    temperature: isThinking ? 1 : 0.7,
-  };
-
-  if (isThinking) {
-    config.thinkingConfig = { thinkingBudget: 32768 };
-    // No maxOutputTokens allowed when thinkingBudget is set per instructions
-  }
-
   try {
-    const response = await ai.models.generateContent({
-      model: modelId,
-      contents,
-      config,
+    // Route through backend canvas API instead of direct SDK calls
+    const response = await fetch('/api/canvas/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        prompt,
+        provider: detectProvider(modelId),
+        modelId,
+        isThinking,
+        currentCode,
+        history,
+      }),
     });
-    return cleanCode(response.text || "");
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'Failed to generate application');
+    }
+
+    return cleanCode(data.code || data.response || '');
   } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw new Error("Failed to process request. Check if the selected model is available.");
+    console.error("AI API Error:", error);
+    throw new Error("Failed to process request. Please try again.");
   }
+}
+
+// Map model ID to provider name for the backend
+function detectProvider(modelId: string): string {
+  if (modelId.startsWith('claude')) return 'Anthropic';
+  if (modelId.startsWith('mistral') || modelId.startsWith('codestral')) return 'Mistral';
+  if (modelId.startsWith('grok')) return 'xAI';
+  if (modelId.startsWith('gpt') || modelId.startsWith('o1') || modelId.startsWith('o3')) return 'OpenAI';
+  if (modelId.startsWith('gemini')) return 'Designer';
+  if (modelId.startsWith('llama')) return 'Groq';
+  return 'Anthropic'; // default fallback
 }
 
 function cleanCode(text: string): string {

@@ -1,47 +1,53 @@
 import { ModelOption } from './types';
 
-// AI Models - 4 Providers, 6 Models (Gemini removed)
+// AI Models - Anthropic (primary) + Mistral (primary) + xAI (fallback)
+// OpenAI and Gemini removed from Canvas Studio
 export const MODELS: ModelOption[] = [
-  // Anthropic
+  // Anthropic (Primary)
   {
-    id: 'claude-sonnet-4',
+    id: 'claude-sonnet-4-20250514',
     name: 'Claude Sonnet 4',
     provider: 'Anthropic',
     description: 'Best for coding - highly recommended.',
   },
   {
-    id: 'claude-opus-4',
+    id: 'claude-opus-4-20250514',
     name: 'Claude Opus 4',
     provider: 'Anthropic',
     description: 'Most powerful reasoning model.',
     isThinking: true,
   },
-  // OpenAI
   {
-    id: 'gpt-4.1',
-    name: 'GPT-4.1',
-    provider: 'OpenAI',
-    description: 'Most capable OpenAI model.',
+    id: 'claude-3-5-haiku-20241022',
+    name: 'Claude Haiku',
+    provider: 'Anthropic',
+    description: 'Fast and affordable.',
+  },
+  // Mistral (Primary)
+  {
+    id: 'mistral-large-2501',
+    name: 'Mistral Large',
+    provider: 'Mistral',
+    description: 'Powerful multilingual reasoning.',
   },
   {
-    id: 'gpt-4o-mini',
-    name: 'GPT-4o Mini',
-    provider: 'OpenAI',
-    description: 'Fast and efficient.',
+    id: 'codestral-latest',
+    name: 'Codestral',
+    provider: 'Mistral',
+    description: 'Specialized for code generation.',
   },
-  // xAI
+  // xAI (Fallback)
   {
     id: 'grok-3',
     name: 'Grok 3',
     provider: 'xAI',
     description: 'Strong reasoning and coding.',
   },
-  // Groq
   {
-    id: 'llama-3.3-70b',
-    name: 'Llama 3.3 70B',
-    provider: 'Groq',
-    description: 'Ultra-fast inference.',
+    id: 'grok-3-mini',
+    name: 'Grok 3 Mini',
+    provider: 'xAI',
+    description: 'Fast fallback model.',
   },
 ];
 

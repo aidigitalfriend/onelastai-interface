@@ -454,9 +454,7 @@ const App: React.FC = () => {
   }, [isOverlayActive]);
 
   // Filter models by selected provider
-  const filteredModels = MODELS.filter(m => m.provider.toLowerCase() === selectedProvider.toLowerCase() || 
-    (selectedProvider === 'xAI' && m.provider === 'xai') ||
-    (selectedProvider === 'Groq' && m.provider === 'groq'));
+  const filteredModels = MODELS.filter(m => m.provider.toLowerCase() === selectedProvider.toLowerCase());
 
   useEffect(() => {
     const saved = localStorage.getItem('gencraft_v4_history');
