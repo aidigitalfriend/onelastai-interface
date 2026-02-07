@@ -2261,6 +2261,10 @@ app.use('/api/chat', chatRoutes);
 import cloudDeployRoutes from './routes/cloud-deploy.js';
 app.use('/api/cloud-deploy', cloudDeployRoutes);
 
+// Import and mount credentials routes for /api/credentials endpoints (deploy token storage)
+import credentialsRoutes from './routes/credentials.js';
+app.use('/api/credentials', credentialsRoutes);
+
 // Import and mount workspace routes for /api/workspace endpoints (project persistence, auto-save)
 import workspaceRoutes from './routes/workspace.js';
 app.use('/api/workspace', workspaceRoutes);

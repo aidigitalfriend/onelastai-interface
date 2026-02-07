@@ -541,6 +541,127 @@ const editorStateTools: Record<string, ToolDefinition> = {
 };
 
 // ============================================================================
+// DEPLOY & EXPORT TOOLS
+// ============================================================================
+
+const deployTools: Record<string, ToolDefinition> = {
+  getCredentialsStatus: {
+    name: 'getCredentialsStatus',
+    description: 'Check which deploy platforms have valid credentials stored (Vercel, Netlify, Railway, Cloudflare, GitHub)',
+    parameters: [],
+    execute: (): ToolResult => {
+      return {
+        success: true,
+        data: { checking: true },
+        message: '__ASYNC_TOOL__:getCredentialsStatus',
+      };
+    },
+  },
+
+  deployToplatform: {
+    name: 'deployToplatform',
+    description: 'Deploy the current project files to a platform (INTERNAL, VERCEL, NETLIFY, RAILWAY, CLOUDFLARE). Uses stored credentials.',
+    parameters: [
+      { name: 'provider', type: 'string', required: true, description: 'Target platform: INTERNAL, VERCEL, NETLIFY, RAILWAY, CLOUDFLARE' },
+      { name: 'projectName', type: 'string', required: false, description: 'Name for the deployed project' },
+    ],
+    execute: (provider: string, projectName?: string): ToolResult => {
+      return {
+        success: true,
+        data: { provider, projectName },
+        message: `__ASYNC_TOOL__:deployToplatform:${provider}:${projectName || 'canvas-app'}`,
+      };
+    },
+  },
+
+  exportAsZip: {
+    name: 'exportAsZip',
+    description: 'Download all project files as a ZIP archive',
+    parameters: [
+      { name: 'filename', type: 'string', required: false, description: 'ZIP filename (default: project.zip)' },
+    ],
+    execute: (filename?: string): ToolResult => {
+      const bridge = getEditorBridge();
+      if (!bridge) return { success: false, error: 'EditorBridge not available' };
+
+      const fileList = bridge.fileList;
+      if (!fileList || fileList.length === 0) {
+        return { success: false, error: 'No files to export' };
+      }
+
+      return {
+        success: true,
+        data: { filename: filename || 'project.zip', fileCount: fileList.length },
+        message: `__ASYNC_TOOL__:exportAsZip:${filename || 'project.zip'}`,
+      };
+    },
+  },
+
+  pushToGithub: {
+    name: 'pushToGithub',
+    description: 'Push project files to a GitHub repository using stored GitHub credentials',
+    parameters: [
+      { name: 'repoName', type: 'string', required: true, description: 'GitHub repository name (will be created if not exists)' },
+      { name: 'commitMessage', type: 'string', required: false, description: 'Commit message (default: "Deploy from Canvas Studio")' },
+      { name: 'isPrivate', type: 'boolean', required: false, description: 'Whether the repo should be private (default: false)' },
+    ],
+    execute: (repoName: string, commitMessage?: string, isPrivate?: boolean): ToolResult => {
+      return {
+        success: true,
+        data: { repoName, commitMessage, isPrivate },
+        message: `__ASYNC_TOOL__:pushToGithub:${repoName}`,
+      };
+    },
+  },
+
+  buildProject: {
+    name: 'buildProject',
+    description: 'Validate and build the project files, checking for errors before deployment',
+    parameters: [],
+    execute: (): ToolResult => {
+      const bridge = getEditorBridge();
+      if (!bridge) return { success: false, error: 'EditorBridge not available' };
+
+      const fileList = bridge.fileList;
+      if (!fileList || fileList.length === 0) {
+        return { success: false, error: 'No files to build' };
+      }
+
+      const errors: string[] = [];
+      const files = bridge.files;
+
+      // Basic validation
+      fileList.forEach((path: string) => {
+        const content = files.get(path) || '';
+        if (!content.trim()) {
+          errors.push(`${path}: File is empty`);
+        }
+        // Check for HTML syntax issues
+        if (path.endsWith('.html')) {
+          if (!content.includes('<!DOCTYPE html') && !content.includes('<!doctype html') && !content.includes('<html')) {
+            errors.push(`${path}: Missing DOCTYPE or <html> tag`);
+          }
+        }
+      });
+
+      if (errors.length > 0) {
+        return {
+          success: false,
+          error: `Build found ${errors.length} issue(s)`,
+          data: { errors, fileCount: fileList.length },
+        };
+      }
+
+      return {
+        success: true,
+        data: { fileCount: fileList.length, files: fileList },
+        message: `Build successful: ${fileList.length} files, no errors found`,
+      };
+    },
+  },
+};
+
+// ============================================================================
 // UNIFIED TOOL REGISTRY
 // ============================================================================
 
@@ -548,6 +669,7 @@ const allTools: Record<string, ToolDefinition> = {
   ...fileSystemTools,
   ...cursorTools,
   ...editorStateTools,
+  ...deployTools,
 };
 
 // ============================================================================
@@ -642,6 +764,7 @@ export const ToolRegistry = {
   fileSystemTools: Object.keys(fileSystemTools),
   cursorTools: Object.keys(cursorTools),
   editorStateTools: Object.keys(editorStateTools),
+  deployTools: Object.keys(deployTools),
   
   // All tool names
   allToolNames: Object.keys(allTools),

@@ -230,29 +230,43 @@ const ChatBox: React.FC<ChatBoxProps> = ({
       setVoiceMessages(prev => [...prev, userMsg]);
       setStatusText('Processing...');
 
-      // Send to AI and get response
+      // Send to AI and get a real response via the canvas agent API
       try {
-        onSendMessage(transcript);
-        
-        // Simulate AI response (in real implementation, this would come from the actual AI response)
-        setTimeout(async () => {
-          const aiResponse = "Hello! I'm AI Studio Assistant. How can I help you today?";
+        const res = await fetch('/api/canvas/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ message: transcript }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const aiText = data.reply || data.response || data.message || transcript;
           const aiMsg: VoiceMessage = {
             id: (Date.now() + 1).toString(),
-            text: aiResponse,
+            text: aiText,
             isUser: false,
             timestamp: Date.now()
           };
           setVoiceMessages(prev => [...prev, aiMsg]);
           setStatusText('Speaking...');
           
+          // Also send through to the main chat handler for code generation
+          onSendMessage(transcript);
+          
           // Speak the response
-          await speak(aiResponse);
+          await speak(aiText);
           setStatusText('Listening...');
-        }, 1000);
+        } else {
+          // Fallback: still send through main handler
+          onSendMessage(transcript);
+          setStatusText('Listening...');
+        }
       } catch (error) {
         console.error('Error processing voice message:', error);
-        setStatusText('Error - Try again');
+        // Fallback: send through main handler
+        onSendMessage(transcript);
+        setStatusText('Listening...');
       }
     };
 
@@ -270,13 +284,33 @@ const ChatBox: React.FC<ChatBoxProps> = ({
     openVoiceModal();
   };
 
-  // File upload handler
+  // File upload handler — reads file content and includes it in the message
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // For now, just add the filename to input - in production, would upload and process
-      setInput(prev => prev + ` [Attached: ${file.name}]`);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const content = ev.target?.result as string;
+      if (content) {
+        // For images, embed as base64 mention
+        if (file.type.startsWith('image/')) {
+          setInput(prev => prev + `\n[Image: ${file.name}]\n`);
+          return;
+        }
+        // For code/text files, include the actual content
+        const ext = file.name.split('.').pop() || '';
+        const langMap: Record<string, string> = { js: 'javascript', ts: 'typescript', py: 'python', html: 'html', css: 'css', json: 'json', md: 'markdown', tsx: 'tsx', jsx: 'jsx' };
+        const lang = langMap[ext] || ext;
+        setInput(prev => prev + `\n--- ${file.name} (${lang}) ---\n${content}\n--- end ${file.name} ---\n`);
+      }
+    };
+    // Read as text for code files, skip large binary files
+    if (file.size > 500000) {
+      setInput(prev => prev + ` [File too large: ${file.name} (${(file.size / 1024).toFixed(0)}KB)]`);
+      return;
     }
+    reader.readAsText(file);
   };
 
   return (

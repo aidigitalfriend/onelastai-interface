@@ -11,6 +11,8 @@ import CodeView from './components/CodeView';
 import ChatBox from './components/ChatBox';
 import CanvasNavDrawer from './components/CanvasNavDrawer';
 import Dashboard from './components/Dashboard';
+import CredentialsPanel from './components/CredentialsPanel';
+import DeployPanel from './components/DeployPanel';
 import { useEditorBridge } from './services/useEditorBridge';
 import { ToolRegistry, runTool, getAvailableTools, ToolResult } from './services/toolRegistry';
 
@@ -167,7 +169,7 @@ const DEVICE_SIZES = {
   mobile: { width: '375px', height: '812px', label: 'Mobile' },
 };
 
-type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | null;
+type ActivePanel = 'workspace' | 'assistant' | 'dashboard' | 'files' | 'tools' | 'settings' | 'history' | 'credentials' | 'deploy' | null;
 type DeviceMode = 'desktop' | 'tablet' | 'mobile';
 type ConversationPhase = 'initial' | 'gathering' | 'confirming' | 'building' | 'editing';
 
@@ -1002,29 +1004,34 @@ const App: React.FC = () => {
               </svg>
             </button>
 
-            {/* 🚀 DEPLOY - One Click Deploy */}
+            {/* 🚀 DEPLOY - Multi-Platform Deploy */}
             <button 
-              onClick={deployApp} 
-              disabled={!currentApp?.code || isDeploying}
+              onClick={() => togglePanel('deploy')} 
               className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${
-                isDeploying 
-                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 animate-pulse' 
-                  : currentApp?.code 
-                    ? 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/20 border-transparent hover:border-orange-500/30 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)]' 
-                    : 'text-gray-600 cursor-not-allowed border-transparent'
+                activePanel === 'deploy'
+                  ? 'bg-orange-500/20 text-orange-400 border-orange-500/30 shadow-[0_0_10px_rgba(249,115,22,0.2)]' 
+                  : 'text-orange-400 hover:text-orange-300 hover:bg-orange-500/20 border-transparent hover:border-orange-500/30 hover:shadow-[0_0_10px_rgba(249,115,22,0.3)]'
               }`} 
-              title="Deploy & Get Shareable Link"
+              title="Deploy to Vercel, Netlify, Railway & more"
             >
-              {isDeploying ? (
-                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-              ) : (
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
-              )}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </button>
+
+            {/* 🔑 CREDENTIALS - Platform Tokens */}
+            <button 
+              onClick={() => togglePanel('credentials')} 
+              className={`p-2.5 rounded-lg transition-all w-full flex justify-center border ${
+                activePanel === 'credentials'
+                  ? 'bg-violet-500/20 text-violet-400 border-violet-500/30 shadow-[0_0_10px_rgba(139,92,246,0.2)]' 
+                  : 'text-gray-500 hover:text-violet-400 hover:bg-violet-500/10 border-transparent hover:border-violet-500/20'
+              }`} 
+              title="Deploy Credentials (Vercel, Netlify, etc.)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
             </button>
 
             {/* Open in New Tab */}
@@ -1262,6 +1269,27 @@ const App: React.FC = () => {
                 </div>
               )}
 
+              {activePanel === 'credentials' && (
+                <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+                  <CredentialsPanel
+                    isDarkMode={isDarkMode}
+                    onClose={() => setActivePanel(null)}
+                  />
+                </div>
+              )}
+
+              {activePanel === 'deploy' && (
+                <div className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
+                  <DeployPanel
+                    isDarkMode={isDarkMode}
+                    onClose={() => setActivePanel(null)}
+                    projectFiles={projectFiles}
+                    projectName={currentApp?.name || ''}
+                    onOpenCredentials={() => setActivePanel('credentials')}
+                  />
+                </div>
+              )}
+
               {/* Files Panel */}
               {activePanel === 'files' && (
                 <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#111]/95">
@@ -1338,7 +1366,7 @@ const App: React.FC = () => {
 
                     <button 
                       onClick={() => {
-                        const newPath = prompt('Enter new file name (e.g., component.tsx):');
+                        const newPath = window.prompt('Enter new file name (e.g., component.tsx):');
                         if (newPath) {
                           editorBridge.createFile(newPath, '');
                           editorBridge.setActiveFile(newPath);
@@ -1538,22 +1566,107 @@ const App: React.FC = () => {
                     <div className="p-4 bg-black/30 border border-gray-800 rounded-lg">
                       <p className="text-xs font-bold text-gray-300 mb-3 uppercase tracking-wider">Export Options</p>
                       <div className="space-y-2">
-                        <button className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider">
+                        <button 
+                          onClick={async () => {
+                            if (projectFiles.length === 0) { alert('No files to export'); return; }
+                            try {
+                              // Dynamic import JSZip from CDN
+                              const JSZip = (await import('https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm' as any)).default;
+                              const zip = new JSZip();
+                              projectFiles.forEach((f: any) => {
+                                zip.file(f.path.replace(/^\//, ''), f.content);
+                              });
+                              // Ensure index.html exists
+                              if (!projectFiles.some((f: any) => f.path === 'index.html') && projectFiles.some((f: any) => f.path === 'main.html')) {
+                                const main = projectFiles.find((f: any) => f.path === 'main.html');
+                                if (main) zip.file('index.html', main.content);
+                              }
+                              const blob = await zip.generateAsync({ type: 'blob' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${(currentApp?.name || 'project').replace(/[^a-z0-9-]/gi, '-')}.zip`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            } catch (err) {
+                              // Fallback: manual ZIP with just the main file
+                              const mainCode = currentApp?.code || projectFiles[0]?.content || '';
+                              const blob = new Blob([mainCode], { type: 'text/html' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${(currentApp?.name || 'project').replace(/[^a-z0-9-]/gi, '-')}.html`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            }
+                          }}
+                          className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                        >
                           Download as ZIP
                         </button>
-                        <button className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider">
+                        <button 
+                          onClick={() => {
+                            if (!currentApp?.code) { alert('No code to export'); return; }
+                            const code = currentApp.code;
+                            const params = new URLSearchParams({ parameters: JSON.stringify({ files: { 'index.html': { content: code } } }) });
+                            const form = document.createElement('form');
+                            form.method = 'POST';
+                            form.action = 'https://codesandbox.io/api/v1/sandboxes/define';
+                            form.target = '_blank';
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = 'parameters';
+                            input.value = btoa(JSON.stringify({ files: { 'index.html': { content: code } } }));
+                            form.appendChild(input);
+                            document.body.appendChild(form);
+                            form.submit();
+                            document.body.removeChild(form);
+                          }}
+                          className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                        >
                           Export to CodeSandbox
                         </button>
-                        <button className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider">
+                        <button 
+                          onClick={async () => {
+                            if (projectFiles.length === 0) { alert('No files to push'); return; }
+                            const repoName = window.prompt('GitHub repository name:', (currentApp?.name || 'canvas-project').toLowerCase().replace(/[^a-z0-9-]/g, '-'));
+                            if (!repoName) return;
+                            try {
+                              const filesMap: Record<string, string> = {};
+                              projectFiles.forEach((f: any) => { filesMap[f.path] = f.content; });
+                              const res = await fetch('/api/credentials/deploy', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'include',
+                                body: JSON.stringify({ provider: 'GITHUB', projectName: repoName, files: filesMap }),
+                              });
+                              const data = await res.json();
+                              if (data.success && data.url) {
+                                window.open(data.url, '_blank');
+                              } else if (data.needsCredentials) {
+                                setActivePanel('credentials');
+                                alert('Please add your GitHub token first');
+                              } else {
+                                alert(data.error || 'Push failed');
+                              }
+                            } catch (err: any) {
+                              alert('Push failed: ' + err.message);
+                            }
+                          }}
+                          className="w-full py-2 text-xs font-bold bg-black/40 hover:bg-cyan-500/10 text-gray-400 hover:text-cyan-400 border border-gray-800 hover:border-cyan-500/30 rounded-lg transition-all uppercase tracking-wider"
+                        >
                           Push to GitHub
                         </button>
                       </div>
                     </div>
-                    {/* API Keys */}
+                    {/* API Keys & Credentials */}
                     <div className="p-4 bg-black/30 border border-gray-800 rounded-lg">
-                      <p className="text-xs font-bold text-gray-300 mb-3 uppercase tracking-wider">API Configuration</p>
-                      <button className="w-full py-2 text-xs font-bold bg-gradient-to-r from-cyan-600 to-emerald-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(34,211,238,0.3)] transition-all uppercase tracking-wider">
-                        Manage API Keys
+                      <p className="text-xs font-bold text-gray-300 mb-3 uppercase tracking-wider">Credentials</p>
+                      <button 
+                        onClick={() => setActivePanel('credentials')}
+                        className="w-full py-2 text-xs font-bold bg-gradient-to-r from-violet-600 to-purple-600 text-white rounded-lg hover:shadow-[0_0_15px_rgba(139,92,246,0.3)] transition-all uppercase tracking-wider"
+                      >
+                        Manage Deploy Tokens
                       </button>
                     </div>
                   </div>

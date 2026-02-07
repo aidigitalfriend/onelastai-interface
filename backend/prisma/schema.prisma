@@ -42,6 +42,7 @@ model User {
   apiKeys           ApiKey[]
   hostedApps        HostedApp[]
   projects          Project[]
+  deployCredentials DeployCredential[]
   
   @@map("users")
 }
@@ -606,4 +607,49 @@ model ProjectVersion {
   
   @@index([projectId, version])
   @@map("project_versions")
+}
+
+// ============================================================================
+// DEPLOY CREDENTIALS (User's external platform tokens)
+// ============================================================================
+
+model DeployCredential {
+  id              String    @id @default(cuid())
+  userId          String    @map("user_id")
+  
+  // Platform identification
+  provider        DeployProvider
+  label           String?   // User-friendly label like "My Vercel Account"
+  
+  // Encrypted token storage
+  encryptedToken  String    @map("encrypted_token") @db.Text
+  tokenIv         String    @map("token_iv")  // AES initialization vector
+  
+  // Validated identity
+  username        String?   // Verified username/email from the platform
+  isValid         Boolean   @default(true) @map("is_valid")
+  
+  // Platform-specific extras (e.g., Cloudflare accountId, Railway teamId)
+  extras          Json?
+  
+  // Timestamps
+  lastValidatedAt DateTime? @map("last_validated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, provider])
+  @@index([userId])
+  @@map("deploy_credentials")
+}
+
+enum DeployProvider {
+  VERCEL
+  NETLIFY
+  RAILWAY
+  RENDER
+  CLOUDFLARE
+  GITHUB
 }
