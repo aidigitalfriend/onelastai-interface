@@ -45,7 +45,7 @@ You are responsible for generating, modifying, and maintaining code across multi
 
 ## LANGUAGE DETECTION
 Automatically detect the target language from:
-1. User's explicit request ("make a React app", "Python script")
+1. User's explicit request ("make a React app", "Python script", "Java class", etc.)
 2. Existing code being modified
 3. Keywords in the prompt
 
@@ -93,6 +93,103 @@ STRUCTURE:
 - Type hints: def function(param: str) -> int:
 - Docstrings for classes/functions
 - PEP 8 style
+
+### JAVA (For enterprise/backend apps)
+USE WHEN: User wants Java backend, Spring Boot, Android, or enterprise code
+INDICATORS: "Java", "Spring", "Spring Boot", "Maven", "Gradle", "JPA", "Android"
+STRUCTURE:
+- Java 17+ syntax (records, sealed classes, pattern matching)
+- Spring Boot conventions (annotations, DI)
+- Proper package declarations
+- Javadoc for public API
+
+### C# (.NET apps)
+USE WHEN: User wants .NET backend, ASP.NET, Unity, or C# code
+INDICATORS: "C#", "csharp", ".NET", "ASP.NET", "Unity", "Blazor", "MAUI"
+STRUCTURE:
+- C# 12+ syntax (records, pattern matching, top-level statements)
+- ASP.NET conventions (controllers, dependency injection)
+- XML documentation comments
+
+### GO (For high-performance backends)
+USE WHEN: User wants Go backend, CLI tools, microservices
+INDICATORS: "Go", "Golang", "Gin", "Fiber", "goroutine", "gRPC"
+STRUCTURE:
+- Go 1.21+ syntax
+- Proper error handling (return err)
+- Package organization
+- Interfaces for contracts
+
+### RUST (For systems/performance-critical code)
+USE WHEN: User wants Rust systems code, WASM, CLI, or performance-critical code
+INDICATORS: "Rust", "Cargo", "ownership", "WASM", "Tokio", "Actix"
+STRUCTURE:
+- Rust 2021 edition
+- Proper ownership/borrowing
+- Result/Option error handling
+- Documentation comments (///)
+
+### PHP (For web backends)
+USE WHEN: User wants PHP backend, Laravel, WordPress, or web APIs
+INDICATORS: "PHP", "Laravel", "WordPress", "Symfony", "Composer"
+STRUCTURE:
+- PHP 8.2+ syntax (enums, readonly, named args, fibers)
+- PSR-12 coding standard
+- Type declarations on params and returns
+- Namespace organization
+
+### RUBY (For web apps/scripts)
+USE WHEN: User wants Ruby backend, Rails, or scripting
+INDICATORS: "Ruby", "Rails", "Sinatra", "gem", "rake"
+STRUCTURE:
+- Ruby 3.2+ syntax
+- Rails conventions (MVC, ActiveRecord)
+- YARD documentation
+
+### SWIFT (For Apple platform apps)
+USE WHEN: User wants iOS/macOS app, SwiftUI, or Apple platform code
+INDICATORS: "Swift", "SwiftUI", "iOS", "macOS", "Xcode", "UIKit"
+STRUCTURE:
+- Swift 5.9+ syntax
+- SwiftUI preferred for UI
+- Structured concurrency (async/await)
+- Protocol-oriented design
+
+### KOTLIN (For Android/JVM apps)
+USE WHEN: User wants Kotlin, Android, or JVM code
+INDICATORS: "Kotlin", "Android", "Jetpack", "Compose", "KMM", "Ktor"
+STRUCTURE:
+- Kotlin 1.9+ syntax
+- Coroutines for async
+- Data classes, sealed classes
+- Extension functions
+
+### C/C++ (For systems programming)
+USE WHEN: User wants C/C++ systems code, embedded, game engines, native code
+INDICATORS: "C++", "C language", "embedded", "game engine", "Unreal", "Qt", "Arduino"
+STRUCTURE:
+- C++20/23 features (concepts, ranges, modules)
+- RAII and smart pointers
+- STL usage
+- Header/implementation separation guidance
+
+### SQL (For database queries)
+USE WHEN: User wants database queries, schemas, migrations
+INDICATORS: "SQL", "database", "query", "schema", "migration", "PostgreSQL", "MySQL", "SQLite"
+STRUCTURE:
+- Standard SQL with dialect notes
+- Proper indexing recommendations
+- Parameterized queries (never string concat)
+- Migration-ready DDL
+
+### SHELL/BASH (For scripts and automation)
+USE WHEN: User wants shell scripts, CI/CD, automation, DevOps
+INDICATORS: "bash", "shell", "script", "CI/CD", "Docker", "Makefile", "automation"
+STRUCTURE:
+- Bash 4+ with set -euo pipefail
+- Shellcheck-clean code
+- Proper quoting and error handling
+- Functions for reusability
 
 ## CODE QUALITY STANDARDS
 
@@ -209,21 +306,45 @@ Listen for these phrases that indicate specific modifications:
 ❌ Don't create single-page apps when user clearly wants multiple pages
 ❌ Don't use placeholder text like "Lorem ipsum" - create REAL content
 
-## ⚠️ CRITICAL: SINGLE FILE OUTPUT ⚠️
-ALL CODE MUST BE IN A SINGLE FILE!
+## ⚠️ CRITICAL: FILE OUTPUT RULES ⚠️
+There are TWO modes of code generation:
+
+### MODE 1: SINGLE-FILE (for quick previews via "build" tool)
+When using the "build" tool for simple apps/pages that run in the sandboxed preview:
+- ALL CODE MUST BE IN A SINGLE FILE
 - For React: ALL components must be defined in App.tsx (inline sub-components)
 - NEVER import from local paths like './components/', './utils/', './hooks/'
 - Only import from npm packages: 'react', 'lucide-react'
-- Define helper functions and sub-components INLINE in the same file
-- This is because the preview runs in a sandboxed environment with only ONE file
+- This is because the Sandpack preview runs with only ONE file
 
-Example of CORRECT React code:
+### MODE 2: MULTI-FILE (for real projects via "build_project" or "build_fullstack" tools)
+When the user wants a REAL project with proper structure (React app, full-stack, etc.):
+- Use "build_project" to create multiple files with proper imports
+- Use "build_fullstack" for frontend + backend + database
+- Each file can import from other project files normally
+- Proper project structure with src/, components/, utils/, etc.
+- Include package.json, config files, README
+
+### HOW TO DECIDE:
+- "build me a quick landing page" → build (single file)
+- "create a portfolio website" → build (single file)
+- "create a React app with proper structure" → build_project (multi-file)
+- "build a full-stack e-commerce site" → build_fullstack (multi-file)
+- "create a Node.js API server" → build_project (multi-file)
+- "build a Python Flask app" → build_project (multi-file)
+- "make a Java Spring Boot project" → build_project (multi-file)
+
+Example of CORRECT single-file React code (build):
 const Header = () => <header>...</header>;
 const Footer = () => <footer>...</footer>;
 export default function App() { return <div><Header/><Footer/></div>; }
 
-Example of WRONG React code (NEVER DO THIS):
-import Header from './components/Header'; // ❌ FORBIDDEN
+Example of CORRECT multi-file project (build_project):
+{"tool": "build_project", "files": [
+  {"path": "src/App.tsx", "content": "import Header from './components/Header';..."},
+  {"path": "src/components/Header.tsx", "content": "export default function Header()..."},
+  {"path": "package.json", "content": "{...}"}
+]}
 
 ## REMEMBER
 - You are the ENTIRE development team
@@ -789,7 +910,9 @@ Required patterns:
 - Use type for unions/aliases
 - Add return types to functions
 - Use async/await for promises
-- Export types that may be reused`,
+- Export types that may be reused
+- For Node.js/Express servers: proper middleware typing, error handling
+- For utilities: generic types where appropriate`,
 
   javascript: `
 ## CURRENT TASK: JAVASCRIPT CODE  
@@ -824,7 +947,355 @@ class ClassName:
     """Class description."""
     
     def __init__(self, value: str) -> None:
-        self.value = value`,
+        self.value = value
+
+For Flask/FastAPI/Django:
+- Use blueprints/routers for route organization
+- Proper error handling with HTTP status codes
+- Environment variables for secrets (os.environ or python-dotenv)
+- Database models with proper relationships
+- Input validation (Pydantic for FastAPI, WTForms for Flask)`,
+
+  java: `
+## CURRENT TASK: JAVA CODE
+Generate Java 17+ code following best practices.
+
+Required patterns:
+package com.example.app;
+
+import java.util.*;
+
+/**
+ * Class description.
+ */
+public class ClassName {
+    private final String field;
+    
+    public ClassName(String field) {
+        this.field = field;
+    }
+    
+    public String getField() {
+        return field;
+    }
+}
+
+// Use records for data carriers:
+public record UserDTO(String name, String email, int age) {}
+
+// Use sealed classes for restricted hierarchies:
+public sealed interface Shape permits Circle, Rectangle {}
+
+For Spring Boot:
+- @RestController, @Service, @Repository annotations
+- Constructor injection (no @Autowired on fields)
+- ResponseEntity for API responses
+- @Valid for request validation
+- application.properties/yml for config`,
+
+  csharp: `
+## CURRENT TASK: C# CODE
+Generate C# 12+ / .NET 8+ code.
+
+Required patterns:
+namespace App.Models;
+
+/// <summary>
+/// Class description.
+/// </summary>
+public class ClassName
+{
+    public required string Name { get; init; }
+    public int Age { get; set; }
+}
+
+// Use records:
+public record UserDto(string Name, string Email);
+
+// Use primary constructors:
+public class Service(IRepository repo)
+{
+    public async Task<User> GetUser(int id) => await repo.FindAsync(id);
+}
+
+For ASP.NET:
+- Minimal API or Controller-based
+- Dependency injection via builder.Services
+- async/await throughout
+- IResult or ActionResult returns`,
+
+  go: `
+## CURRENT TASK: GO CODE
+Generate Go 1.21+ code.
+
+Required patterns:
+package main
+
+import (
+    "fmt"
+    "net/http"
+)
+
+// User represents a user in the system.
+type User struct {
+    ID    int    \`json:"id"\`
+    Name  string \`json:"name"\`
+    Email string \`json:"email"\`
+}
+
+func main() {
+    // Error handling - always check errors
+    result, err := doSomething()
+    if err != nil {
+        log.Fatal(err)
+    }
+}
+
+// Use interfaces for contracts:
+type Repository interface {
+    FindByID(id int) (*User, error)
+    Save(user *User) error
+}
+
+For web servers (Gin/Fiber/stdlib):
+- Proper middleware chain
+- Structured logging
+- Graceful shutdown
+- Context propagation`,
+
+  rust: `
+## CURRENT TASK: RUST CODE
+Generate Rust 2021 edition code.
+
+Required patterns:
+use std::collections::HashMap;
+
+/// Struct description.
+#[derive(Debug, Clone)]
+pub struct Config {
+    pub name: String,
+    pub port: u16,
+}
+
+impl Config {
+    pub fn new(name: &str, port: u16) -> Self {
+        Self {
+            name: name.to_string(),
+            port,
+        }
+    }
+}
+
+// Error handling with Result:
+fn parse_data(input: &str) -> Result<Data, ParseError> {
+    // ...
+}
+
+// Use enums for state machines:
+enum State {
+    Idle,
+    Running { progress: f64 },
+    Complete(Output),
+    Failed(Error),
+}`,
+
+  php: `
+## CURRENT TASK: PHP CODE
+Generate PHP 8.2+ code.
+
+Required patterns:
+<?php
+
+declare(strict_types=1);
+
+namespace App\\Models;
+
+class User
+{
+    public function __construct(
+        public readonly string $name,
+        public readonly string $email,
+        private int $age = 0,
+    ) {}
+    
+    public function getAge(): int
+    {
+        return $this->age;
+    }
+}
+
+// Use enums:
+enum Status: string
+{
+    case Active = 'active';
+    case Inactive = 'inactive';
+}
+
+For Laravel:
+- Eloquent models with relationships
+- Form requests for validation
+- Resource controllers
+- Blade templates or API resources`,
+
+  ruby: `
+## CURRENT TASK: RUBY CODE
+Generate Ruby 3.2+ code.
+
+Required patterns:
+# frozen_string_literal: true
+
+class User
+  attr_reader :name, :email
+  
+  def initialize(name:, email:)
+    @name = name
+    @email = email
+  end
+  
+  def to_h
+    { name: @name, email: @email }
+  end
+end
+
+For Rails:
+- RESTful routes and controllers
+- ActiveRecord models with validations
+- Strong parameters
+- Proper migrations`,
+
+  swift: `
+## CURRENT TASK: SWIFT CODE
+Generate Swift 5.9+ code.
+
+Required patterns:
+import Foundation
+
+struct User: Codable, Identifiable {
+    let id: UUID
+    var name: String
+    var email: String
+}
+
+actor DataStore {
+    private var users: [User] = []
+    
+    func add(_ user: User) {
+        users.append(user)
+    }
+    
+    func find(id: UUID) -> User? {
+        users.first { $0.id == id }
+    }
+}
+
+For SwiftUI:
+- @State, @Binding, @ObservableObject
+- NavigationStack for routing
+- .task for async loading`,
+
+  kotlin: `
+## CURRENT TASK: KOTLIN CODE
+Generate Kotlin 1.9+ code.
+
+Required patterns:
+data class User(
+    val name: String,
+    val email: String,
+    val age: Int = 0,
+)
+
+sealed class Result<out T> {
+    data class Success<T>(val data: T) : Result<T>()
+    data class Error(val message: String) : Result<Nothing>()
+}
+
+suspend fun fetchUsers(): List<User> {
+    // Coroutines for async
+}
+
+For Android/Compose:
+- Jetpack Compose UI
+- ViewModel + StateFlow
+- Room for database
+- Hilt for DI`,
+
+  cpp: `
+## CURRENT TASK: C++ CODE
+Generate C++20/23 code.
+
+Required patterns:
+#include <iostream>
+#include <vector>
+#include <memory>
+#include <string>
+
+class Widget {
+public:
+    explicit Widget(std::string name) : name_(std::move(name)) {}
+    
+    [[nodiscard]] const std::string& name() const { return name_; }
+    
+private:
+    std::string name_;
+};
+
+// Use smart pointers:
+auto widget = std::make_unique<Widget>("example");
+
+// Use concepts:
+template<typename T>
+concept Printable = requires(T t) {
+    { std::cout << t } -> std::same_as<std::ostream&>;
+};`,
+
+  sql: `
+## CURRENT TASK: SQL CODE
+Generate standard SQL with PostgreSQL extensions where appropriate.
+
+Required patterns:
+-- Table with proper types and constraints
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Use parameterized queries (shown as $1, $2):
+SELECT * FROM users WHERE email = $1;
+
+-- Proper indexing:
+CREATE INDEX idx_users_email ON users(email);
+
+-- Migrations should be reversible`,
+
+  shell: `
+## CURRENT TASK: SHELL/BASH SCRIPT
+Generate Bash 4+ scripts.
+
+Required patterns:
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Script description
+
+readonly SCRIPT_DIR="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+
+log() {
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
+}
+
+error() {
+    echo "[ERROR] $*" >&2
+    exit 1
+}
+
+main() {
+    log "Starting..."
+    # Script logic here
+}
+
+main "$@"`,
 
   default: `
 ## CURRENT TASK: CODE GENERATION
@@ -844,6 +1315,17 @@ const CODE_GENERATION_PROMPTS = {
   typescript: getSystemPrompt('typescript'),
   javascript: getSystemPrompt('javascript'),
   python: getSystemPrompt('python'),
+  java: getSystemPrompt('java'),
+  csharp: getSystemPrompt('csharp'),
+  go: getSystemPrompt('go'),
+  rust: getSystemPrompt('rust'),
+  php: getSystemPrompt('php'),
+  ruby: getSystemPrompt('ruby'),
+  swift: getSystemPrompt('swift'),
+  kotlin: getSystemPrompt('kotlin'),
+  cpp: getSystemPrompt('cpp'),
+  sql: getSystemPrompt('sql'),
+  shell: getSystemPrompt('shell'),
   default: getSystemPrompt('default')
 };
 
@@ -878,8 +1360,80 @@ function detectLanguage(code) {
   // Python detection
   if ((code.includes('def ') && code.includes(':')) || 
       (code.includes('class ') && code.includes(':') && !code.includes('{')) ||
-      code.includes('print(')) {
+      code.includes('print(') ||
+      code.includes('import flask') ||
+      code.includes('from fastapi') ||
+      code.includes('import django')) {
     return 'python';
+  }
+  
+  // Java detection
+  if ((code.includes('public class ') || code.includes('public interface ') || code.includes('public record ')) && 
+      code.includes('{') && 
+      (code.includes('public static void main') || code.includes('package ') || code.includes('@Override') || code.includes('@RestController') || code.includes('System.out'))) {
+    return 'java';
+  }
+  
+  // C# detection
+  if ((code.includes('namespace ') || code.includes('using System')) && 
+      (code.includes('public class ') || code.includes('public record ') || code.includes('async Task'))) {
+    return 'csharp';
+  }
+  
+  // Go detection
+  if (code.includes('package main') || code.includes('func main()') ||
+      (code.includes('func ') && code.includes('error') && code.includes(':='))) {
+    return 'go';
+  }
+  
+  // Rust detection
+  if (code.includes('fn main()') && code.includes('let ') && (code.includes('->') || code.includes('::')) ||
+      code.includes('use std::') || code.includes('#[derive(')) {
+    return 'rust';
+  }
+  
+  // PHP detection
+  if (code.includes('<?php') || 
+      (code.includes('function ') && code.includes('$') && code.includes('->'))) {
+    return 'php';
+  }
+  
+  // Ruby detection
+  if ((code.includes('def ') && code.includes('end') && !code.includes('{')) ||
+      code.includes('require ') && code.includes("'rails") ||
+      code.includes('attr_reader') || code.includes('attr_accessor')) {
+    return 'ruby';
+  }
+  
+  // Swift detection
+  if (code.includes('import SwiftUI') || code.includes('import Foundation') ||
+      (code.includes('struct ') && code.includes(': View') && code.includes('var body'))) {
+    return 'swift';
+  }
+  
+  // Kotlin detection
+  if (code.includes('fun main') || code.includes('data class ') ||
+      code.includes('suspend fun ') || code.includes('import kotlinx.') ||
+      (code.includes('val ') && code.includes('fun ') && !code.includes('const '))) {
+    return 'kotlin';
+  }
+  
+  // C++ detection
+  if (code.includes('#include <') || code.includes('std::') ||
+      (code.includes('int main(') && code.includes('#include'))) {
+    return 'cpp';
+  }
+  
+  // SQL detection
+  if (lowerCode.includes('create table ') || lowerCode.includes('select ') && lowerCode.includes(' from ') ||
+      lowerCode.includes('insert into ') || lowerCode.includes('alter table ')) {
+    return 'sql';
+  }
+  
+  // Shell/Bash detection
+  if (code.includes('#!/bin/bash') || code.includes('#!/usr/bin/env bash') || code.includes('#!/bin/sh') ||
+      (code.includes('set -e') && code.includes('echo '))) {
+    return 'shell';
   }
   
   // TypeScript detection
@@ -923,8 +1477,134 @@ function detectLanguageFromPrompt(prompt) {
       p.includes('ml model') ||
       p.includes('data analysis') ||
       p.includes('scraper') ||
-      p.includes('automation script')) {
+      p.includes('automation script') ||
+      p.includes('pytorch') ||
+      p.includes('tensorflow')) {
     return 'python';
+  }
+  
+  // Java indicators
+  if (p.includes('java ') ||
+      p.includes('java,') ||
+      p.includes('spring boot') ||
+      p.includes('spring ') ||
+      p.includes('maven') ||
+      p.includes('gradle') ||
+      p.includes('jpa') ||
+      p.includes('hibernate') ||
+      p.includes('servlet') ||
+      p.includes('java class') ||
+      p.includes('java app') ||
+      p.includes('java api')) {
+    return 'java';
+  }
+  
+  // C# indicators
+  if (p.includes('c#') ||
+      p.includes('csharp') ||
+      p.includes('.net') ||
+      p.includes('asp.net') ||
+      p.includes('blazor') ||
+      p.includes('maui') ||
+      p.includes('unity game') ||
+      p.includes('wpf') ||
+      p.includes('entity framework')) {
+    return 'csharp';
+  }
+  
+  // Go indicators
+  if (p.includes('golang') ||
+      p.includes('go lang') ||
+      p.includes('go api') ||
+      p.includes('go server') ||
+      p.includes('go backend') ||
+      p.includes('gin ') ||
+      p.includes('fiber ') ||
+      p.includes('goroutine') ||
+      p.includes('grpc')) {
+    return 'go';
+  }
+  
+  // Rust indicators
+  if (p.includes('rust ') ||
+      p.includes('rust,') ||
+      p.includes('cargo') ||
+      p.includes('tokio') ||
+      p.includes('actix') ||
+      p.includes('wasm') ||
+      p.includes('webassembly')) {
+    return 'rust';
+  }
+  
+  // PHP indicators
+  if (p.includes('php') ||
+      p.includes('laravel') ||
+      p.includes('wordpress') ||
+      p.includes('symfony') ||
+      p.includes('composer')) {
+    return 'php';
+  }
+  
+  // Ruby indicators
+  if (p.includes('ruby') ||
+      p.includes('rails') ||
+      p.includes('sinatra') ||
+      p.includes('rake')) {
+    return 'ruby';
+  }
+  
+  // Swift indicators
+  if (p.includes('swift') ||
+      p.includes('swiftui') ||
+      p.includes('ios app') ||
+      p.includes('macos app') ||
+      p.includes('xcode') ||
+      p.includes('uikit')) {
+    return 'swift';
+  }
+  
+  // Kotlin indicators
+  if (p.includes('kotlin') ||
+      p.includes('android app') ||
+      p.includes('jetpack compose') ||
+      p.includes('android ') ||
+      p.includes('ktor')) {
+    return 'kotlin';
+  }
+  
+  // C++ indicators
+  if (p.includes('c++') ||
+      p.includes('cpp') ||
+      p.includes('unreal') ||
+      p.includes('arduino') ||
+      p.includes('embedded') ||
+      p.includes('game engine') ||
+      p.includes('opengl') ||
+      p.includes('vulkan')) {
+    return 'cpp';
+  }
+  
+  // SQL indicators
+  if (p.includes('sql ') ||
+      p.includes('sql,') ||
+      p.includes('database schema') ||
+      p.includes('migration') ||
+      p.includes('postgresql') ||
+      p.includes('mysql') ||
+      p.includes('sqlite') ||
+      p.includes('create table')) {
+    return 'sql';
+  }
+  
+  // Shell/Bash indicators
+  if (p.includes('bash') ||
+      p.includes('shell script') ||
+      p.includes('ci/cd') ||
+      p.includes('dockerfile') ||
+      p.includes('makefile') ||
+      p.includes('deploy script') ||
+      p.includes('automation') && p.includes('script')) {
+    return 'shell';
   }
   
   // TypeScript indicators
@@ -1181,8 +1861,8 @@ Use when: greeting, questions, clarification, discussion
 {"tool": "chat", "message": "Your response here"}
 
 ### 2. BUILD - Generate Single-File Code
-Use when: user wants to create a simple single-file app (HTML page, script)
-{"tool": "build", "prompt": "Detailed requirements", "language": "html|javascript|python"}
+Use when: user wants to create a simple single-file app (HTML page, script, utility)
+{"tool": "build", "prompt": "Detailed requirements", "language": "html|javascript|python|react|typescript|java|csharp|go|rust|php|ruby|swift|kotlin|cpp|sql|shell"}
 
 ### 3. BUILD_PROJECT - Generate Multi-File Project ⭐ NEW
 Use when: user wants to create a React app, full project, template with multiple files
@@ -1229,7 +1909,7 @@ Use when: user wants to change which AI model to use
 
 ### 6. CHANGE_LANGUAGE - Switch Output Language
 Use when: user wants to change the coding language
-{"tool": "change_language", "language": "react|html|typescript|javascript|python"}
+{"tool": "change_language", "language": "react|html|typescript|javascript|python|java|csharp|go|rust|php|ruby|swift|kotlin|cpp|sql|shell"}
 
 ### 7. DEPLOY - Deploy the App
 Use when: user wants to publish/deploy/host their app
@@ -1579,6 +2259,10 @@ function processToolRequest(tool) {
       return { action: 'delete_file', path: tool.path, message: tool.message || `Deleting ${tool.path}...` };
     case 'open_file':
       return { action: 'open_file', path: tool.path, message: tool.message || `Opening ${tool.path}...` };
+    case 'edit_file':
+      return { action: 'edit_file', path: tool.path, instruction: tool.instruction, code: tool.code, message: tool.message || `Editing ${tool.path}...` };
+    case 'read_file':
+      return { action: 'read_file', path: tool.path, message: tool.message || `Reading ${tool.path}...` };
     case 'undo':
       return { action: 'undo', message: tool.message || 'Undoing...' };
     case 'redo':
@@ -1631,8 +2315,8 @@ async function processToolRequestWithAI(tool, context) {
     'download', 'sandbox', 'change_provider', 'change_language',
     // 🔗 Editor Bridge tools (all passthrough)
     'insert_at', 'replace_range', 'delete_lines', 'goto_line',
-    'create_file', 'delete_file', 'open_file', 'undo', 'redo',
-    'find_replace', 'get_selection',
+    'create_file', 'delete_file', 'open_file', 'edit_file', 'read_file',
+    'undo', 'redo', 'find_replace', 'get_selection',
     // Multi-file project (already has content from agent)
     'build_project',
     // 🔧 Unified Tool Registry (direct EditorBridge invocation)
@@ -1896,7 +2580,18 @@ ${prompt}
         typescript: 'TypeScript code',
         javascript: 'JavaScript code',
         python: 'Python code with type hints',
-        html: 'a complete single-file HTML application with Tailwind CSS'
+        html: 'a complete single-file HTML application with Tailwind CSS',
+        java: 'Java code following best practices',
+        csharp: 'C# code with .NET conventions',
+        go: 'Go code following Go idioms',
+        rust: 'Rust code with proper ownership patterns',
+        php: 'PHP code following modern standards',
+        ruby: 'Ruby code following conventions',
+        swift: 'Swift code with modern patterns',
+        kotlin: 'Kotlin code with coroutines and data classes',
+        cpp: 'C++ code with modern C++20 features',
+        sql: 'SQL with proper constraints and indexing',
+        shell: 'a Bash script with proper error handling',
       };
       fullPrompt = `## NEW APPLICATION REQUEST
 

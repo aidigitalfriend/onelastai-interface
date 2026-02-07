@@ -30,6 +30,71 @@ const detectLanguageFromCode = (code: string, providedLang: string = 'html'): st
   
   if (hasReactPatterns) return 'react';
   
+  // Java detection (before TypeScript — both use 'interface' but Java has 'package')
+  if ((code.includes('public class ') || code.includes('public interface ') || code.includes('public record ')) &&
+      (code.includes('package ') || code.includes('System.out') || code.includes('@Override') || code.includes('public static void main'))) {
+    return 'java';
+  }
+  
+  // C# detection
+  if ((code.includes('namespace ') || code.includes('using System')) &&
+      (code.includes('public class ') || code.includes('public record ') || code.includes('async Task'))) {
+    return 'csharp';
+  }
+  
+  // Go detection
+  if (code.includes('package main') || code.includes('func main()') ||
+      (code.includes('func ') && code.includes(':='))) {
+    return 'go';
+  }
+  
+  // Rust detection
+  if (code.includes('fn main()') || code.includes('use std::') || code.includes('#[derive(')) {
+    return 'rust';
+  }
+  
+  // PHP detection
+  if (code.includes('<?php') || (code.includes('function ') && code.includes('$') && code.includes('->'))) {
+    return 'php';
+  }
+  
+  // Ruby detection
+  if ((code.includes('def ') && code.includes('end') && !code.includes('{')) ||
+      code.includes('attr_reader') || code.includes('attr_accessor')) {
+    return 'ruby';
+  }
+  
+  // Swift detection
+  if (code.includes('import SwiftUI') || code.includes('import Foundation') ||
+      (code.includes('struct ') && code.includes(': View'))) {
+    return 'swift';
+  }
+  
+  // Kotlin detection
+  if (code.includes('fun main') || code.includes('data class ') ||
+      code.includes('suspend fun ') || code.includes('import kotlinx.')) {
+    return 'kotlin';
+  }
+  
+  // C++ detection
+  if (code.includes('#include <') || code.includes('std::') ||
+      (code.includes('int main(') && code.includes('#include'))) {
+    return 'cpp';
+  }
+  
+  // SQL detection
+  const lowerCode = code.toLowerCase();
+  if (lowerCode.includes('create table ') || (lowerCode.includes('select ') && lowerCode.includes(' from ')) ||
+      lowerCode.includes('insert into ')) {
+    return 'sql';
+  }
+  
+  // Shell detection
+  if (code.includes('#!/bin/bash') || code.includes('#!/usr/bin/env bash') || code.includes('#!/bin/sh')) {
+    return 'shell';
+  }
+  
+  // TypeScript detection
   if (code.includes(': React.FC') || 
       code.includes(': string') || 
       code.includes(': number') || 
@@ -39,6 +104,7 @@ const detectLanguageFromCode = (code: string, providedLang: string = 'html'): st
     return 'typescript';
   }
   
+  // Python detection
   if (code.includes('def ') || 
       code.includes('import ') && code.includes('flask') ||
       code.includes('class ') && code.includes('self') ||
@@ -306,7 +372,13 @@ export function useAgent(deps: UseAgentDeps) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `app.${currentApp.language === 'react' ? 'tsx' : currentApp.language === 'python' ? 'py' : 'html'}`;
+            const extMap: Record<string, string> = {
+              react: 'tsx', typescript: 'ts', javascript: 'js', python: 'py',
+              html: 'html', java: 'java', csharp: 'cs', go: 'go', rust: 'rs',
+              php: 'php', ruby: 'rb', swift: 'swift', kotlin: 'kt', cpp: 'cpp',
+              sql: 'sql', shell: 'sh',
+            };
+            a.download = `app.${extMap[currentApp.language] || 'txt'}`;
             a.click();
             URL.revokeObjectURL(url);
             addAIMessage(data.message || '⬇️ Download started!');
@@ -397,6 +469,33 @@ export function useAgent(deps: UseAgentDeps) {
           if (data.path) {
             editorBridge.setActiveFile(data.path);
             addAIMessage(data.message || `📂 Opened ${data.path}`);
+          }
+          break;
+        }
+
+        case 'edit_file': {
+          // Agent wants to edit a specific file — the backend already generated the updated code
+          if (data.path && data.code) {
+            editorBridge.writeFile(data.path, data.code);
+            editorBridge.setActiveFile(data.path);
+            setViewMode(ViewMode.CODE);
+            addAIMessage(data.message || `✏️ Updated ${data.path}`);
+          } else if (data.path && data.instruction) {
+            // Instruction-only edit — tell the user what was requested
+            addAIMessage(data.message || `✏️ Edit requested for ${data.path}: ${data.instruction}`);
+          }
+          break;
+        }
+
+        case 'read_file': {
+          // Agent wants to read a file's contents — retrieve from editorBridge
+          if (data.path) {
+            const fileContent = editorBridge.getFile(data.path);
+            if (fileContent !== null) {
+              addAIMessage(data.message || `📖 Read ${data.path} (${fileContent.length} chars)`);
+            } else {
+              addAIMessage(`⚠️ File not found: ${data.path}`);
+            }
           }
           break;
         }
