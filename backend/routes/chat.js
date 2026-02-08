@@ -34,6 +34,10 @@ const requireAuth = async (req, res, next) => {
         });
 
         if (user) {
+          // Build creditsSummary from per-app credits array
+          const creditsArr = user.credits || [];
+          const totalBal = creditsArr.reduce((s, c) => s + Number(c.balance || 0), 0);
+          user.creditsSummary = { balance: totalBal };
           req.user = user;
           return next();
         }
@@ -53,6 +57,9 @@ const requireAuth = async (req, res, next) => {
       });
       
       if (linkedUser) {
+        const creditsArr = linkedUser.credits || [];
+        const totalBal = creditsArr.reduce((s, c) => s + Number(c.balance || 0), 0);
+        linkedUser.creditsSummary = { balance: totalBal };
         req.user = linkedUser;
         return next();
       }
@@ -174,7 +181,7 @@ router.post('/send', requireAuth, async (req, res) => {
     } = req.body;
 
     // Check credits
-    if (req.user.credits?.balance <= 0) {
+    if (req.user.creditsSummary?.balance <= 0) {
       return res.status(402).json({
         success: false,
         error: 'Insufficient credits',
@@ -256,10 +263,11 @@ router.post('/send', requireAuth, async (req, res) => {
       },
     });
 
-    // Get updated credits
-    const updatedCredits = await prisma.userCredits.findUnique({
+    // Get updated credits (sum across all apps)
+    const allAppCredits = await prisma.userCredits.findMany({
       where: { userId: req.user.id },
     });
+    const updatedBalance = allAppCredits.reduce((s, c) => s + Number(c.balance || 0), 0);
 
     res.json({
       success: true,
@@ -274,7 +282,7 @@ router.post('/send', requireAuth, async (req, res) => {
         credits: response.creditsCost,
         latency: response.latencyMs,
       },
-      credits: updatedCredits?.balance || 0,
+      credits: updatedBalance,
     });
 
   } catch (error) {
@@ -307,7 +315,7 @@ router.post('/stream', requireAuth, async (req, res) => {
     } = req.body;
 
     // Check credits
-    if (req.user.credits?.balance <= 0) {
+    if ((req.user.creditsSummary?.balance || 0) <= 0) {
       return res.status(402).json({
         success: false,
         error: 'Insufficient credits',
@@ -407,16 +415,17 @@ router.post('/stream', requireAuth, async (req, res) => {
         },
       });
 
-      // Get updated credits
-      const updatedCredits = await prisma.userCredits.findUnique({
+      // Get updated credits (sum across all apps)
+      const streamCredits = await prisma.userCredits.findMany({
         where: { userId: req.user.id },
       });
+      const streamBalance = streamCredits.reduce((s, c) => s + Number(c.balance || 0), 0);
 
       res.write(`data: ${JSON.stringify({ 
         type: 'done', 
         tokens: finalResponse.totalTokens,
         credits: finalResponse.creditsCost,
-        balance: updatedCredits?.balance || 0,
+        balance: streamBalance,
       })}\n\n`);
     }
 

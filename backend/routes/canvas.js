@@ -2117,7 +2117,7 @@ router.post('/agent', requireAuth, async (req, res) => {
     // Create mock user for demo mode if not authenticated
     const user = req.user || {
       id: 'demo-user',
-      credits: { balance: 100 },
+      credits: [{ balance: 100 }],
     };
 
     // Initialize AI service
@@ -2646,11 +2646,14 @@ ${prompt}
     // Create mock user for demo mode if not authenticated
     const user = req.user || {
       id: 'demo-user',
-      credits: { balance: 100 },
+      credits: [{ balance: 100 }],
     };
 
     // Check credits
-    if (req.user && req.user.credits?.balance <= 0) {
+    const userTotalBalance = Array.isArray(req.user?.credits)
+      ? req.user.credits.reduce((sum, c) => sum + parseFloat(c.balance || 0), 0)
+      : parseFloat(req.user?.credits?.balance || 0);
+    if (req.user && userTotalBalance <= 0) {
       return res.status(402).json({ 
         success: false, 
         error: 'Insufficient credits. Please purchase more credits to continue.' 
@@ -2687,13 +2690,17 @@ ${prompt}
     }
 
     // Update user credits in response
-    let updatedCredits = user.credits?.balance || 0;
+    let updatedCredits = Array.isArray(user.credits)
+      ? user.credits.reduce((sum, c) => sum + parseFloat(c.balance || 0), 0)
+      : parseFloat(user.credits?.balance || 0);
     if (req.user) {
       const updatedUser = await prisma.user.findUnique({
         where: { id: req.user.id },
         include: { credits: true },
       });
-      updatedCredits = updatedUser?.credits?.balance || 0;
+      updatedCredits = Array.isArray(updatedUser?.credits)
+        ? updatedUser.credits.reduce((sum, c) => sum + parseFloat(c.balance || 0), 0)
+        : parseFloat(updatedUser?.credits?.balance || 0);
     }
 
     res.json({ 

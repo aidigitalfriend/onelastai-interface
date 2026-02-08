@@ -714,7 +714,7 @@ app.get('/app', async (req, res) => {
         <h1>Neural Link</h1>
       </div>
       <div class="user-info">
-        <span class="credits">💎 ${user.credits?.balance?.toFixed(1) || '0.0'} credits</span>
+        <span class="credits">💎 ${Array.isArray(user.credits) ? user.credits.reduce((s, c) => s + parseFloat(c.balance || 0), 0).toFixed(1) : (user.credits?.balance?.toFixed(1) || '0.0')} credits</span>
         <span class="user-name">${user.name || user.email}</span>
         <button class="logout-btn" onclick="logout()">Logout</button>
       </div>
@@ -939,14 +939,21 @@ app.get('/api/auth/me', async (req, res) => {
       return res.status(401).json({ success: false, error: 'User not found' });
     }
 
+    const totalBalance = Array.isArray(user.credits)
+      ? user.credits.reduce((sum, c) => sum + parseFloat(c.balance || 0), 0)
+      : parseFloat(user.credits?.balance || 0);
+    const totalLifetimeSpent = Array.isArray(user.credits)
+      ? user.credits.reduce((sum, c) => sum + parseFloat(c.lifetimeSpent || 0), 0)
+      : parseFloat(user.credits?.lifetimeSpent || 0);
+
     res.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        credits: parseFloat(user.credits?.balance || 0),
-        lifetimeSpent: parseFloat(user.credits?.lifetimeSpent || 0),
+        credits: totalBalance,
+        lifetimeSpent: totalLifetimeSpent,
       },
     });
 
@@ -1022,13 +1029,17 @@ app.post('/api/auth/login', async (req, res) => {
     
     console.log(`[Auth] User ${user.email} logged in successfully`);
     
+    const loginBalance = Array.isArray(user.credits)
+      ? user.credits.reduce((sum, c) => sum + parseFloat(c.balance || 0), 0)
+      : Number(user.credits?.balance) || 0;
+
     res.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        credits: Number(user.credits?.balance) || 0,
+        credits: loginBalance,
       },
     });
     
@@ -1104,13 +1115,17 @@ app.post('/api/auth/signup', async (req, res) => {
     
     console.log(`[Auth] New user created: ${user.email}`);
     
+    const signupBalance = Array.isArray(user.credits)
+      ? user.credits.reduce((sum, c) => sum + parseFloat(c.balance || 0), 0)
+      : Number(user.credits?.balance) || 5;
+
     res.json({
       success: true,
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        credits: Number(user.credits?.balance) || 5,
+        credits: signupBalance,
       },
     });
     
@@ -1180,6 +1195,14 @@ const requireAuth = async (req, res, next) => {
       return res.status(401).json({ success: false, error: 'User not found' });
     }
 
+    // credits is now an array (per-app). Build a summary for backward compat.
+    const creditsArray = user.credits || [];
+    const totalBalance = creditsArray.reduce((sum, c) => sum + Number(c.balance || 0), 0);
+    const totalLifetimeSpent = creditsArray.reduce((sum, c) => sum + Number(c.lifetimeSpent || 0), 0);
+    const totalLifetimeEarned = creditsArray.reduce((sum, c) => sum + Number(c.lifetimeEarned || 0), 0);
+    user.creditsSummary = { balance: totalBalance, lifetimeSpent: totalLifetimeSpent, lifetimeEarned: totalLifetimeEarned };
+    // Keep user.credits as array for per-app access
+
     req.user = user;
     next();
   } catch (error) {
@@ -1190,14 +1213,15 @@ const requireAuth = async (req, res, next) => {
 // Get credit balance
 app.get('/api/credits/balance', requireAuth, async (req, res) => {
   try {
+    const summary = req.user.creditsSummary || {};
     res.json({
       success: true,
       credits: {
-        balance: req.user.credits?.balance || 0,
-        lifetimeEarned: req.user.credits?.lifetimeEarned || 0,
-        lifetimeSpent: req.user.credits?.lifetimeSpent || 0,
-        freeCreditsUsed: req.user.credits?.freeCreditsUsed || 0,
-        freeCreditsMax: req.user.credits?.freeCreditsMax || 5,
+        balance: summary.balance || 0,
+        lifetimeEarned: summary.lifetimeEarned || 0,
+        lifetimeSpent: summary.lifetimeSpent || 0,
+        freeCreditsUsed: 0,
+        freeCreditsMax: 5,
       },
     });
   } catch (error) {
@@ -1208,8 +1232,9 @@ app.get('/api/credits/balance', requireAuth, async (req, res) => {
 // Get credit transaction history
 app.get('/api/credits/history', requireAuth, async (req, res) => {
   try {
+    const creditIds = (req.user.credits || []).map(c => c.id);
     const transactions = await prisma.creditTransaction.findMany({
-      where: { userCreditsId: req.user.credits?.id },
+      where: { userCreditsId: { in: creditIds } },
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -1312,7 +1337,7 @@ app.post('/api/chat', requireAuth, async (req, res) => {
     }
     
     // Check credits
-    const credits = Number(req.user.credits?.balance) || 0;
+    const credits = Number(req.user.creditsSummary?.balance) || 0;
     if (credits <= 0) {
       return res.status(402).json({ success: false, error: 'Insufficient credits' });
     }
@@ -1438,7 +1463,7 @@ app.post('/api/speech/transcribe', requireAuth, async (req, res) => {
     }
 
     // Check credits
-    const credits = Number(req.user.credits?.balance) || 0;
+    const credits = Number(req.user.creditsSummary?.balance) || 0;
     if (credits < 0.5) {
       return res.status(402).json({ success: false, error: 'Insufficient credits for transcription' });
     }
@@ -1489,7 +1514,7 @@ app.post('/api/speech/synthesize', requireAuth, async (req, res) => {
     }
 
     // Check credits
-    const credits = Number(req.user.credits?.balance) || 0;
+    const credits = Number(req.user.creditsSummary?.balance) || 0;
     if (credits < 0.3) {
       return res.status(402).json({ success: false, error: 'Insufficient credits for speech synthesis' });
     }
@@ -1542,7 +1567,7 @@ app.post('/api/speech/conversation', requireAuth, async (req, res) => {
     }
 
     // Check credits (STT + Chat + TTS = ~1 credit)
-    const credits = Number(req.user.credits?.balance) || 0;
+    const credits = Number(req.user.creditsSummary?.balance) || 0;
     if (credits < 1) {
       return res.status(402).json({ success: false, error: 'Insufficient credits for voice conversation' });
     }
@@ -2468,7 +2493,7 @@ app.post('/api/realtime/session', requireAuth, async (req, res) => {
     const { voice = 'alloy', instructions } = req.body;
     
     // Check credits (voice calls cost more)
-    const credits = Number(req.user.credits?.balance) || 0;
+    const credits = Number(req.user.creditsSummary?.balance) || 0;
     if (credits < 1) {
       return res.status(402).json({ 
         success: false, 

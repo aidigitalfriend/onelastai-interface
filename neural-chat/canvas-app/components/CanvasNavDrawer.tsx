@@ -375,13 +375,13 @@ const CanvasNavDrawer: React.FC<CanvasNavDrawerProps> = ({ isOpen, onClose, onNa
     try {
       const userId = getUserId();
       const packageMap: Record<number, string> = {
-        50: 'starter',
-        100: 'basic',
-        350: 'popular',
-        600: 'pro',
-        1500: 'enterprise'
+        50: 'nc-50',
+        100: 'nc-100',
+        350: 'nc-350',
+        600: 'nc-600',
+        1500: 'nc-1500'
       };
-      const packageId = packageMap[pkg.credits] || 'starter';
+      const packageId = packageMap[pkg.credits] || 'nc-50';
       
       const response = await fetch(`${API_BASE}/billing/checkout/neural-chat`, {
         method: 'POST',

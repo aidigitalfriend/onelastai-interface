@@ -209,12 +209,18 @@ export class AIService {
    * Check if user has enough credits
    */
   async checkCredits(estimatedCost = 0.01) {
-    const credits = this.user.credits?.balance || 0;
-    return credits >= estimatedCost;
+    // credits is now an array; sum all per-app balances
+    const creditsArr = this.user.credits || [];
+    const totalBalance = Array.isArray(creditsArr) 
+      ? creditsArr.reduce((s, c) => s + Number(c.balance || 0), 0) 
+      : Number(creditsArr?.balance || 0);
+    return totalBalance >= estimatedCost;
   }
 
   /**
    * Deduct credits after usage
+   * With per-app credit system, deducts from the app with available balance.
+   * Endpoint mapping: chat/audio → neural-chat, canvas/image → canvas-studio, code → maula-editor, generate/deploy/build → gen-craft-pro
    */
   async deductCredits(cost, provider, model, inputTokens, outputTokens, sessionId = null, endpoint = 'chat') {
     if (cost <= 0) {
@@ -228,12 +234,34 @@ export class AIService {
       return cost;
     }
 
+    // Map endpoint to preferred app for deduction
+    const endpointToApp = {
+      'chat': 'neural-chat',
+      'audio': 'neural-chat',
+      'canvas': 'canvas-studio',
+      'image': 'canvas-studio',
+      'code': 'maula-editor',
+      'generate': 'gen-craft-pro',
+      'deploy': 'gen-craft-pro',
+      'build': 'gen-craft-pro',
+    };
+    const preferredAppId = endpointToApp[endpoint] || 'neural-chat';
+
     try {
       const result = await prisma.$transaction(async (tx) => {
-        // Get current balance first
-        const currentCredits = await tx.userCredits.findUnique({
-          where: { userId: this.user.id },
+        // Try preferred app first, fallback to any app with balance
+        let currentCredits = await tx.userCredits.findUnique({
+          where: { userId_appId: { userId: this.user.id, appId: preferredAppId } },
         });
+
+        // If no credits for preferred app, find any app with balance > 0
+        if (!currentCredits || Number(currentCredits.balance) <= 0) {
+          const allCredits = await tx.userCredits.findMany({
+            where: { userId: this.user.id },
+            orderBy: { balance: 'desc' },
+          });
+          currentCredits = allCredits.find(c => Number(c.balance) > 0) || currentCredits;
+        }
         
         if (!currentCredits) {
           console.log(`[Credit] No credits record for user ${this.user.id}`);
@@ -242,9 +270,9 @@ export class AIService {
 
         const balanceBefore = Number(currentCredits.balance);
         
-        // Update balance
+        // Update balance using the composite key
         const updatedCredits = await tx.userCredits.update({
-          where: { userId: this.user.id },
+          where: { userId_appId: { userId: this.user.id, appId: currentCredits.appId } },
           data: {
             balance: { decrement: cost },
             lifetimeSpent: { increment: cost },
@@ -281,7 +309,7 @@ export class AIService {
           },
         });
 
-        console.log(`[Credit] Deducted ${cost.toFixed(4)} credits from user ${this.user.id}: ${balanceBefore.toFixed(2)} -> ${balanceAfter.toFixed(2)}`);
+        console.log(`[Credit] Deducted ${cost.toFixed(4)} credits from user ${this.user.id} (${currentCredits.appId}): ${balanceBefore.toFixed(2)} -> ${balanceAfter.toFixed(2)}`);
         
         return { balanceBefore, balanceAfter, cost };
       });

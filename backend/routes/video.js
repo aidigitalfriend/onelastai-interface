@@ -54,13 +54,18 @@ router.post('/generate', requireAuth, async (req, res) => {
     // Deduct credits if user is authenticated
     if (req.user?.id) {
       try {
-        const userCredits = await prisma.userCredits.findUnique({ where: { userId: req.user.id } });
-        if (!userCredits || userCredits.balance < VIDEO_CREDIT_COST) {
+        // Find first app credit record with enough balance
+        const allCredits = await prisma.userCredits.findMany({ 
+          where: { userId: req.user.id },
+          orderBy: { balance: 'desc' },
+        });
+        const userCredits = allCredits.find(c => Number(c.balance) >= VIDEO_CREDIT_COST);
+        if (!userCredits) {
           return res.status(402).json({ success: false, error: `Insufficient credits. Video generation costs ${VIDEO_CREDIT_COST} credits.` });
         }
 
         await prisma.userCredits.update({
-          where: { userId: req.user.id },
+          where: { userId_appId: { userId: req.user.id, appId: userCredits.appId } },
           data: { balance: { decrement: VIDEO_CREDIT_COST }, lifetimeSpent: { increment: VIDEO_CREDIT_COST } },
         });
 
