@@ -190,9 +190,9 @@ const App: React.FC = () => {
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         });
-        if (!authRes.ok) { setIsCheckingPlan(false); setShowPricing(true); return; }
+        if (!authRes.ok) { window.location.href = '/auth/login?redirect=/gen-craft-pro/'; return; }
         const authData = await authRes.json();
-        if (!authData.valid || !authData.user) { setIsCheckingPlan(false); setShowPricing(true); return; }
+        if (!authData.valid || !authData.user) { window.location.href = '/auth/login?redirect=/gen-craft-pro/'; return; }
         setAuthUser({ id: authData.user.id, email: authData.user.email });
 
         // 2. Check for post-checkout redirect
@@ -828,30 +828,7 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Auth Gate — if not authenticated, show sign-in screen */}
-      {!isCheckingPlan && !authUser && showPricing && (
-        <div className="fixed inset-0 z-[100] bg-[#09090b] matrix-bg flex items-center justify-center">
-          <div className="w-full max-w-md mx-auto px-6 text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-violet-500 to-blue-500 rounded-2xl flex items-center justify-center text-white mx-auto mb-6 shadow-xl shadow-violet-500/20 ring-1 ring-white/10">
-              <Sparkles className="w-8 h-8" />
-            </div>
-            <h1 className="text-3xl font-extrabold text-white mb-1 tracking-tight">GenCraft Pro</h1>
-            <p className="text-zinc-500 text-sm font-medium">AI App Builder</p>
-            <div className="w-16 h-px bg-gradient-to-r from-transparent via-violet-500/40 to-transparent mx-auto my-8" />
-            <h2 className="text-xl font-semibold text-zinc-200 mb-2">Sign in to start building</h2>
-            <p className="text-zinc-500 text-sm mb-8 leading-relaxed">Create a free account to use GenCraft AI App Builder. Build full-stack apps with AI in seconds.</p>
-            <div className="flex flex-col gap-3 mb-8">
-              <a href="/auth/login?redirect=/gen-craft-pro/" className="w-full py-3 px-6 bg-gradient-to-r from-violet-600 to-blue-600 text-white font-semibold rounded-xl hover:from-violet-500 hover:to-blue-500 transition-all shadow-lg shadow-violet-500/15 text-center ring-1 ring-white/10">Log In</a>
-              <a href="/auth/signup?redirect=/gen-craft-pro/" className="w-full py-3 px-6 bg-zinc-800/50 border border-zinc-700/50 text-zinc-200 font-semibold rounded-xl hover:bg-zinc-700/50 hover:border-zinc-600/50 transition-all text-center">Create Free Account</a>
-            </div>
-            <div className="flex items-center justify-center gap-6 text-zinc-600">
-              <div className="flex items-center gap-1.5 text-xs font-medium"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />Free to sign up</div>
-              <div className="flex items-center gap-1.5 text-xs font-medium"><div className="w-1.5 h-1.5 rounded-full bg-violet-500" />AI-powered</div>
-              <div className="flex items-center gap-1.5 text-xs font-medium"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" />Secure</div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Auth Gate — redirects to main login page automatically */}
 
       {/* Pricing Paywall — user is authenticated but has no plan */}
       {!isCheckingPlan && authUser && showPricing && (
