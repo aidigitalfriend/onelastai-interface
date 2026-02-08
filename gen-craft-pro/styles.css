@@ -29,14 +29,6 @@ code, pre, .font-mono, textarea {
   animation: slide-in-left 0.2s ease-out;
 }
 
-@keyframes slide-in-right {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-.animate-slide-in-right {
-  animation: slide-in-right 0.2s ease-out;
-}
-
 /* ── Scrollbar ── */
 .custom-scrollbar::-webkit-scrollbar {
   width: 5px;

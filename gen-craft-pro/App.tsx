@@ -25,7 +25,7 @@ import { editorBridge, useEditorStore } from './services/editorBridge';
 import { buildEditorContextForAgent, processAgentResponse, getSurgicalEditPrompt } from './services/agentProcessor';
 import deploymentService from './services/deploymentService';
 import { DeploymentPlatform } from './types';
-import { Monitor, Tablet, Smartphone, Code, Columns, Mic, Image, Rocket, Edit, Eye, MessageSquare, FolderTree, Clock, LayoutTemplate, Settings, Sparkles, ChevronDown, ChevronLeft, ChevronRight, Play, CheckCircle, GitBranch, Key, Package, Terminal, Wrench, RefreshCcw, BookOpen, TestTube2, BarChart3, Receipt, Globe, History, Activity, Zap, X, Menu } from 'lucide-react';
+import { Monitor, Tablet, Smartphone, Code, Columns, Mic, Image, Rocket, Edit, Eye, MessageSquare, FolderTree, Clock, LayoutTemplate, Settings, Sparkles, ChevronDown, Play, CheckCircle, GitBranch, Key, Package, Terminal, Wrench, RefreshCcw, BookOpen, TestTube2, BarChart3, Receipt, Globe, History, Activity, Zap, X } from 'lucide-react';
 
 // New Phase 2-7 Components
 import GitPanel from './components/sidebar/GitPanel';
@@ -119,20 +119,10 @@ const App: React.FC = () => {
   const [currentApp, setCurrentApp] = useState<GeneratedApp | null>(null);
   const [history, setHistory] = useState<GeneratedApp[]>([]);
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>(null);
-  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
-  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
-  const [panelSide, setPanelSide] = useState<'left' | 'right'>('left');
 
   // Toggle panel: click same tab closes it, click different tab opens it
-  const togglePanel = (tab: SidebarTab, side: 'left' | 'right' = 'left') => {
-    if (sidebarTab === tab) {
-      setSidebarTab(null);
-    } else {
-      setSidebarTab(tab);
-      setPanelSide(side);
-    }
-    setLeftDrawerOpen(false);
-    setRightDrawerOpen(false);
+  const togglePanel = (tab: SidebarTab) => {
+    setSidebarTab(prev => prev === tab ? null : tab);
   };
   const [genState, setGenState] = useState<GenerationState>({
     isGenerating: false,
@@ -899,220 +889,145 @@ const App: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* TOP HEADER BAR — Minimal: Left Logo | Center Controls | Right Logo */}
+      {/* TOP HEADER BAR — Full width, brand + prompt + tabs + controls */}
       {/* ============================================================ */}
-      <header className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm shrink-0 z-50 relative">
-        {/* LEFT LOGO — Click to toggle left drawer */}
-        <button
-          onClick={() => { setLeftDrawerOpen(!leftDrawerOpen); setRightDrawerOpen(false); }}
-          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl transition-all group shrink-0 ${leftDrawerOpen ? 'bg-violet-500/15 ring-1 ring-violet-500/25' : 'hover:bg-zinc-800/50'}`}
-          title="Workspace panels"
-        >
-          <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-violet-600/20 ring-1 ring-white/10 group-hover:shadow-violet-600/30 transition-shadow">
+      <header className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm shrink-0 z-50">
+        {/* Brand */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-violet-600/20 ring-1 ring-white/10">
             <Sparkles className="w-4 h-4" />
           </div>
-          <ChevronRight className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 ${leftDrawerOpen ? 'rotate-180' : ''}`} />
-        </button>
-
-        {/* CENTER — View Mode + Device Frames + Credit Status */}
-        <div className="flex items-center gap-2">
-          <div className="shrink-0">
-            <CreditStatusBar credits={activeCredits} onBuyCredits={() => setShowPricing(true)} />
+          <div className="hidden sm:block">
+            <h1 className="text-xs font-bold text-zinc-100 leading-tight">GenCraft Pro</h1>
           </div>
-          <div className="w-px h-5 bg-zinc-800/60" />
-          {/* View Mode */}
-          <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50">
-            <button onClick={() => setViewMode('desktop')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>PREVIEW</button>
-            <button onClick={() => { setViewMode('code'); setEditorMode('edit'); }} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'code' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>CODE</button>
-            <button onClick={() => { setViewMode('split'); setEditorMode('edit'); }} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'split' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>SPLIT</button>
-          </div>
-          {/* Device frames */}
-          {(viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile') && (
-            <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50">
-              <button onClick={() => setViewMode('desktop')} title="Desktop" className={`p-1.5 rounded-md transition-all ${viewMode === 'desktop' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Monitor className="w-3.5 h-3.5" /></button>
-              <button onClick={() => setViewMode('tablet')} title="Tablet" className={`p-1.5 rounded-md transition-all ${viewMode === 'tablet' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Tablet className="w-3.5 h-3.5" /></button>
-              <button onClick={() => setViewMode('mobile')} title="Mobile" className={`p-1.5 rounded-md transition-all ${viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Smartphone className="w-3.5 h-3.5" /></button>
-            </div>
-          )}
         </div>
 
-        {/* RIGHT LOGO — Click to toggle right drawer */}
-        <button
-          onClick={() => { setRightDrawerOpen(!rightDrawerOpen); setLeftDrawerOpen(false); }}
-          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl transition-all group shrink-0 ${rightDrawerOpen ? 'bg-blue-500/15 ring-1 ring-blue-500/25' : 'hover:bg-zinc-800/50'}`}
-          title="Tools & settings"
-        >
-          <ChevronLeft className={`w-3.5 h-3.5 text-zinc-500 transition-transform duration-200 ${rightDrawerOpen ? 'rotate-180' : ''}`} />
-          <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-blue-600/20 ring-1 ring-white/10 group-hover:shadow-blue-600/30 transition-shadow">
-            <Settings className="w-4 h-4" />
+        {/* Separator */}
+        <div className="w-px h-6 bg-zinc-800/60 shrink-0" />
+
+        {/* Credit Status */}
+        <div className="shrink-0">
+          <CreditStatusBar credits={activeCredits} onBuyCredits={() => setShowPricing(true)} />
+        </div>
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-zinc-800/60 shrink-0" />
+
+        {/* Scrollable Panel Tabs */}
+        <div className="flex-1 min-w-0 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-0.5 w-max">
+            {([
+              { id: 'chat' as SidebarTab, label: 'Chat', icon: MessageSquare },
+              { id: 'files' as SidebarTab, label: 'Files', icon: FolderTree },
+              { id: 'templates' as SidebarTab, label: 'Templates', icon: LayoutTemplate },
+              { id: 'history' as SidebarTab, label: 'History', icon: Clock },
+              { id: 'git' as SidebarTab, label: 'Git', icon: GitBranch },
+              { id: 'packages' as SidebarTab, label: 'Deps', icon: Package },
+              { id: 'env' as SidebarTab, label: 'Env', icon: Key },
+              { id: 'voice' as SidebarTab, label: 'Voice', icon: Mic },
+              { id: 'image' as SidebarTab, label: 'Image', icon: Image },
+              { id: 'ai-tools' as SidebarTab, label: 'AI Tools', icon: Wrench },
+              { id: 'billing' as SidebarTab, label: 'Billing', icon: BarChart3 },
+            ]).map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => togglePanel(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all ${
+                  sidebarTab === tab.id 
+                    ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/20' 
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                }`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            ))}
           </div>
+        </div>
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-zinc-800/60 shrink-0" />
+
+        {/* Language Selector */}
+        <div className="relative group shrink-0">
+          <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] font-medium hover:border-violet-500/30 hover:bg-zinc-800/40 transition-all">
+            <span>{LANGUAGES.find(l => l.id === currentLanguage)?.icon}</span>
+            <span className="text-zinc-300 hidden md:inline">{LANGUAGES.find(l => l.id === currentLanguage)?.name || 'HTML'}</span>
+            <ChevronDown className="w-3 h-3 text-zinc-500" />
+          </button>
+          <div className="absolute top-full right-0 mt-1 w-56 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5 max-h-80 overflow-y-auto">
+            <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Language</p>
+            {LANGUAGES.map((lang) => (
+              <button key={lang.id} onClick={() => setCurrentLanguage(lang.id)} className={`w-full text-left p-2 rounded-lg hover:bg-violet-500/10 transition-colors flex items-center gap-3 ${currentLanguage === lang.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
+                <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs shadow-sm" style={{ backgroundColor: lang.color }}>{lang.icon}</span>
+                <div>
+                  <p className="text-xs font-medium text-zinc-200">{lang.name}</p>
+                  <p className="text-[10px] text-zinc-500">{lang.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Model Selector */}
+        <div className="relative group shrink-0">
+          <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] font-medium hover:border-violet-500/30 hover:bg-zinc-800/40 transition-all">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-zinc-300 hidden md:inline">{selectedModel.name}</span>
+            <ChevronDown className="w-3 h-3 text-zinc-500" />
+          </button>
+          <div className="absolute top-full right-0 mt-1 w-64 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5">
+            <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">AI Model</p>
+            {MODELS.map((model) => (
+              <button key={model.id} onClick={() => setSelectedModel(model)} className={`w-full text-left p-2.5 rounded-lg hover:bg-violet-500/10 transition-colors ${selectedModel.id === model.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <p className="text-xs font-medium text-zinc-200">{model.name}</p>
+                  <span className="text-[10px] text-zinc-500 ml-auto">{model.provider}</span>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-0.5 ml-4">{model.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* View Mode */}
+        <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50 shrink-0">
+          <button onClick={() => setViewMode('desktop')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>PREVIEW</button>
+          <button onClick={() => { setViewMode('code'); setEditorMode('edit'); }} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'code' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>CODE</button>
+          <button onClick={() => { setViewMode('split'); setEditorMode('edit'); }} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'split' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>SPLIT</button>
+        </div>
+
+        {/* Device frames */}
+        {(viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile') && (
+          <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50 shrink-0">
+            <button onClick={() => setViewMode('desktop')} className={`p-1.5 rounded-md transition-all ${viewMode === 'desktop' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Monitor className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('tablet')} className={`p-1.5 rounded-md transition-all ${viewMode === 'tablet' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Tablet className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('mobile')} className={`p-1.5 rounded-md transition-all ${viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Smartphone className="w-3.5 h-3.5" /></button>
+          </div>
+        )}
+
+        <button onClick={() => setShowBottomPanel(!showBottomPanel)} className={`p-1.5 rounded-lg transition-all shrink-0 ${showBottomPanel ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'}`}><Terminal className="w-4 h-4" /></button>
+
+        <button onClick={() => setShowDeployPanel(true)} className="px-3 py-1.5 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-[11px] font-bold rounded-lg hover:from-violet-500 hover:to-blue-500 transition-all shadow-lg shadow-violet-600/15 ring-1 ring-white/10 active:scale-95 flex items-center gap-1.5 shrink-0">
+          <Rocket className="w-3.5 h-3.5" />
+          DEPLOY
         </button>
       </header>
 
       {/* ============================================================ */}
-      {/* LEFT DRAWER — Slides from left, workspace panels */}
-      {/* ============================================================ */}
-      {leftDrawerOpen && (
-        <div className="fixed inset-0 z-[60]" onClick={() => setLeftDrawerOpen(false)}>
-          <div
-            className="absolute top-[52px] left-0 w-[260px] bg-zinc-950/95 backdrop-blur-xl border-r border-b border-zinc-800/50 rounded-br-2xl shadow-2xl shadow-black/60 animate-slide-in-left overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-3 border-b border-zinc-800/40">
-              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Workspace</p>
-            </div>
-            <div className="p-2 space-y-0.5">
-              {([
-                { id: 'chat' as SidebarTab, label: 'Chat', desc: 'AI assistant', icon: MessageSquare },
-                { id: 'files' as SidebarTab, label: 'Files', desc: 'Project explorer', icon: FolderTree },
-                { id: 'templates' as SidebarTab, label: 'Templates', desc: 'Quick start', icon: LayoutTemplate },
-                { id: 'history' as SidebarTab, label: 'History', desc: 'Past projects', icon: Clock },
-                { id: 'git' as SidebarTab, label: 'Git', desc: 'Version control', icon: GitBranch },
-                { id: 'packages' as SidebarTab, label: 'Dependencies', desc: 'NPM packages', icon: Package },
-                { id: 'env' as SidebarTab, label: 'Environment', desc: 'Variables & secrets', icon: Key },
-              ]).map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => togglePanel(item.id, 'left')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group ${
-                    sidebarTab === item.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : 'hover:bg-zinc-800/50'
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                    sidebarTab === item.id ? 'bg-violet-500/20 text-violet-400' : 'bg-zinc-800/50 text-zinc-500 group-hover:text-zinc-300'
-                  }`}>
-                    <item.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className={`text-xs font-semibold ${sidebarTab === item.id ? 'text-violet-300' : 'text-zinc-300'}`}>{item.label}</p>
-                    <p className="text-[10px] text-zinc-600">{item.desc}</p>
-                  </div>
-                  {sidebarTab === item.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-violet-500" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* RIGHT DRAWER — Slides from right, tools & settings */}
-      {/* ============================================================ */}
-      {rightDrawerOpen && (
-        <div className="fixed inset-0 z-[60]" onClick={() => setRightDrawerOpen(false)}>
-          <div
-            className="absolute top-[52px] right-0 w-[260px] bg-zinc-950/95 backdrop-blur-xl border-l border-b border-zinc-800/50 rounded-bl-2xl shadow-2xl shadow-black/60 animate-slide-in-right overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-3 border-b border-zinc-800/40">
-              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Tools & Settings</p>
-            </div>
-            <div className="p-2 space-y-0.5">
-              {([
-                { id: 'voice' as SidebarTab, label: 'Voice Input', desc: 'Speak to build', icon: Mic },
-                { id: 'image' as SidebarTab, label: 'Image to Code', desc: 'Upload & convert', icon: Image },
-                { id: 'ai-tools' as SidebarTab, label: 'AI Tools', desc: 'Autofix, refactor, explain', icon: Wrench },
-                { id: 'billing' as SidebarTab, label: 'Usage & Billing', desc: 'Credits & invoices', icon: BarChart3 },
-              ]).map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => togglePanel(item.id, 'right')}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all group ${
-                    sidebarTab === item.id ? 'bg-blue-500/12 ring-1 ring-blue-500/20' : 'hover:bg-zinc-800/50'
-                  }`}
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${
-                    sidebarTab === item.id ? 'bg-blue-500/20 text-blue-400' : 'bg-zinc-800/50 text-zinc-500 group-hover:text-zinc-300'
-                  }`}>
-                    <item.icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className={`text-xs font-semibold ${sidebarTab === item.id ? 'text-blue-300' : 'text-zinc-300'}`}>{item.label}</p>
-                    <p className="text-[10px] text-zinc-600">{item.desc}</p>
-                  </div>
-                  {sidebarTab === item.id && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500" />}
-                </button>
-              ))}
-
-              <div className="my-2 h-px bg-zinc-800/40" />
-              <p className="px-3 py-1 text-[10px] font-bold text-zinc-600 uppercase tracking-widest">Quick Actions</p>
-
-              {/* Language Selector */}
-              <div className="relative group">
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-zinc-800/50">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-800/50 text-zinc-500">
-                    <span className="text-sm">{LANGUAGES.find(l => l.id === currentLanguage)?.icon}</span>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-zinc-300">Language</p>
-                    <p className="text-[10px] text-zinc-600">{LANGUAGES.find(l => l.id === currentLanguage)?.name || 'HTML'}</p>
-                  </div>
-                  <ChevronDown className="w-3 h-3 text-zinc-600" />
-                </button>
-                <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5 max-h-60 overflow-y-auto custom-scrollbar">
-                  {LANGUAGES.map((lang) => (
-                    <button key={lang.id} onClick={() => { setCurrentLanguage(lang.id); setRightDrawerOpen(false); }} className={`w-full text-left p-2 rounded-lg hover:bg-violet-500/10 transition-colors flex items-center gap-2 ${currentLanguage === lang.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
-                      <span className="w-5 h-5 rounded flex items-center justify-center text-white text-[10px]" style={{ backgroundColor: lang.color }}>{lang.icon}</span>
-                      <p className="text-xs text-zinc-200">{lang.name}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Model Selector */}
-              <div className="relative group">
-                <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-zinc-800/50">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-zinc-800/50">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold text-zinc-300">AI Model</p>
-                    <p className="text-[10px] text-zinc-600">{selectedModel.name}</p>
-                  </div>
-                  <ChevronDown className="w-3 h-3 text-zinc-600" />
-                </button>
-                <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5">
-                  {MODELS.map((model) => (
-                    <button key={model.id} onClick={() => { setSelectedModel(model); setRightDrawerOpen(false); }} className={`w-full text-left p-2 rounded-lg hover:bg-violet-500/10 transition-colors ${selectedModel.id === model.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        <p className="text-xs font-medium text-zinc-200">{model.name}</p>
-                        <span className="text-[10px] text-zinc-500 ml-auto">{model.provider}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="my-2 h-px bg-zinc-800/40" />
-
-              <button onClick={() => { setShowBottomPanel(!showBottomPanel); setRightDrawerOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all ${showBottomPanel ? 'bg-violet-500/12' : 'hover:bg-zinc-800/50'}`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${showBottomPanel ? 'bg-violet-500/20 text-violet-400' : 'bg-zinc-800/50 text-zinc-500'}`}><Terminal className="w-4 h-4" /></div>
-                <div><p className="text-xs font-semibold text-zinc-300">Console</p><p className="text-[10px] text-zinc-600">Logs & terminal</p></div>
-              </button>
-
-              <button onClick={() => { setShowDeployPanel(true); setRightDrawerOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all hover:bg-zinc-800/50">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-violet-600 to-blue-600 text-white"><Rocket className="w-4 h-4" /></div>
-                <div><p className="text-xs font-semibold text-zinc-300">Deploy</p><p className="text-[10px] text-zinc-600">Ship to production</p></div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* MAIN AREA — Side Panel (left or right) + Preview/Code */}
+      {/* MAIN AREA — Side Panel (toggleable) + Preview/Code */}
       {/* ============================================================ */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* LEFT Side Panel — opens when panelSide is 'left' */}
-        {sidebarTab && panelSide === 'left' && (
+        {/* Slide-in Side Panel — opens when a header tab is active */}
+        {sidebarTab && (
           <aside className="w-[360px] shrink-0 flex flex-col bg-zinc-950/90 border-r border-zinc-800/50 backdrop-blur-sm z-40 animate-slide-in-left">
             {/* Panel Header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/50 shrink-0">
               <h2 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">{
                 sidebarTab === 'chat' ? 'Chat' : sidebarTab === 'files' ? 'Files' : sidebarTab === 'templates' ? 'Templates' : sidebarTab === 'history' ? 'History' : sidebarTab === 'git' ? 'Git' : sidebarTab === 'packages' ? 'Dependencies' : sidebarTab === 'env' ? 'Environment' : sidebarTab === 'voice' ? 'Voice Input' : sidebarTab === 'image' ? 'Image to Code' : sidebarTab === 'ai-tools' ? 'AI Tools' : sidebarTab === 'billing' ? 'Usage & Billing' : ''
               }</h2>
-              <button onClick={() => setSidebarTab(null)} title="Close panel" className="p-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/40 transition-all">
+              <button onClick={() => setSidebarTab(null)} className="p-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/40 transition-all">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -1135,7 +1050,6 @@ const App: React.FC = () => {
                         onClick={() => handleGenerate(prompt, true)}
                         disabled={genState.isGenerating || !prompt.trim()}
                         className="absolute bottom-2.5 right-2.5 w-7 h-7 bg-gradient-to-r from-violet-600 to-blue-600 text-white rounded-lg flex items-center justify-center hover:from-violet-500 hover:to-blue-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all shadow-md shadow-violet-600/20 ring-1 ring-white/10 active:scale-95"
-                        title="Generate"
                       >
                         <Play className="w-3 h-3 ml-0.5" />
                       </button>
@@ -1164,7 +1078,7 @@ const App: React.FC = () => {
                   <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Quick Start</p>
                   <div className="space-y-2 mb-6">
                     {PRESET_TEMPLATES.map((tpl) => (
-                      <button key={tpl.name} onClick={() => { setPrompt(tpl.prompt); togglePanel('chat', 'left'); }} className="w-full text-left px-4 py-3 text-xs text-zinc-400 bg-zinc-900/40 hover:bg-violet-500/10 hover:text-violet-300 rounded-xl border border-zinc-800/50 hover:border-violet-500/20 transition-all flex justify-between items-center group">
+                      <button key={tpl.name} onClick={() => { setPrompt(tpl.prompt); togglePanel('chat'); }} className="w-full text-left px-4 py-3 text-xs text-zinc-400 bg-zinc-900/40 hover:bg-violet-500/10 hover:text-violet-300 rounded-xl border border-zinc-800/50 hover:border-violet-500/20 transition-all flex justify-between items-center group">
                         <span>{tpl.name}</span>
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
                       </button>
@@ -1213,6 +1127,58 @@ const App: React.FC = () => {
                   <DependenciesPanel dependencies={projectDependencies} />
                 </div>
               )}
+              {sidebarTab === 'voice' && (
+                <div className="flex-1 p-4">
+                  <VoiceInput onTranscript={(transcript) => { setPrompt(transcript); togglePanel('chat'); }} onClose={() => setSidebarTab(null)} />
+                </div>
+              )}
+              {sidebarTab === 'image' && (
+                <div className="flex-1 overflow-y-auto">
+                  <ImageToCode
+                    onGenerate={async (code) => {
+                      const newApp: GeneratedApp = { id: Date.now().toString(), name: 'From Image', code, prompt: 'Generated from image upload', timestamp: Date.now(), history: [{ role: 'model', text: 'Generated from uploaded image', timestamp: Date.now() }], language: currentLanguage, provider: selectedModel.provider, modelId: selectedModel.id };
+                      setCurrentApp(newApp);
+                      saveApp(newApp, true);
+                      setSidebarTab(null);
+                    }}
+                    onClose={() => setSidebarTab(null)}
+                    outputType={['react', 'nextjs'].includes(currentLanguage) ? 'react' : 'html'}
+                  />
+                </div>
+              )}
+              {sidebarTab === 'ai-tools' && (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center gap-0.5 px-3 py-2 border-b border-zinc-800/40 shrink-0">
+                    {([
+                      { id: 'autofix' as AIToolTab, label: 'Autofix', icon: Wrench },
+                      { id: 'refactor' as AIToolTab, label: 'Refactor', icon: RefreshCcw },
+                      { id: 'explain' as AIToolTab, label: 'Explain', icon: BookOpen },
+                      { id: 'tests' as AIToolTab, label: 'Tests', icon: TestTube2 },
+                    ]).map(tab => (
+                      <button key={tab.id} onClick={() => setAIToolTab(tab.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${aiToolTab === tab.id ? 'bg-violet-500/12 text-violet-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                        <tab.icon className="w-3 h-3" />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <ErrorBoundary section="AI Tools" compact>
+                      {aiToolTab === 'autofix' && <AIAutofix errors={[]} />}
+                      {aiToolTab === 'refactor' && <AIRefactor code={currentApp?.code} fileName={activeFilePath || undefined} />}
+                      {aiToolTab === 'explain' && <AIExplain selectedCode={undefined} fileName={activeFilePath || undefined} />}
+                      {aiToolTab === 'tests' && <AITestWriter targetCode={currentApp?.code} fileName={activeFilePath || undefined} />}
+                    </ErrorBoundary>
+                  </div>
+                </div>
+              )}
+              {sidebarTab === 'billing' && (
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  <UsageDashboard onUpgrade={() => { setSidebarTab(null); setShowPricing(true); }} />
+                  <div className="border-t border-zinc-800/50">
+                    <InvoiceHistory />
+                  </div>
+                </div>
+              )}
             </div>
           </aside>
         )}
@@ -1245,77 +1211,6 @@ const App: React.FC = () => {
             </ErrorBoundary>
           </div>
         </main>
-
-        {/* RIGHT Side Panel — opens when panelSide is 'right' */}
-        {sidebarTab && panelSide === 'right' && (
-          <aside className="w-[360px] shrink-0 flex flex-col bg-zinc-950/90 border-l border-zinc-800/50 backdrop-blur-sm z-40 animate-slide-in-right">
-            {/* Panel Header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/50 shrink-0">
-              <h2 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">{
-                sidebarTab === 'voice' ? 'Voice Input' : sidebarTab === 'image' ? 'Image to Code' : sidebarTab === 'ai-tools' ? 'AI Tools' : sidebarTab === 'billing' ? 'Usage & Billing' : ''
-              }</h2>
-              <button onClick={() => setSidebarTab(null)} title="Close panel" className="p-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/40 transition-all">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Panel Content */}
-            <div className="flex-1 overflow-hidden flex flex-col">
-              {sidebarTab === 'voice' && (
-                <div className="flex-1 p-4">
-                  <VoiceInput onTranscript={(transcript) => { setPrompt(transcript); togglePanel('chat', 'left'); }} onClose={() => setSidebarTab(null)} />
-                </div>
-              )}
-              {sidebarTab === 'image' && (
-                <div className="flex-1 overflow-y-auto">
-                  <ImageToCode
-                    onGenerate={async (code) => {
-                      const newApp: GeneratedApp = { id: Date.now().toString(), name: 'From Image', code, prompt: 'Generated from image upload', timestamp: Date.now(), history: [{ role: 'model', text: 'Generated from uploaded image', timestamp: Date.now() }], language: currentLanguage, provider: selectedModel.provider, modelId: selectedModel.id };
-                      setCurrentApp(newApp);
-                      saveApp(newApp, true);
-                      setSidebarTab(null);
-                    }}
-                    onClose={() => setSidebarTab(null)}
-                    outputType={['react', 'nextjs'].includes(currentLanguage) ? 'react' : 'html'}
-                  />
-                </div>
-              )}
-              {sidebarTab === 'ai-tools' && (
-                <div className="flex flex-col h-full">
-                  <div className="flex items-center gap-0.5 px-3 py-2 border-b border-zinc-800/40 shrink-0">
-                    {([
-                      { id: 'autofix' as AIToolTab, label: 'Autofix', icon: Wrench },
-                      { id: 'refactor' as AIToolTab, label: 'Refactor', icon: RefreshCcw },
-                      { id: 'explain' as AIToolTab, label: 'Explain', icon: BookOpen },
-                      { id: 'tests' as AIToolTab, label: 'Tests', icon: TestTube2 },
-                    ]).map(tab => (
-                      <button key={tab.id} onClick={() => setAIToolTab(tab.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${aiToolTab === tab.id ? 'bg-blue-500/12 text-blue-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
-                        <tab.icon className="w-3 h-3" />
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex-1 overflow-y-auto custom-scrollbar">
-                    <ErrorBoundary section="AI Tools" compact>
-                      {aiToolTab === 'autofix' && <AIAutofix errors={[]} />}
-                      {aiToolTab === 'refactor' && <AIRefactor code={currentApp?.code} fileName={activeFilePath || undefined} />}
-                      {aiToolTab === 'explain' && <AIExplain selectedCode={undefined} fileName={activeFilePath || undefined} />}
-                      {aiToolTab === 'tests' && <AITestWriter targetCode={currentApp?.code} fileName={activeFilePath || undefined} />}
-                    </ErrorBoundary>
-                  </div>
-                </div>
-              )}
-              {sidebarTab === 'billing' && (
-                <div className="flex-1 overflow-y-auto custom-scrollbar">
-                  <UsageDashboard onUpgrade={() => { setSidebarTab(null); setShowPricing(true); }} />
-                  <div className="border-t border-zinc-800/50">
-                    <InvoiceHistory />
-                  </div>
-                </div>
-              )}
-            </div>
-          </aside>
-        )}
       </div>
 
       {/* ============================================================ */}
