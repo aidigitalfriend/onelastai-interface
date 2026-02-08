@@ -25,7 +25,7 @@ import { editorBridge, useEditorStore } from './services/editorBridge';
 import { buildEditorContextForAgent, processAgentResponse, getSurgicalEditPrompt } from './services/agentProcessor';
 import deploymentService from './services/deploymentService';
 import { DeploymentPlatform } from './types';
-import { Monitor, Tablet, Smartphone, Code, Columns, Mic, Image, Rocket, Edit, Eye, MessageSquare, FolderTree, Clock, LayoutTemplate, Settings, Sparkles, ChevronDown, Play, CheckCircle, GitBranch, Key, Package, Terminal, Wrench, RefreshCcw, BookOpen, TestTube2, BarChart3, Receipt, Globe, History, Activity } from 'lucide-react';
+import { Monitor, Tablet, Smartphone, Code, Columns, Mic, Image, Rocket, Edit, Eye, MessageSquare, FolderTree, Clock, LayoutTemplate, Settings, Sparkles, ChevronDown, Play, CheckCircle, GitBranch, Key, Package, Terminal, Wrench, RefreshCcw, BookOpen, TestTube2, BarChart3, Receipt, Globe, History, Activity, Zap, X } from 'lucide-react';
 
 // New Phase 2-7 Components
 import GitPanel from './components/sidebar/GitPanel';
@@ -51,8 +51,8 @@ import ErrorBoundary from './components/shared/ErrorBoundary';
 // Preview view mode type (separate from legacy ViewMode)
 type PreviewViewMode = 'desktop' | 'tablet' | 'mobile' | 'code' | 'split';
 
-// Left sidebar tab type
-type SidebarTab = 'chat' | 'files' | 'templates' | 'history' | 'git' | 'env' | 'packages';
+// Left sidebar tab type (now used for header panel toggle)
+type SidebarTab = 'chat' | 'files' | 'templates' | 'history' | 'git' | 'env' | 'packages' | 'voice' | 'image' | 'ai-tools' | 'billing' | null;
 
 // Bottom panel tab type
 type BottomPanelTab = 'console' | 'network' | 'problems' | 'terminal';
@@ -109,7 +109,6 @@ const PRESET_TEMPLATES = [
   },
 ];
 
-type ActivePanel = 'workspace' | 'assistant' | 'history' | 'voice' | 'image' | 'deploy' | 'files' | 'ai-tools' | 'billing' | null;
 type EditorMode = 'view' | 'edit'; // Toggle between read-only and editable code
 type AIToolTab = 'autofix' | 'refactor' | 'explain' | 'tests';
 
@@ -119,8 +118,12 @@ const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<PreviewViewMode>('desktop');
   const [currentApp, setCurrentApp] = useState<GeneratedApp | null>(null);
   const [history, setHistory] = useState<GeneratedApp[]>([]);
-  const [activePanel, setActivePanel] = useState<ActivePanel>('workspace');
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>('chat');
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(null);
+
+  // Toggle panel: click same tab closes it, click different tab opens it
+  const togglePanel = (tab: SidebarTab) => {
+    setSidebarTab(prev => prev === tab ? null : tab);
+  };
   const [genState, setGenState] = useState<GenerationState>({
     isGenerating: false,
     error: null,
@@ -500,10 +503,6 @@ const App: React.FC = () => {
     }
   };
 
-  const togglePanel = (panel: ActivePanel) => {
-    setActivePanel(activePanel === panel ? null : panel);
-  };
-
   // Handle messages from AI Assistant chat - uses /api/canvas/chat endpoint
   // which supports multi-page builds, deployment commands, and build fix responses
   const handleChatMessage = async (text: string) => {
@@ -778,7 +777,7 @@ const App: React.FC = () => {
     setPrompt(template.prompt);
     setCurrentLanguage(template.language);
     setIsTemplatesPanelOpen(false);
-    setActivePanel('workspace');
+    setSidebarTab(null);
   };
 
   // Get language-specific system prompt addition
@@ -815,7 +814,7 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="flex h-screen bg-[#09090b] text-zinc-400 overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#09090b] text-zinc-400 overflow-hidden">
       {/* Small Login Prompt — shown when user tries to generate without being logged in */}
       {showLoginPrompt && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowLoginPrompt(false)}>
@@ -890,237 +889,302 @@ const App: React.FC = () => {
       )}
 
       {/* ============================================================ */}
-      {/* LEFT SIDEBAR — 340px, always visible */}
+      {/* TOP HEADER BAR — Full width, brand + prompt + tabs + controls */}
       {/* ============================================================ */}
-      <aside className="w-[340px] shrink-0 flex flex-col bg-zinc-950/80 border-r border-zinc-800/50 z-50 backdrop-blur-sm">
-        {/* Sidebar Header — Brand + New Project */}
-        <div className="px-5 pt-5 pb-4 border-b border-zinc-800/50">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-gradient-to-br from-violet-600 to-blue-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-violet-600/20 ring-1 ring-white/10">
-                <Sparkles className="w-4.5 h-4.5" />
-              </div>
-              <div>
-                <h1 className="text-sm font-bold text-zinc-100 leading-tight tracking-tight">GenCraft Pro</h1>
-                <p className="text-[10px] text-zinc-500 font-medium">AI App Builder</p>
-              </div>
-            </div>
-            <CreditStatusBar credits={activeCredits} onBuyCredits={() => setShowPricing(true)} />
+      <header className="flex items-center gap-2 px-3 py-2 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-sm shrink-0 z-50">
+        {/* Brand */}
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-violet-600 to-blue-600 rounded-lg flex items-center justify-center text-white shadow-lg shadow-violet-600/20 ring-1 ring-white/10">
+            <Sparkles className="w-4 h-4" />
           </div>
-          {/* New App Prompt */}
-          <div className="relative">
-            <textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && prompt.trim()) { e.preventDefault(); handleGenerate(prompt, true); } }}
-              placeholder="Describe what you want to build..."
-              className="w-full p-3.5 pr-12 text-[13px] font-mono border border-zinc-800/60 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500/40 outline-none bg-zinc-900/50 min-h-[72px] max-h-[120px] resize-none transition-all text-zinc-300 placeholder-zinc-600"
-            />
-            <button
-              onClick={() => handleGenerate(prompt, true)}
-              disabled={genState.isGenerating || !prompt.trim()}
-              className="absolute bottom-3 right-3 w-8 h-8 bg-gradient-to-r from-violet-600 to-blue-600 text-white rounded-lg flex items-center justify-center hover:from-violet-500 hover:to-blue-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all shadow-md shadow-violet-600/20 ring-1 ring-white/10 active:scale-95"
-              title="Generate App"
-            >
-              <Play className="w-3.5 h-3.5 ml-0.5" />
-            </button>
+          <div className="hidden sm:block">
+            <h1 className="text-xs font-bold text-zinc-100 leading-tight">GenCraft Pro</h1>
           </div>
         </div>
 
-        {/* Sidebar Tabs */}
-        <div className="flex border-b border-zinc-800/50 px-1.5 gap-0.5 overflow-x-auto custom-scrollbar">
-          {([
-            { id: 'chat' as SidebarTab, label: 'Chat', icon: MessageSquare },
-            { id: 'files' as SidebarTab, label: 'Files', icon: FolderTree },
-            { id: 'git' as SidebarTab, label: 'Git', icon: GitBranch },
-            { id: 'packages' as SidebarTab, label: 'Deps', icon: Package },
-            { id: 'env' as SidebarTab, label: 'Env', icon: Key },
-            { id: 'templates' as SidebarTab, label: 'Templates', icon: LayoutTemplate },
-            { id: 'history' as SidebarTab, label: 'History', icon: Clock },
-          ]).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setSidebarTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[11px] font-medium border-b-2 transition-all ${
-                sidebarTab === tab.id ? 'border-violet-500 text-violet-400' : 'border-transparent text-zinc-600 hover:text-zinc-400'
-              }`}
-            >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
-            </button>
-          ))}
+        {/* Separator */}
+        <div className="w-px h-6 bg-zinc-800/60 shrink-0" />
+
+        {/* Credit Status */}
+        <div className="shrink-0">
+          <CreditStatusBar credits={activeCredits} onBuyCredits={() => setShowPricing(true)} />
         </div>
 
-        {/* Sidebar Content */}
-        <div className="flex-1 overflow-hidden flex flex-col">
-          {sidebarTab === 'chat' && (
-            <div className="flex-1 flex flex-col h-full overflow-hidden">
-              <ChatBox messages={currentApp?.history || []} onSendMessage={(text) => handleChatMessage(text)} isGenerating={genState.isGenerating} />
-            </div>
-          )}
-          {sidebarTab === 'files' && (
-            <div className="flex-1 overflow-hidden">
-              <FileTree
-                files={projectFiles}
-                activeFile={activeFilePath}
-                onFileSelect={(path) => { setActiveFilePath(path); setViewMode('code'); }}
-                onFileCreate={(path) => { editorBridge.createFile(path, ''); setProjectFiles(editorBridge.getProjectTree()); setActiveFilePath(path); setViewMode('code'); }}
-                onFileDelete={(path) => { editorBridge.deleteFile(path); setProjectFiles(editorBridge.getProjectTree()); if (activeFilePath === path) { const paths = editorBridge.getAllFilePaths(); setActiveFilePath(paths[0] || null); } }}
-                onFileRename={(oldPath, newPath) => { editorBridge.renameFile(oldPath, newPath); setProjectFiles(editorBridge.getProjectTree()); if (activeFilePath === oldPath) { setActiveFilePath(newPath); } }}
-                darkMode={true}
-              />
-            </div>
-          )}
-          {sidebarTab === 'templates' && (
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Quick Start</p>
-              <div className="space-y-2 mb-6">
-                {PRESET_TEMPLATES.map((tpl) => (
-                  <button key={tpl.name} onClick={() => { setPrompt(tpl.prompt); setSidebarTab('chat'); }} className="w-full text-left px-4 py-3 text-xs text-zinc-400 bg-zinc-900/40 hover:bg-violet-500/10 hover:text-violet-300 rounded-xl border border-zinc-800/50 hover:border-violet-500/20 transition-all flex justify-between items-center group">
-                    <span>{tpl.name}</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => setIsTemplatesPanelOpen(true)} className="w-full py-2.5 text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20 hover:border-violet-500/40 rounded-xl transition-all flex items-center justify-center gap-2">
-                <LayoutTemplate className="w-3.5 h-3.5" />
-                Browse All Templates
+        {/* Separator */}
+        <div className="w-px h-6 bg-zinc-800/60 shrink-0" />
+
+        {/* Scrollable Panel Tabs */}
+        <div className="flex-1 min-w-0 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-0.5 w-max">
+            {([
+              { id: 'chat' as SidebarTab, label: 'Chat', icon: MessageSquare },
+              { id: 'files' as SidebarTab, label: 'Files', icon: FolderTree },
+              { id: 'templates' as SidebarTab, label: 'Templates', icon: LayoutTemplate },
+              { id: 'history' as SidebarTab, label: 'History', icon: Clock },
+              { id: 'git' as SidebarTab, label: 'Git', icon: GitBranch },
+              { id: 'packages' as SidebarTab, label: 'Deps', icon: Package },
+              { id: 'env' as SidebarTab, label: 'Env', icon: Key },
+              { id: 'voice' as SidebarTab, label: 'Voice', icon: Mic },
+              { id: 'image' as SidebarTab, label: 'Image', icon: Image },
+              { id: 'ai-tools' as SidebarTab, label: 'AI Tools', icon: Wrench },
+              { id: 'billing' as SidebarTab, label: 'Billing', icon: BarChart3 },
+            ]).map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => togglePanel(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium whitespace-nowrap transition-all ${
+                  sidebarTab === tab.id 
+                    ? 'bg-violet-500/15 text-violet-400 ring-1 ring-violet-500/20' 
+                    : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                }`}
+              >
+                <tab.icon className="w-3.5 h-3.5" />
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Separator */}
+        <div className="w-px h-6 bg-zinc-800/60 shrink-0" />
+
+        {/* Language Selector */}
+        <div className="relative group shrink-0">
+          <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] font-medium hover:border-violet-500/30 hover:bg-zinc-800/40 transition-all">
+            <span>{LANGUAGES.find(l => l.id === currentLanguage)?.icon}</span>
+            <span className="text-zinc-300 hidden md:inline">{LANGUAGES.find(l => l.id === currentLanguage)?.name || 'HTML'}</span>
+            <ChevronDown className="w-3 h-3 text-zinc-500" />
+          </button>
+          <div className="absolute top-full right-0 mt-1 w-56 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5 max-h-80 overflow-y-auto">
+            <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Language</p>
+            {LANGUAGES.map((lang) => (
+              <button key={lang.id} onClick={() => setCurrentLanguage(lang.id)} className={`w-full text-left p-2 rounded-lg hover:bg-violet-500/10 transition-colors flex items-center gap-3 ${currentLanguage === lang.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
+                <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs shadow-sm" style={{ backgroundColor: lang.color }}>{lang.icon}</span>
+                <div>
+                  <p className="text-xs font-medium text-zinc-200">{lang.name}</p>
+                  <p className="text-[10px] text-zinc-500">{lang.description}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Model Selector */}
+        <div className="relative group shrink-0">
+          <button className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-[11px] font-medium hover:border-violet-500/30 hover:bg-zinc-800/40 transition-all">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span className="text-zinc-300 hidden md:inline">{selectedModel.name}</span>
+            <ChevronDown className="w-3 h-3 text-zinc-500" />
+          </button>
+          <div className="absolute top-full right-0 mt-1 w-64 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5">
+            <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">AI Model</p>
+            {MODELS.map((model) => (
+              <button key={model.id} onClick={() => setSelectedModel(model)} className={`w-full text-left p-2.5 rounded-lg hover:bg-violet-500/10 transition-colors ${selectedModel.id === model.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  <p className="text-xs font-medium text-zinc-200">{model.name}</p>
+                  <span className="text-[10px] text-zinc-500 ml-auto">{model.provider}</span>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-0.5 ml-4">{model.description}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* View Mode */}
+        <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50 shrink-0">
+          <button onClick={() => setViewMode('desktop')} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>PREVIEW</button>
+          <button onClick={() => { setViewMode('code'); setEditorMode('edit'); }} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'code' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>CODE</button>
+          <button onClick={() => { setViewMode('split'); setEditorMode('edit'); }} className={`px-3 py-1 rounded-md text-[11px] font-semibold transition-all ${viewMode === 'split' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}>SPLIT</button>
+        </div>
+
+        {/* Device frames */}
+        {(viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile') && (
+          <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50 shrink-0">
+            <button onClick={() => setViewMode('desktop')} className={`p-1.5 rounded-md transition-all ${viewMode === 'desktop' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Monitor className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('tablet')} className={`p-1.5 rounded-md transition-all ${viewMode === 'tablet' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Tablet className="w-3.5 h-3.5" /></button>
+            <button onClick={() => setViewMode('mobile')} className={`p-1.5 rounded-md transition-all ${viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`}><Smartphone className="w-3.5 h-3.5" /></button>
+          </div>
+        )}
+
+        <button onClick={() => setShowBottomPanel(!showBottomPanel)} className={`p-1.5 rounded-lg transition-all shrink-0 ${showBottomPanel ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'}`}><Terminal className="w-4 h-4" /></button>
+
+        <button onClick={() => setShowDeployPanel(true)} className="px-3 py-1.5 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-[11px] font-bold rounded-lg hover:from-violet-500 hover:to-blue-500 transition-all shadow-lg shadow-violet-600/15 ring-1 ring-white/10 active:scale-95 flex items-center gap-1.5 shrink-0">
+          <Rocket className="w-3.5 h-3.5" />
+          DEPLOY
+        </button>
+      </header>
+
+      {/* ============================================================ */}
+      {/* MAIN AREA — Side Panel (toggleable) + Preview/Code */}
+      {/* ============================================================ */}
+      <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Slide-in Side Panel — opens when a header tab is active */}
+        {sidebarTab && (
+          <aside className="w-[360px] shrink-0 flex flex-col bg-zinc-950/90 border-r border-zinc-800/50 backdrop-blur-sm z-40 animate-slide-in-left">
+            {/* Panel Header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-800/50 shrink-0">
+              <h2 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">{
+                sidebarTab === 'chat' ? 'Chat' : sidebarTab === 'files' ? 'Files' : sidebarTab === 'templates' ? 'Templates' : sidebarTab === 'history' ? 'History' : sidebarTab === 'git' ? 'Git' : sidebarTab === 'packages' ? 'Dependencies' : sidebarTab === 'env' ? 'Environment' : sidebarTab === 'voice' ? 'Voice Input' : sidebarTab === 'image' ? 'Image to Code' : sidebarTab === 'ai-tools' ? 'AI Tools' : sidebarTab === 'billing' ? 'Usage & Billing' : ''
+              }</h2>
+              <button onClick={() => setSidebarTab(null)} className="p-1 rounded-lg text-zinc-600 hover:text-zinc-300 hover:bg-zinc-800/40 transition-all">
+                <X className="w-4 h-4" />
               </button>
             </div>
-          )}
-          {sidebarTab === 'history' && (
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-              {isLoadingHistory ? (
-                <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
-              ) : history.length > 0 ? (
-                <div className="space-y-2">
-                  {history.map((app) => (
-                    <button key={app.id} onClick={() => setCurrentApp(app)} className={`w-full text-left px-4 py-3 text-xs rounded-xl transition-all border ${currentApp?.id === app.id ? 'bg-violet-500/12 border-violet-500/25 text-violet-300' : 'bg-zinc-900/30 text-zinc-400 border-zinc-800/50 hover:border-violet-500/20 hover:bg-violet-500/5'}`}>
-                      <div className="font-semibold mb-1 truncate">{app.name}</div>
-                      <div className="text-[10px] opacity-50">{new Date(app.timestamp).toLocaleString()}</div>
-                    </button>
-                  ))}
+
+            {/* Panel Content */}
+            <div className="flex-1 overflow-hidden flex flex-col">
+              {sidebarTab === 'chat' && (
+                <div className="flex flex-col h-full">
+                  {/* Prompt box inside chat panel */}
+                  <div className="p-3 border-b border-zinc-800/50">
+                    <div className="relative">
+                      <textarea
+                        value={prompt}
+                        onChange={(e) => setPrompt(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && prompt.trim()) { e.preventDefault(); handleGenerate(prompt, true); } }}
+                        placeholder="Describe what you want to build..."
+                        className="w-full p-3 pr-10 text-[13px] font-mono border border-zinc-800/60 rounded-xl focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500/40 outline-none bg-zinc-900/50 min-h-[60px] max-h-[100px] resize-none transition-all text-zinc-300 placeholder-zinc-600"
+                      />
+                      <button
+                        onClick={() => handleGenerate(prompt, true)}
+                        disabled={genState.isGenerating || !prompt.trim()}
+                        className="absolute bottom-2.5 right-2.5 w-7 h-7 bg-gradient-to-r from-violet-600 to-blue-600 text-white rounded-lg flex items-center justify-center hover:from-violet-500 hover:to-blue-500 disabled:opacity-20 disabled:cursor-not-allowed transition-all shadow-md shadow-violet-600/20 ring-1 ring-white/10 active:scale-95"
+                      >
+                        <Play className="w-3 h-3 ml-0.5" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-hidden">
+                    <ChatBox messages={currentApp?.history || []} onSendMessage={(text) => handleChatMessage(text)} isGenerating={genState.isGenerating} />
+                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-12 text-zinc-500 text-xs">
-                  <Clock className="w-8 h-8 mx-auto mb-3 opacity-30" />
-                  <p>No project history yet.</p>
-                  <p className="text-zinc-600 mt-1">Generated apps will appear here.</p>
+              )}
+              {sidebarTab === 'files' && (
+                <div className="flex-1 overflow-hidden">
+                  <FileTree
+                    files={projectFiles}
+                    activeFile={activeFilePath}
+                    onFileSelect={(path) => { setActiveFilePath(path); setViewMode('code'); }}
+                    onFileCreate={(path) => { editorBridge.createFile(path, ''); setProjectFiles(editorBridge.getProjectTree()); setActiveFilePath(path); setViewMode('code'); }}
+                    onFileDelete={(path) => { editorBridge.deleteFile(path); setProjectFiles(editorBridge.getProjectTree()); if (activeFilePath === path) { const paths = editorBridge.getAllFilePaths(); setActiveFilePath(paths[0] || null); } }}
+                    onFileRename={(oldPath, newPath) => { editorBridge.renameFile(oldPath, newPath); setProjectFiles(editorBridge.getProjectTree()); if (activeFilePath === oldPath) { setActiveFilePath(newPath); } }}
+                    darkMode={true}
+                  />
+                </div>
+              )}
+              {sidebarTab === 'templates' && (
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                  <p className="text-[10px] font-bold text-zinc-600 uppercase tracking-widest mb-3">Quick Start</p>
+                  <div className="space-y-2 mb-6">
+                    {PRESET_TEMPLATES.map((tpl) => (
+                      <button key={tpl.name} onClick={() => { setPrompt(tpl.prompt); togglePanel('chat'); }} className="w-full text-left px-4 py-3 text-xs text-zinc-400 bg-zinc-900/40 hover:bg-violet-500/10 hover:text-violet-300 rounded-xl border border-zinc-800/50 hover:border-violet-500/20 transition-all flex justify-between items-center group">
+                        <span>{tpl.name}</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </button>
+                    ))}
+                  </div>
+                  <button onClick={() => setIsTemplatesPanelOpen(true)} className="w-full py-2.5 text-xs text-violet-400 hover:text-violet-300 border border-violet-500/20 hover:border-violet-500/40 rounded-xl transition-all flex items-center justify-center gap-2">
+                    <LayoutTemplate className="w-3.5 h-3.5" />
+                    Browse All Templates
+                  </button>
+                </div>
+              )}
+              {sidebarTab === 'history' && (
+                <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                  {isLoadingHistory ? (
+                    <div className="flex items-center justify-center py-12"><div className="w-6 h-6 border-2 border-violet-500 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : history.length > 0 ? (
+                    <div className="space-y-2">
+                      {history.map((app) => (
+                        <button key={app.id} onClick={() => setCurrentApp(app)} className={`w-full text-left px-4 py-3 text-xs rounded-xl transition-all border ${currentApp?.id === app.id ? 'bg-violet-500/12 border-violet-500/25 text-violet-300' : 'bg-zinc-900/30 text-zinc-400 border-zinc-800/50 hover:border-violet-500/20 hover:bg-violet-500/5'}`}>
+                          <div className="font-semibold mb-1 truncate">{app.name}</div>
+                          <div className="text-[10px] opacity-50">{new Date(app.timestamp).toLocaleString()}</div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-12 text-zinc-500 text-xs">
+                      <Clock className="w-8 h-8 mx-auto mb-3 opacity-30" />
+                      <p>No project history yet.</p>
+                      <p className="text-zinc-600 mt-1">Generated apps will appear here.</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {sidebarTab === 'git' && (
+                <div className="flex-1 overflow-hidden">
+                  <GitPanel projectId={currentApp?.id || 'default'} />
+                </div>
+              )}
+              {sidebarTab === 'env' && (
+                <div className="flex-1 overflow-hidden">
+                  <EnvironmentVars projectId={currentApp?.id || 'default'} vars={envVars} onChange={setEnvVars} />
+                </div>
+              )}
+              {sidebarTab === 'packages' && (
+                <div className="flex-1 overflow-hidden">
+                  <DependenciesPanel dependencies={projectDependencies} />
+                </div>
+              )}
+              {sidebarTab === 'voice' && (
+                <div className="flex-1 p-4">
+                  <VoiceInput onTranscript={(transcript) => { setPrompt(transcript); togglePanel('chat'); }} onClose={() => setSidebarTab(null)} />
+                </div>
+              )}
+              {sidebarTab === 'image' && (
+                <div className="flex-1 overflow-y-auto">
+                  <ImageToCode
+                    onGenerate={async (code) => {
+                      const newApp: GeneratedApp = { id: Date.now().toString(), name: 'From Image', code, prompt: 'Generated from image upload', timestamp: Date.now(), history: [{ role: 'model', text: 'Generated from uploaded image', timestamp: Date.now() }], language: currentLanguage, provider: selectedModel.provider, modelId: selectedModel.id };
+                      setCurrentApp(newApp);
+                      saveApp(newApp, true);
+                      setSidebarTab(null);
+                    }}
+                    onClose={() => setSidebarTab(null)}
+                    outputType={['react', 'nextjs'].includes(currentLanguage) ? 'react' : 'html'}
+                  />
+                </div>
+              )}
+              {sidebarTab === 'ai-tools' && (
+                <div className="flex flex-col h-full">
+                  <div className="flex items-center gap-0.5 px-3 py-2 border-b border-zinc-800/40 shrink-0">
+                    {([
+                      { id: 'autofix' as AIToolTab, label: 'Autofix', icon: Wrench },
+                      { id: 'refactor' as AIToolTab, label: 'Refactor', icon: RefreshCcw },
+                      { id: 'explain' as AIToolTab, label: 'Explain', icon: BookOpen },
+                      { id: 'tests' as AIToolTab, label: 'Tests', icon: TestTube2 },
+                    ]).map(tab => (
+                      <button key={tab.id} onClick={() => setAIToolTab(tab.id)} className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${aiToolTab === tab.id ? 'bg-violet-500/12 text-violet-400' : 'text-zinc-600 hover:text-zinc-400'}`}>
+                        <tab.icon className="w-3 h-3" />
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <ErrorBoundary section="AI Tools" compact>
+                      {aiToolTab === 'autofix' && <AIAutofix errors={[]} />}
+                      {aiToolTab === 'refactor' && <AIRefactor code={currentApp?.code} fileName={activeFilePath || undefined} />}
+                      {aiToolTab === 'explain' && <AIExplain selectedCode={undefined} fileName={activeFilePath || undefined} />}
+                      {aiToolTab === 'tests' && <AITestWriter targetCode={currentApp?.code} fileName={activeFilePath || undefined} />}
+                    </ErrorBoundary>
+                  </div>
+                </div>
+              )}
+              {sidebarTab === 'billing' && (
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                  <UsageDashboard onUpgrade={() => { setSidebarTab(null); setShowPricing(true); }} />
+                  <div className="border-t border-zinc-800/50">
+                    <InvoiceHistory />
+                  </div>
                 </div>
               )}
             </div>
-          )}
-          {sidebarTab === 'git' && (
-            <div className="flex-1 overflow-hidden">
-              <GitPanel projectId={currentApp?.id || 'default'} />
-            </div>
-          )}
-          {sidebarTab === 'env' && (
-            <div className="flex-1 overflow-hidden">
-              <EnvironmentVars projectId={currentApp?.id || 'default'} vars={envVars} onChange={setEnvVars} />
-            </div>
-          )}
-          {sidebarTab === 'packages' && (
-            <div className="flex-1 overflow-hidden">
-              <DependenciesPanel dependencies={projectDependencies} />
-            </div>
-          )}
-        </div>
+          </aside>
+        )}
 
-        {/* Sidebar Bottom Toolbar */}
-        <div className="px-4 py-3 border-t border-zinc-800/50 flex items-center justify-between">
-          <div className="flex items-center gap-0.5">
-            <button onClick={() => setShowVoiceInput(true)} className="p-2 rounded-lg text-zinc-600 hover:text-violet-400 hover:bg-violet-500/8 transition-all" data-tooltip="Voice Input"><Mic className="w-4 h-4" /></button>
-            <button onClick={() => setShowImageToCode(true)} className="p-2 rounded-lg text-zinc-600 hover:text-violet-400 hover:bg-violet-500/8 transition-all" data-tooltip="Image to Code"><Image className="w-4 h-4" /></button>
-            <button onClick={() => setShowAITools(!showAITools)} className={`p-2 rounded-lg transition-all ${showAITools ? 'text-violet-400 bg-violet-500/10' : 'text-zinc-600 hover:text-violet-400 hover:bg-violet-500/8'}`} data-tooltip="AI Tools"><Wrench className="w-4 h-4" /></button>
-            <button onClick={() => setShowBilling(!showBilling)} className={`p-2 rounded-lg transition-all ${showBilling ? 'text-blue-400 bg-blue-500/10' : 'text-zinc-600 hover:text-blue-400 hover:bg-blue-500/8'}`} data-tooltip="Usage & Billing"><BarChart3 className="w-4 h-4" /></button>
-          </div>
-          <div className="text-[9px] text-zinc-700 font-medium select-none">GenCraft Pro &middot; Maula AI</div>
-        </div>
-      </aside>
-
-      {/* ============================================================ */}
-      {/* MAIN CONTENT — Header + Preview/Code Area */}
-      {/* ============================================================ */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Header Bar */}
-        <header className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/50 bg-zinc-950/60 backdrop-blur-sm shrink-0 z-40">
-          <div className="flex items-center gap-3">
-            {/* Language Selector */}
-            <div className="relative group">
-              <button className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-xs font-medium hover:border-violet-500/30 hover:bg-zinc-800/40 transition-all">
-                <span>{LANGUAGES.find(l => l.id === currentLanguage)?.icon}</span>
-                <span className="text-zinc-300">{LANGUAGES.find(l => l.id === currentLanguage)?.name || 'HTML'}</span>
-                <ChevronDown className="w-3 h-3 text-zinc-500" />
-              </button>
-              <div className="absolute top-full left-0 mt-1 w-56 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5 max-h-80 overflow-y-auto">
-                <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Language</p>
-                {LANGUAGES.map((lang) => (
-                  <button key={lang.id} onClick={() => setCurrentLanguage(lang.id)} className={`w-full text-left p-2 rounded-lg hover:bg-violet-500/10 transition-colors flex items-center gap-3 ${currentLanguage === lang.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
-                    <span className="w-6 h-6 rounded-md flex items-center justify-center text-white text-xs shadow-sm" style={{ backgroundColor: lang.color }}>{lang.icon}</span>
-                    <div>
-                      <p className="text-xs font-medium text-zinc-200">{lang.name}</p>
-                      <p className="text-[10px] text-zinc-500">{lang.description}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Model Selector */}
-            <div className="relative group">
-              <button className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900/60 border border-zinc-800/60 rounded-lg text-xs font-medium hover:border-violet-500/30 hover:bg-zinc-800/40 transition-all">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="text-zinc-300">{selectedModel.name}</span>
-                <ChevronDown className="w-3 h-3 text-zinc-500" />
-              </button>
-              <div className="absolute top-full left-0 mt-1 w-64 bg-zinc-900/95 backdrop-blur-xl border border-zinc-700/40 rounded-xl shadow-2xl shadow-black/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 p-1.5">
-                <p className="px-3 py-1.5 text-[10px] font-bold text-zinc-500 uppercase tracking-widest">AI Model</p>
-                {MODELS.map((model) => (
-                  <button key={model.id} onClick={() => setSelectedModel(model)} className={`w-full text-left p-2.5 rounded-lg hover:bg-violet-500/10 transition-colors ${selectedModel.id === model.id ? 'bg-violet-500/12 ring-1 ring-violet-500/20' : ''}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      <p className="text-xs font-medium text-zinc-200">{model.name}</p>
-                      <span className="text-[10px] text-zinc-500 ml-auto">{model.provider}</span>
-                    </div>
-                    <p className="text-[10px] text-zinc-500 mt-0.5 ml-4">{model.description}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Center — View Mode Tabs */}
-          <div className="flex items-center gap-1 bg-zinc-900/50 p-1 rounded-lg border border-zinc-800/50">
-            <button onClick={() => setViewMode('desktop')} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>PREVIEW</button>
-            <button onClick={() => { setViewMode('code'); setEditorMode('edit'); }} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'code' ? 'bg-violet-500/15 text-violet-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>CODE</button>
-            <button onClick={() => { setViewMode('split'); setEditorMode('edit'); }} className={`px-4 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'split' ? 'bg-violet-500/15 text-violet-400 shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>SPLIT</button>
-          </div>
-
-          {/* Right — Device frames + Deploy */}
-          <div className="flex items-center gap-3">
-            {(viewMode === 'desktop' || viewMode === 'tablet' || viewMode === 'mobile') && (
-              <div className="flex items-center gap-0.5 bg-zinc-900/50 p-0.5 rounded-lg border border-zinc-800/50">
-                <button onClick={() => setViewMode('desktop')} className={`p-1.5 rounded-md transition-all ${viewMode === 'desktop' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`} data-tooltip="Desktop"><Monitor className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setViewMode('tablet')} className={`p-1.5 rounded-md transition-all ${viewMode === 'tablet' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`} data-tooltip="Tablet"><Tablet className="w-3.5 h-3.5" /></button>
-                <button onClick={() => setViewMode('mobile')} className={`p-1.5 rounded-md transition-all ${viewMode === 'mobile' ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300'}`} data-tooltip="Mobile"><Smartphone className="w-3.5 h-3.5" /></button>
-              </div>
-            )}
-            <button onClick={() => setShowBottomPanel(!showBottomPanel)} className={`p-2 rounded-lg transition-all ${showBottomPanel ? 'bg-violet-500/15 text-violet-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'}`} data-tooltip="Console">
-              <Terminal className="w-4 h-4" />
-            </button>
-            <button onClick={() => setShowHosting(!showHosting)} className={`p-2 rounded-lg transition-all ${showHosting ? 'bg-emerald-500/15 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'}`} data-tooltip="Hosting">
-              <Activity className="w-4 h-4" />
-            </button>
-            <button onClick={() => setShowDeployPanel(true)} className="px-4 py-2 bg-gradient-to-r from-violet-600 to-blue-600 text-white text-xs font-bold rounded-lg hover:from-violet-500 hover:to-blue-500 transition-all shadow-lg shadow-violet-600/15 ring-1 ring-white/10 active:scale-95 flex items-center gap-2">
-              <Rocket className="w-3.5 h-3.5" />
-              DEPLOY
-            </button>
-          </div>
-        </header>
-
-        {/* Preview / Code Area */}
-        <main className="flex-1 relative overflow-hidden bg-[#09090b]">
+        {/* Preview / Code Area — uses remaining space */}
+        <main className="flex-1 relative overflow-hidden bg-[#09090b] min-w-0">
           {genState.isGenerating && (
             <div className="absolute inset-0 z-40 bg-[#09090b]/80 backdrop-blur-md flex flex-col items-center justify-center">
               <div className="w-12 h-12 border-2 border-zinc-800 border-t-violet-500 rounded-full animate-spin mb-6" />
@@ -1153,7 +1217,7 @@ const App: React.FC = () => {
       {/* BOTTOM PANEL — Console, Network, Problems */}
       {/* ============================================================ */}
       {showBottomPanel && (
-        <div className="fixed bottom-0 left-[340px] right-0 h-[280px] z-50 bg-zinc-950/90 backdrop-blur-md border-t border-zinc-800/50 flex flex-col animate-fade-in-up">
+        <div className="fixed bottom-0 left-0 right-0 h-[280px] z-50 bg-zinc-950/90 backdrop-blur-md border-t border-zinc-800/50 flex flex-col animate-fade-in-up">
           <div className="flex items-center gap-1 px-3 py-1.5 border-b border-zinc-800/40 shrink-0">
             {([
               { id: 'console' as BottomPanelTab, label: 'Console', icon: Terminal },
@@ -1189,62 +1253,9 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* ============================================================ */}
-      {/* AI TOOLS PANEL — Floating overlay */}
-      {/* ============================================================ */}
-      {showAITools && (
-        <div className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm" onClick={() => setShowAITools(false)}>
-          <div
-            className="absolute top-16 right-6 w-[520px] max-h-[80vh] bg-zinc-950/95 backdrop-blur-xl border border-zinc-800/60 rounded-2xl shadow-2xl shadow-black/60 overflow-hidden flex flex-col animate-fade-in-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-zinc-800/50 shrink-0">
-              {([
-                { id: 'autofix' as AIToolTab, label: 'Autofix', icon: Wrench },
-                { id: 'refactor' as AIToolTab, label: 'Refactor', icon: RefreshCcw },
-                { id: 'explain' as AIToolTab, label: 'Explain', icon: BookOpen },
-                { id: 'tests' as AIToolTab, label: 'Tests', icon: TestTube2 },
-              ]).map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setAIToolTab(tab.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
-                    aiToolTab === tab.id ? 'bg-violet-500/12 text-violet-400' : 'text-zinc-600 hover:text-zinc-400'
-                  }`}
-                >
-                  <tab.icon className="w-3 h-3" />
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <div className="flex-1 overflow-y-auto custom-scrollbar">
-              <ErrorBoundary section="AI Tools" compact>
-                {aiToolTab === 'autofix' && <AIAutofix errors={[]} />}
-                {aiToolTab === 'refactor' && <AIRefactor code={currentApp?.code} fileName={activeFilePath || undefined} />}
-                {aiToolTab === 'explain' && <AIExplain selectedCode={undefined} fileName={activeFilePath || undefined} />}
-                {aiToolTab === 'tests' && <AITestWriter targetCode={currentApp?.code} fileName={activeFilePath || undefined} />}
-              </ErrorBoundary>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ============================================================ */}
-      {/* BILLING PANEL — Floating overlay */}
-      {/* ============================================================ */}
-      {showBilling && (
-        <div className="fixed inset-0 z-[90] bg-black/50 backdrop-blur-sm" onClick={() => setShowBilling(false)}>
-          <div
-            className="absolute top-16 left-[360px] w-[420px] max-h-[80vh] bg-zinc-950/95 backdrop-blur-xl border border-zinc-800/60 rounded-2xl shadow-2xl shadow-black/60 overflow-y-auto custom-scrollbar animate-fade-in-up"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <UsageDashboard onUpgrade={() => { setShowBilling(false); setShowPricing(true); }} />
-            <div className="border-t border-zinc-800/50">
-              <InvoiceHistory />
-            </div>
-          </div>
-        </div>
-      )}
+
+
 
       {/* ============================================================ */}
       {/* HOSTING DASHBOARD — Floating overlay */}
@@ -1285,20 +1296,9 @@ const App: React.FC = () => {
       {/* Templates Panel */}
       <TemplatesPanel isOpen={isTemplatesPanelOpen} onClose={() => setIsTemplatesPanelOpen(false)} onUseTemplate={handleUseTemplate} selectedLanguage={selectedLanguage} onLanguageChange={setSelectedLanguage} />
 
-      {showVoiceInput && <VoiceInput onTranscript={(transcript) => { setPrompt(transcript); setShowVoiceInput(false); }} onClose={() => setShowVoiceInput(false)} />}
 
-      {showImageToCode && (
-        <ImageToCode
-          onGenerate={async (code) => {
-            const newApp: GeneratedApp = { id: Date.now().toString(), name: 'From Image', code, prompt: 'Generated from image upload', timestamp: Date.now(), history: [{ role: 'model', text: 'Generated from uploaded image', timestamp: Date.now() }], language: currentLanguage, provider: selectedModel.provider, modelId: selectedModel.id };
-            setCurrentApp(newApp);
-            saveApp(newApp, true);
-            setShowImageToCode(false);
-          }}
-          onClose={() => setShowImageToCode(false)}
-          outputType={['react', 'nextjs'].includes(currentLanguage) ? 'react' : 'html'}
-        />
-      )}
+
+
 
       {showDeployPanel && (
         <DeployPanel projectName={currentApp?.name || 'Untitled Project'} files={useEditorStore.getState().files} onClose={() => setShowDeployPanel(false)} onDeployComplete={handleDeployComplete} onFixBuildError={handleFixBuildError} />
