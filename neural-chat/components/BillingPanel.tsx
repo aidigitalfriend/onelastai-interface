@@ -46,9 +46,10 @@ export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, use
   };
 
   const fetchCredits = async () => {
-    if (!userId) return;
     try {
-      const res = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
+      const res = await fetch(`${API_BASE}/billing/credits?app=${APP_ID}`, {
+        credentials: 'include',
+      });
       const data = await res.json();
       if (data.success) {
         setCredits(data.credits);
@@ -69,11 +70,8 @@ export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, use
       const res = await fetch(`${API_BASE}/billing/checkout/${APP_ID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          userId, 
-          packageId,
-          email: localStorage.getItem('userEmail') || undefined
-        })
+        credentials: 'include',
+        body: JSON.stringify({ packageId })
       });
       
       const data = await res.json();

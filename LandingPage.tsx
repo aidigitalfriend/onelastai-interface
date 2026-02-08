@@ -792,7 +792,7 @@ interface FullPageDashboardProps {
 
 interface DashboardData {
   user: { id: string; email: string; name: string };
-  credits: { balance: number; lifetimeSpent: number };
+  credits: { balance: number; lifetimeSpent: number; perApp?: Record<string, number> };
   stats: {
     creditsUsedToday: number;
     creditsUsedWeek: number;
@@ -822,8 +822,6 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
   const [activeTab, setActiveTab] = useState<'overview' | 'apps' | 'credits' | 'usage' | 'billing' | 'security' | 'settings'>('overview');
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
-  
   // Fetch dashboard data on mount
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -843,29 +841,6 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
     };
     fetchDashboard();
   }, []);
-
-  // Handle credit purchase
-  const handleBuyCredits = async (packageId: string, appId: string = 'neural-chat') => {
-    setCheckoutLoading(packageId);
-    try {
-      const res = await fetch(`${API_BASE}/billing/checkout/${appId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ packageId }),
-      });
-      const data = await res.json();
-      if (data.success && data.url) {
-        window.location.href = data.url;
-      } else {
-        alert(data.error || 'Failed to start checkout');
-      }
-    } catch (error) {
-      alert('Failed to start checkout');
-    } finally {
-      setCheckoutLoading(null);
-    }
-  };
 
   // Format time ago
   const timeAgo = (date: Date) => {
@@ -890,14 +865,6 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
     { id: 'billing', label: 'Billing', icon: '💳' },
     { id: 'security', label: 'Security', icon: '🔒' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
-  ];
-
-  const creditPackages = [
-    { id: 'nc-50', credits: 50, price: 5, savings: null, popular: false },
-    { id: 'nc-100', credits: 100, price: 10, savings: '5%', popular: false },
-    { id: 'nc-350', credits: 350, price: 30, savings: '15%', popular: true },
-    { id: 'nc-600', credits: 600, price: 50, savings: '20%', popular: false },
-    { id: 'nc-1500', credits: 1500, price: 100, savings: '35%', popular: false },
   ];
 
   return (
@@ -1017,18 +984,16 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             {/* Quick Actions */}
             <div>
               <h3 className="text-xl font-bold mb-4 text-white">Quick Actions</h3>
-              <div className="grid md:grid-cols-5 gap-4">
+              <div className="grid md:grid-cols-4 gap-4">
                 {[
                   { name: 'Neural Chat', icon: '🧠', desc: 'Start a conversation', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat' },
                   { name: 'Canvas Studio', icon: '🎨', desc: 'Build something new', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio' },
                   { name: 'Maula Editor', icon: '⚡', desc: 'Code with AI', gradient: 'from-green-500 to-emerald-500', path: '/maula-editor' },
                   { name: 'GenCraft Pro', icon: '🚀', desc: 'Build full-stack apps', gradient: 'from-violet-500 to-fuchsia-500', path: '/gen-craft-pro' },
-                  { name: 'Buy Credits', icon: '🪙', desc: 'Top up your balance', gradient: 'from-yellow-500 to-orange-500', path: null },
                 ].map((action, i) => (
                   <a
                     key={i}
-                    href={action.path || '#'}
-                    onClick={(e) => { if (!action.path) { e.preventDefault(); setActiveTab('credits'); }}}
+                    href={action.path}
                     className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group cursor-pointer"
                   >
                     <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${action.gradient} flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform shadow-lg`}>
@@ -1102,50 +1067,78 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
 
         {activeTab === 'credits' && (
           <div className="space-y-8">
+            {/* Total Balance Summary */}
             <div className="p-8 rounded-3xl bg-gradient-to-r from-green-500/10 to-cyan-500/10 border border-green-500/20">
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div>
-                  <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Current Balance</div>
+                  <div className="text-sm text-gray-500 uppercase tracking-wider mb-1">Total Balance (All Apps)</div>
                   <div className="text-5xl font-black text-green-400">{Math.round(creditBalance)}</div>
                 </div>
                 <span className="text-7xl">🪙</span>
               </div>
-              <div className="h-3 rounded-full bg-gray-800 overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full transition-all" style={{ width: `${Math.min(creditBalance / 5, 100)}%` }} />
-              </div>
-              <div className="flex justify-between mt-2 text-sm text-gray-500">
-                <span>0</span>
-                <span>500</span>
+              <p className="text-sm text-gray-500">Credits are purchased per app. Open an app to add credits.</p>
+            </div>
+
+            {/* Per-App Credit Balances */}
+            <div>
+              <h3 className="text-2xl font-bold mb-6 text-white">Credits by App</h3>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                  { id: 'neural-chat', name: 'Neural Chat', icon: '🧠', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat' },
+                  { id: 'canvas-studio', name: 'Canvas Studio', icon: '🎨', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio' },
+                  { id: 'maula-editor', name: 'Maula Editor', icon: '⚡', gradient: 'from-green-500 to-emerald-500', path: '/maula-editor' },
+                  { id: 'gen-craft-pro', name: 'GenCraft Pro', icon: '🚀', gradient: 'from-violet-500 to-fuchsia-500', path: '/gen-craft-pro' },
+                ].map((app) => {
+                  const appBalance = Math.round(dashboardData?.credits.perApp?.[app.id] || 0);
+                  return (
+                    <div key={app.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group">
+                      <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${app.gradient} flex items-center justify-center text-3xl mb-4 group-hover:scale-110 transition-transform shadow-lg`}>
+                        {app.icon}
+                      </div>
+                      <h4 className="font-bold text-white text-lg mb-1">{app.name}</h4>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className="text-3xl font-black text-green-400">{appBalance}</span>
+                        <span className="text-sm text-gray-500">credits</span>
+                      </div>
+                      <a
+                        href={app.path}
+                        className="block w-full py-3 rounded-xl bg-gradient-to-r from-green-500/20 to-cyan-500/20 border border-green-500/30 text-center font-bold text-sm text-green-400 hover:from-green-500/30 hover:to-cyan-500/30 transition-all"
+                      >
+                        {appBalance > 0 ? 'Launch App →' : 'Buy Credits →'}
+                      </a>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
+            {/* Transaction History */}
             <div>
-              <h3 className="text-2xl font-bold mb-6 text-white">Buy Credits</h3>
-              <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
-                {creditPackages.map((pkg, i) => (
-                  <button 
-                    key={pkg.id}
-                    onClick={() => handleBuyCredits(pkg.id)}
-                    disabled={checkoutLoading !== null}
-                    className={`p-8 rounded-2xl border transition-all text-left relative ${pkg.popular ? 'bg-gradient-to-br from-green-500/10 to-cyan-500/10 border-green-500/30 scale-105' : 'bg-white/[0.02] border-white/10 hover:border-white/20'} ${checkoutLoading === pkg.id ? 'opacity-75' : ''}`}
-                  >
-                    {pkg.popular && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-green-500 to-cyan-500 rounded-full text-xs font-bold">
-                        MOST POPULAR
+              <h3 className="text-2xl font-bold mb-6 text-white">Recent Transactions</h3>
+              <div className="space-y-3">
+                {(dashboardData?.transactions && dashboardData.transactions.length > 0) ? (
+                  dashboardData.transactions.map((tx, i) => (
+                    <div key={tx.id || i} className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/10">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-2xl ${tx.type === 'PURCHASE' ? '💰' : tx.type === 'USAGE' ? '⚡' : '🎁'}`}>
+                          {tx.type === 'PURCHASE' ? '💰' : tx.type === 'USAGE' ? '⚡' : '🎁'}
+                        </span>
+                        <div>
+                          <div className="text-white font-medium">{tx.description || tx.type}</div>
+                          <div className="text-xs text-gray-500">{timeAgo(tx.createdAt)}</div>
+                        </div>
                       </div>
-                    )}
-                    <div className="flex items-center gap-3 mb-4">
-                      <span className="text-4xl">🪙</span>
-                      <span className="text-3xl font-black text-white">{pkg.credits}</span>
+                      <span className={`font-bold ${tx.type === 'PURCHASE' || tx.type === 'BONUS' ? 'text-green-400' : 'text-cyan-400'}`}>
+                        {tx.type === 'PURCHASE' || tx.type === 'BONUS' ? '+' : '-'}{Math.round(Math.abs(tx.amount))}
+                      </span>
                     </div>
-                    {pkg.savings && <span className="inline-block px-3 py-1 rounded-full bg-green-500/20 text-green-400 text-sm font-bold mb-4">{pkg.savings} OFF</span>}
-                    <div className="text-4xl font-black text-cyan-400 mb-2">${pkg.price}</div>
-                    <div className="text-sm text-gray-500 mb-4">${(pkg.price / pkg.credits).toFixed(2)} per credit</div>
-                    <div className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-cyan-500 text-center font-bold text-sm hover:shadow-lg hover:shadow-green-500/25 transition-all">
-                      {checkoutLoading === pkg.id ? 'Processing...' : 'Buy Now'}
-                    </div>
-                  </button>
-                ))}
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-gray-500">
+                    <div className="text-4xl mb-3">💳</div>
+                    <p>No transactions yet. Purchase credits in any app to get started!</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1242,7 +1235,7 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
                     ) : (
                       <tr>
                         <td colSpan={4} className="p-8 text-center text-gray-500">
-                          No transactions yet. Buy credits to get started!
+                          No transactions yet. Purchase credits in any app to get started!
                         </td>
                       </tr>
                     )}
@@ -1518,36 +1511,30 @@ const DashboardContent: React.FC<DashboardContentProps> = ({ userEmail = 'user@e
           <div className="p-6 rounded-xl bg-gradient-to-r from-green-500/10 to-cyan-500/10 border border-green-500/20">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <div className="text-sm text-gray-500">Current Balance</div>
+                <div className="text-sm text-gray-500">Total Balance (All Apps)</div>
                 <div className="text-4xl font-black text-green-400">{creditBalance}</div>
               </div>
               <span className="text-6xl">🪙</span>
             </div>
-            <div className="h-2 rounded-full bg-gray-800 overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-green-500 to-cyan-500 rounded-full" style={{ width: '49%' }} />
-            </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-500">
-              <span>0</span>
-              <span>500</span>
-            </div>
+            <p className="text-xs text-gray-500">Credits are purchased per app. Open an app to add credits.</p>
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold mb-4 text-white">Buy Credits</h3>
-            <div className="grid md:grid-cols-3 gap-4">
+            <h3 className="text-lg font-semibold mb-4 text-white">Credits by App</h3>
+            <div className="grid grid-cols-2 gap-4">
               {[
-                { credits: 50, price: 5, savings: null },
-                { credits: 350, price: 30, savings: '15%' },
-                { credits: 1500, price: 100, savings: '35%' },
-              ].map((pkg, i) => (
-                <button key={i} className={`p-4 rounded-xl border transition-all text-left ${i === 1 ? 'bg-gradient-to-r from-green-500/10 to-cyan-500/10 border-green-500/30' : 'bg-white/[0.02] border-white/10 hover:border-white/20'}`}>
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xl">🪙</span>
-                    <span className="text-lg font-bold text-white">{pkg.credits}</span>
-                    {pkg.savings && <span className="text-xs text-green-400 font-bold">{pkg.savings} OFF</span>}
-                  </div>
-                  <div className="text-2xl font-black text-cyan-400">${pkg.price}</div>
-                </button>
+                { id: 'neural-chat', name: 'Neural Chat', icon: '🧠', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat' },
+                { id: 'canvas-studio', name: 'Canvas Studio', icon: '🎨', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio' },
+                { id: 'maula-editor', name: 'Maula Editor', icon: '⚡', gradient: 'from-green-500 to-emerald-500', path: '/maula-editor' },
+                { id: 'gen-craft-pro', name: 'GenCraft Pro', icon: '🚀', gradient: 'from-violet-500 to-fuchsia-500', path: '/gen-craft-pro' },
+              ].map((app) => (
+                  <a key={app.id} href={app.path} className="p-4 rounded-xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group block">
+                    <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${app.gradient} flex items-center justify-center text-xl mb-3 group-hover:scale-110 transition-transform`}>
+                      {app.icon}
+                    </div>
+                    <h4 className="font-bold text-white text-sm mb-1">{app.name}</h4>
+                    <div className="text-sm text-green-400 mt-2">Open app to view →</div>
+                  </a>
               ))}
             </div>
           </div>

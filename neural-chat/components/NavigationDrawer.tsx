@@ -120,8 +120,9 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
   const fetchCredits = async () => {
     setIsLoadingCredits(true);
     try {
-      const userId = getUserId();
-      const response = await fetch(`${API_BASE}/billing/credits?userId=${userId}`);
+      const response = await fetch(`${API_BASE}/billing/credits?app=neural-chat`, {
+        credentials: 'include',
+      });
       if (response.ok) {
         const data = await response.json();
         const available = data.credits || 0;
@@ -173,7 +174,8 @@ const NavigationDrawer: React.FC<NavigationDrawerProps> = ({ isOpen, onClose, on
       const response = await fetch(`${API_BASE}/billing/checkout/neural-chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, packageId })
+        credentials: 'include',
+        body: JSON.stringify({ packageId })
       });
       
       if (response.ok) {

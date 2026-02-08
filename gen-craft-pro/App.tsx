@@ -211,7 +211,7 @@ const App: React.FC = () => {
         }
 
         // 3. Check credit balance
-        const creditsRes = await fetch('/api/billing/credits', { credentials: 'include' });
+        const creditsRes = await fetch('/api/billing/credits?app=gen-craft-pro', { credentials: 'include' });
         const creditsData = await creditsRes.json();
         if (creditsData.success) {
           setActiveCredits({ balance: creditsData.balance || 0, lifetimeSpent: creditsData.lifetimeSpent || 0 });

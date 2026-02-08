@@ -61,7 +61,7 @@ export function useAuth(): UseAuthReturn {
   const checkCredits = useCallback(async () => {
     if (!user) { setCredits(null); return; }
     try {
-      const res = await fetch('/api/billing/credits', { credentials: 'include' });
+      const res = await fetch('/api/billing/credits?app=gen-craft-pro', { credentials: 'include' });
       const data = await res.json();
       if (data.success) {
         setCredits({ balance: data.credits || 0, lifetimeSpent: data.lifetimeSpent || 0 });

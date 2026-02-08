@@ -47,8 +47,8 @@ export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, use
 
   const fetchCredits = async () => {
     try {
-      const res = await fetch(`${API_BASE}/billing/credits`, {
-        credentials: 'include', // Send cookies for auth
+      const res = await fetch(`${API_BASE}/billing/credits?app=${APP_ID}`, {
+        credentials: 'include',
       });
       const data = await res.json();
       if (data.success) {
@@ -62,10 +62,10 @@ export const BillingPanel: React.FC<BillingPanelProps> = ({ isOpen, onClose, use
   const handlePurchase = async (packageId: string) => {
     setProcessing(packageId);
     try {
-      const res = await fetch(`${API_BASE}/billing/checkout`, {
+      const res = await fetch(`${API_BASE}/billing/checkout/${APP_ID}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // Send cookies for auth
+        credentials: 'include',
         body: JSON.stringify({ 
           packageId,
         })

@@ -113,8 +113,8 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       try {
         await prisma.$transaction(async (tx) => {
           const userCredits = await tx.userCredits.upsert({
-            where: { userId },
-            create: { userId, balance: credits, lifetimeSpent: 0 },
+            where: { userId_appId: { userId, appId } },
+            create: { userId, appId, balance: credits, lifetimeSpent: 0 },
             update: { balance: { increment: credits } },
           });
 
@@ -1814,37 +1814,45 @@ app.get('/api/billing/packages', (req, res) => {
   });
 });
 
-// Get user credits
+// Get user credits (per-app)
 app.get('/api/billing/credits', requireAuth, async (req, res) => {
   try {
+    const appId = req.query.app || req.query.appId || 'neural-chat';
     const credits = await prisma.userCredits.findUnique({
-      where: { userId: req.user.id },
+      where: { userId_appId: { userId: req.user.id, appId } },
     });
     res.json({ 
       success: true, 
       credits: credits?.balance || 0,
+      balance: credits?.balance || 0,
       lifetimeSpent: credits?.lifetimeSpent || 0,
+      appId,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get credits' });
   }
 });
 
-// Get all credits info
+// Get all credits info (per-app breakdown)
 app.get('/api/billing/credits-all', requireAuth, async (req, res) => {
   try {
-    const credits = await prisma.userCredits.findUnique({
+    const allAppCredits = await prisma.userCredits.findMany({
       where: { userId: req.user.id },
     });
     const allCredits = {};
+    let totalBalance = 0;
+    let totalLifetimeSpent = 0;
     for (const appId of VALID_APPS) {
-      allCredits[appId] = credits?.balance || 0;
+      const appCredit = allAppCredits.find(c => c.appId === appId);
+      allCredits[appId] = Number(appCredit?.balance || 0);
+      totalBalance += Number(appCredit?.balance || 0);
+      totalLifetimeSpent += Number(appCredit?.lifetimeSpent || 0);
     }
     res.json({ 
       success: true,
       credits: allCredits,
-      totalBalance: credits?.balance || 0,
-      lifetimeSpent: credits?.lifetimeSpent || 0,
+      totalBalance,
+      lifetimeSpent: totalLifetimeSpent,
     });
   } catch (error) {
     res.status(500).json({ success: false, error: 'Failed to get credits' });
@@ -1866,17 +1874,28 @@ app.get('/api/billing/history', requireAuth, async (req, res) => {
   }
 });
 
-// Get transactions
+// Get transactions (optionally per-app)
 app.get('/api/billing/transactions', requireAuth, async (req, res) => {
   try {
-    const userCredits = await prisma.userCredits.findUnique({
-      where: { userId: req.user.id },
-    });
-    if (!userCredits) {
-      return res.json({ success: true, transactions: [] });
+    const appId = req.query.app || req.query.appId;
+    let whereClause = {};
+    if (appId) {
+      const userCredits = await prisma.userCredits.findUnique({
+        where: { userId_appId: { userId: req.user.id, appId } },
+      });
+      if (!userCredits) return res.json({ success: true, transactions: [] });
+      whereClause = { userCreditsId: userCredits.id };
+    } else {
+      // All transactions across all apps
+      const allCredits = await prisma.userCredits.findMany({
+        where: { userId: req.user.id },
+        select: { id: true },
+      });
+      if (!allCredits.length) return res.json({ success: true, transactions: [] });
+      whereClause = { userCreditsId: { in: allCredits.map(c => c.id) } };
     }
     const transactions = await prisma.creditTransaction.findMany({
-      where: { userCreditsId: userCredits.id },
+      where: whereClause,
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
@@ -2025,8 +2044,8 @@ app.post('/api/billing/add-free-credits', requireAuth, async (req, res) => {
     }
 
     const userCredits = await prisma.userCredits.upsert({
-      where: { userId: req.user.id },
-      create: { userId: req.user.id, balance: amount, lifetimeSpent: 0 },
+      where: { userId_appId: { userId: req.user.id, appId } },
+      create: { userId: req.user.id, appId, balance: amount, lifetimeSpent: 0 },
       update: { balance: { increment: amount } },
     });
 
@@ -2060,10 +2079,11 @@ app.post('/api/billing/verify', requireAuth, async (req, res) => {
     
     if (!stripeClient) {
       // If Stripe not configured, just confirm based on credits
+      const appId = req.body.appId || 'neural-chat';
       const credits = await prisma.userCredits.findUnique({
-        where: { userId: req.user.id },
+        where: { userId_appId: { userId: req.user.id, appId } },
       });
-      return res.json({ success: true, credits: credits?.balance || 0, verified: true });
+      return res.json({ success: true, credits: credits?.balance || 0, verified: true, appId });
     }
 
     // Retrieve the checkout session from Stripe
@@ -2071,8 +2091,9 @@ app.post('/api/billing/verify', requireAuth, async (req, res) => {
     
     if (session.payment_status === 'paid' && 
         (session.metadata?.userId === req.user.id || session.client_reference_id === req.user.id)) {
+      const verifiedAppId = session.metadata?.appId || 'neural-chat';
       const credits = await prisma.userCredits.findUnique({
-        where: { userId: req.user.id },
+        where: { userId_appId: { userId: req.user.id, appId: verifiedAppId } },
       });
       
       res.json({ 
@@ -2089,11 +2110,12 @@ app.post('/api/billing/verify', requireAuth, async (req, res) => {
     console.error('[Billing] Verify error:', error);
     // Still return success if session retrieval fails but user has credits
     try {
+      const appId = req.body.appId || 'neural-chat';
       const credits = await prisma.userCredits.findUnique({
-        where: { userId: req.user.id },
+        where: { userId_appId: { userId: req.user.id, appId } },
       });
-      if (credits && credits.balance > 0) {
-        return res.json({ success: true, verified: true, credits: credits.balance });
+      if (credits && Number(credits.balance) > 0) {
+        return res.json({ success: true, verified: true, credits: Number(credits.balance), appId });
       }
     } catch (e) { /* ignore */ }
     res.status(500).json({ success: false, error: 'Failed to verify payment' });
@@ -2164,7 +2186,7 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
 
     // Get all data in parallel
     const [
-      userCredits,
+      allUserCredits,
       todayUsage,
       weekUsage,
       monthUsage,
@@ -2174,8 +2196,8 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
       recentTransactions,
       recentActivity
     ] = await Promise.all([
-      // Credit balance
-      prisma.userCredits.findUnique({
+      // Credit balances (per-app)
+      prisma.userCredits.findMany({
         where: { userId },
       }),
       
@@ -2251,7 +2273,18 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
     const creditsUsedWeek = Number(weekUsage._sum.creditsCost || 0);
     const creditsUsedMonth = Number(monthUsage._sum.creditsCost || 0);
     const creditsUsedLastMonth = Number(lastMonthUsage._sum.creditsCost || 0);
-    const creditBalance = Number(userCredits?.balance || 0);
+    
+    // Per-app credit balances
+    const perAppCredits = {};
+    let totalCreditBalance = 0;
+    let totalLifetimeSpent = 0;
+    for (const aid of VALID_APPS) {
+      const appCredit = allUserCredits.find(c => c.appId === aid);
+      perAppCredits[aid] = Number(appCredit?.balance || 0);
+      totalCreditBalance += Number(appCredit?.balance || 0);
+      totalLifetimeSpent += Number(appCredit?.lifetimeSpent || 0);
+    }
+    const creditBalance = totalCreditBalance;
     
     // Calculate change percentages
     const weeklyChange = lastMonthUsage._count > 0 
@@ -2340,7 +2373,8 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
         },
         credits: {
           balance: creditBalance,
-          lifetimeSpent: Number(userCredits?.lifetimeSpent || 0),
+          lifetimeSpent: totalLifetimeSpent,
+          perApp: perAppCredits,
         },
         stats: {
           creditsUsedToday,

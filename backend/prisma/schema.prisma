@@ -35,7 +35,7 @@ model User {
   lastLoginAt       DateTime? @map("last_login_at")
   
   // Relations
-  credits           UserCredits?
+  credits           UserCredits[]
   sessions          ChatSession[]
   usageLogs         UsageLog[]
   billingHistory    BillingHistory[]
@@ -53,7 +53,8 @@ model User {
 
 model UserCredits {
   id              String    @id @default(cuid())
-  userId          String    @unique @map("user_id")
+  userId          String    @map("user_id")
+  appId           String    @default("neural-chat") @map("app_id")
   
   // Credit balance
   balance         Decimal   @default(0) @db.Decimal(12, 4)
@@ -72,6 +73,8 @@ model UserCredits {
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   transactions    CreditTransaction[]
   
+  @@unique([userId, appId])
+  @@index([userId])
   @@map("user_credits")
 }
 
