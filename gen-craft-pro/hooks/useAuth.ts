@@ -74,11 +74,11 @@ export function useAuth(): UseAuthReturn {
   }, [user]);
 
   const login = useCallback((redirect = '/gen-craft-pro/') => {
-    window.location.href = `/auth/login?redirect=${encodeURIComponent(redirect)}`;
+    window.location.href = '/';
   }, []);
 
   const signup = useCallback((redirect = '/gen-craft-pro/') => {
-    window.location.href = `/auth/signup?redirect=${encodeURIComponent(redirect)}`;
+    window.location.href = '/';
   }, []);
 
   const logout = useCallback(async () => {

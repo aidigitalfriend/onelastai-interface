@@ -178,21 +178,23 @@ const App: React.FC = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [isCheckingPlan, setIsCheckingPlan] = useState(true);
   const [showThankYou, setShowThankYou] = useState(false);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showCreditsPrompt, setShowCreditsPrompt] = useState(false);
 
-  // Auth check + credit balance
+  // Auth check + credit balance (silent — app always visible)
   useEffect(() => {
     const checkAuthAndCredits = async () => {
       setIsCheckingPlan(true);
       try {
-        // 1. Verify user session
+        // 1. Verify user session (silently)
         const authRes = await fetch('/api/auth/verify', {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
         });
-        if (!authRes.ok) { window.location.href = '/auth/login?redirect=/gen-craft-pro/'; return; }
+        if (!authRes.ok) { setAuthUser(null); setIsCheckingPlan(false); return; }
         const authData = await authRes.json();
-        if (!authData.valid || !authData.user) { window.location.href = '/auth/login?redirect=/gen-craft-pro/'; return; }
+        if (!authData.valid || !authData.user) { setAuthUser(null); setIsCheckingPlan(false); return; }
         setAuthUser({ id: authData.user.id, email: authData.user.email });
 
         // 2. Check for post-checkout redirect
@@ -210,18 +212,14 @@ const App: React.FC = () => {
           window.history.replaceState({}, '', window.location.pathname);
         }
 
-        // 3. Check credit balance
+        // 3. Check credit balance (silently)
         const creditsRes = await fetch('/api/billing/credits?app=gen-craft-pro', { credentials: 'include' });
         const creditsData = await creditsRes.json();
         if (creditsData.success) {
           setActiveCredits({ balance: creditsData.balance || 0, lifetimeSpent: creditsData.lifetimeSpent || 0 });
-          if ((creditsData.balance || 0) > 0) { setShowPricing(false); } else { setShowPricing(true); }
-        } else {
-          setShowPricing(true);
         }
       } catch (e) {
         console.error('Auth/credits check error:', e);
-        setShowPricing(true);
       } finally {
         setIsCheckingPlan(false);
       }
@@ -386,15 +384,15 @@ const App: React.FC = () => {
   ) => {
     if (!instruction.trim() || genState.isGenerating) return;
 
-    // Auth gate — if not logged in, show sign-in screen
+    // Auth gate — show small login prompt
     if (!authUser) {
-      setShowPricing(true);
+      setShowLoginPrompt(true);
       return;
     }
 
-    // Credits gate — if no credits, show pricing
+    // Credits gate — show small purchase prompt
     if (!activeCredits || activeCredits.balance <= 0) {
-      setShowPricing(true);
+      setShowCreditsPrompt(true);
       return;
     }
 
@@ -429,16 +427,16 @@ const App: React.FC = () => {
         }),
       });
 
-      // Handle auth/plan errors with actionable prompts
+      // Handle auth/plan errors with small inline prompts
       if (response.status === 401) {
         setGenState({ isGenerating: false, error: null, progressMessage: '' });
         setAuthUser(null);
-        setShowPricing(true);
+        setShowLoginPrompt(true);
         return;
       }
-      if (response.status === 403) {
+      if (response.status === 402 || response.status === 403) {
         setGenState({ isGenerating: false, error: null, progressMessage: '' });
-        setShowPricing(true);
+        setShowCreditsPrompt(true);
         return;
       }
 
@@ -511,15 +509,15 @@ const App: React.FC = () => {
   const handleChatMessage = async (text: string) => {
     if (!text.trim() || genState.isGenerating) return;
 
-    // Auth gate — if not logged in, show sign-in screen
+    // Auth gate — show small login prompt
     if (!authUser) {
-      setShowPricing(true);
+      setShowLoginPrompt(true);
       return;
     }
 
-    // Credits gate — if no credits, show pricing
+    // Credits gate — show small purchase prompt
     if (!activeCredits || activeCredits.balance <= 0) {
-      setShowPricing(true);
+      setShowCreditsPrompt(true);
       return;
     }
 
@@ -543,16 +541,16 @@ const App: React.FC = () => {
         }),
       });
 
-      // Handle auth/plan errors with actionable prompts
+      // Handle auth/plan errors with small inline prompts
       if (response.status === 401) {
         setGenState({ isGenerating: false, error: null, progressMessage: '' });
         setAuthUser(null);
-        setShowPricing(true);
+        setShowLoginPrompt(true);
         return;
       }
-      if (response.status === 403) {
+      if (response.status === 402 || response.status === 403) {
         setGenState({ isGenerating: false, error: null, progressMessage: '' });
-        setShowPricing(true);
+        setShowCreditsPrompt(true);
         return;
       }
 
@@ -818,21 +816,57 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#09090b] text-zinc-400 overflow-hidden">
-      {/* Loading state */}
-      {isCheckingPlan && (
-        <div className="fixed inset-0 z-[100] bg-[#09090b] flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-10 h-10 border-2 border-violet-500/60 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-            <p className="text-zinc-500 text-sm font-medium">Loading GenCraft Pro...</p>
+      {/* Small Login Prompt — shown when user tries to generate without being logged in */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowLoginPrompt(false)}>
+          <div className="bg-zinc-900 border border-zinc-700/50 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-violet-500 to-blue-500 rounded-xl flex items-center justify-center text-white">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-white font-semibold text-sm">Sign in required</h3>
+                <p className="text-zinc-500 text-xs">Log in to start building with AI</p>
+              </div>
+            </div>
+            <p className="text-zinc-400 text-sm mb-5">Please sign in from the <a href="/" className="text-violet-400 underline hover:text-violet-300">home page</a> to use GenCraft Pro.</p>
+            <div className="flex gap-2">
+              <a href="/" className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-blue-600 text-white font-medium rounded-xl text-center text-sm hover:from-violet-500 hover:to-blue-500 transition-all">Go to Home & Sign In</a>
+              <button onClick={() => setShowLoginPrompt(false)} className="px-4 py-2.5 bg-zinc-800 text-zinc-400 font-medium rounded-xl text-sm hover:bg-zinc-700 transition-all">Close</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Auth Gate — redirects to main login page automatically */}
+      {/* Small Credits Prompt — shown when user tries to generate with 0 credits */}
+      {showCreditsPrompt && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowCreditsPrompt(false)}>
+          <div className="bg-zinc-900 border border-zinc-700/50 rounded-2xl p-6 max-w-sm w-full mx-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center text-white">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-white font-semibold text-sm">Credits needed</h3>
+                <p className="text-zinc-500 text-xs">Purchase credits to generate apps</p>
+              </div>
+            </div>
+            <p className="text-zinc-400 text-sm mb-5">You need AI credits to generate code. Choose a plan that fits your needs.</p>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowCreditsPrompt(false); setShowPricing(true); }} className="flex-1 py-2.5 bg-gradient-to-r from-violet-600 to-blue-600 text-white font-medium rounded-xl text-center text-sm hover:from-violet-500 hover:to-blue-500 transition-all">Purchase Credits</button>
+              <button onClick={() => setShowCreditsPrompt(false)} className="px-4 py-2.5 bg-zinc-800 text-zinc-400 font-medium rounded-xl text-sm hover:bg-zinc-700 transition-all">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* Pricing Paywall — user is authenticated but has no plan */}
-      {!isCheckingPlan && authUser && showPricing && (
-        <PricingPaywall userId={authUser?.id || null} userEmail={authUser?.email || null} isOverlay={true} />
+      {/* Pricing Paywall — full credit purchase page */}
+      {showPricing && authUser && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center" onClick={() => setShowPricing(false)}>
+          <div onClick={e => e.stopPropagation()}>
+            <PricingPaywall userId={authUser.id} userEmail={authUser.email} isOverlay={true} onClose={() => setShowPricing(false)} />
+          </div>
+        </div>
       )}
 
       {/* Thank You Toast — shows after successful Stripe checkout */}

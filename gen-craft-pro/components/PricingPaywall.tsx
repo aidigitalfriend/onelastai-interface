@@ -56,7 +56,7 @@ const PricingPaywall: React.FC<PricingPaywallProps> = ({ userId, userEmail, onCl
 
   const handlePurchase = async (pkgId: string) => {
     if (!userId || !userEmail) {
-      window.location.href = '/auth/login?redirect=/gen-craft-pro/';
+      window.location.href = '/';
       return;
     }
     setIsLoading(true);
