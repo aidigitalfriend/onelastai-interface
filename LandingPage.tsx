@@ -144,6 +144,16 @@ const LandingPage: React.FC<LandingPageProps> = ({ onLaunchApp }) => {
       status: 'live',
       features: ['VS Code Style', 'AI Copilot', 'Git Integration', 'Terminal'],
       path: '/maula-editor'
+    },
+    {
+      id: 'gen-craft-pro',
+      name: 'GenCraft Pro',
+      description: 'Full-stack AI app builder. Generate, preview, and deploy complete applications with one prompt.',
+      icon: '🚀',
+      gradient: 'from-violet-500 to-fuchsia-500',
+      status: 'live',
+      features: ['Full-Stack Apps', 'AI Code Gen', 'Live Preview', 'One-Click Deploy'],
+      path: '/gen-craft-pro'
     }
   ];
 
@@ -799,6 +809,7 @@ interface DashboardData {
       'neural-chat': { credits: number; requests: number; percent: number };
       'canvas-studio': { credits: number; requests: number; percent: number };
       'maula-editor': { credits: number; requests: number; percent: number };
+      'gen-craft-pro': { credits: number; requests: number; percent: number };
     };
   };
   recentActivity: Array<{ id: string; app: string; icon: string; action: string; credits: number; time: Date }>;
@@ -883,7 +894,9 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
 
   const creditPackages = [
     { id: 'nc-50', credits: 50, price: 5, savings: null, popular: false },
+    { id: 'nc-100', credits: 100, price: 10, savings: '5%', popular: false },
     { id: 'nc-350', credits: 350, price: 30, savings: '15%', popular: true },
+    { id: 'nc-600', credits: 600, price: 50, savings: '20%', popular: false },
     { id: 'nc-1500', credits: 1500, price: 100, savings: '35%', popular: false },
   ];
 
@@ -987,7 +1000,7 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
               {[
                 { label: 'Credits Used Today', value: Math.round(dashboardData?.stats.creditsUsedToday || 0).toString(), icon: '⚡', color: 'cyan', change: `${dashboardData?.stats.requestsToday || 0} requests` },
                 { label: 'Total Requests', value: (dashboardData?.stats.requestsMonth || 0).toString(), icon: '📊', color: 'purple', change: `${dashboardData?.stats.weeklyChange > 0 ? '+' : ''}${dashboardData?.stats.weeklyChange || 0}% this week` },
-                { label: 'Apps Used', value: (dashboardData?.apps.active || 3).toString(), icon: '🚀', color: 'pink', change: 'All Active' },
+                { label: 'Apps Used', value: (dashboardData?.apps.active || 4).toString(), icon: '🚀', color: 'pink', change: 'All Active' },
                 { label: 'Credits Remaining', value: Math.round(creditBalance).toString(), icon: '🪙', color: 'green', change: creditBalance > 0 ? 'Available' : 'Add credits' },
               ].map((stat, i) => (
                 <div key={i} className="p-6 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group">
@@ -1004,11 +1017,13 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
             {/* Quick Actions */}
             <div>
               <h3 className="text-xl font-bold mb-4 text-white">Quick Actions</h3>
-              <div className="grid md:grid-cols-3 gap-4">
+              <div className="grid md:grid-cols-5 gap-4">
                 {[
                   { name: 'Neural Chat', icon: '🧠', desc: 'Start a conversation', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat' },
                   { name: 'Canvas Studio', icon: '🎨', desc: 'Build something new', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio' },
-                  { name: 'Buy Credits', icon: '🪙', desc: 'Top up your balance', gradient: 'from-green-500 to-emerald-500', path: null },
+                  { name: 'Maula Editor', icon: '⚡', desc: 'Code with AI', gradient: 'from-green-500 to-emerald-500', path: '/maula-editor' },
+                  { name: 'GenCraft Pro', icon: '🚀', desc: 'Build full-stack apps', gradient: 'from-violet-500 to-fuchsia-500', path: '/gen-craft-pro' },
+                  { name: 'Buy Credits', icon: '🪙', desc: 'Top up your balance', gradient: 'from-yellow-500 to-orange-500', path: null },
                 ].map((action, i) => (
                   <a
                     key={i}
@@ -1060,11 +1075,12 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
         {activeTab === 'apps' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-white">My Apps</h2>
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid md:grid-cols-4 gap-6">
               {[
                 { name: 'Neural Chat', icon: '🧠', status: 'Active', gradient: 'from-purple-500 to-pink-500', path: '/neural-chat', desc: 'AI conversation interface' },
                 { name: 'Canvas Studio', icon: '🎨', status: 'Active', gradient: 'from-cyan-500 to-blue-500', path: '/canvas-studio', desc: 'Visual app builder' },
                 { name: 'Maula Editor', icon: '⚡', status: 'Active', gradient: 'from-green-500 to-emerald-500', path: '/maula-editor', desc: 'AI code editor' },
+                { name: 'GenCraft Pro', icon: '🚀', status: 'Active', gradient: 'from-violet-500 to-fuchsia-500', path: '/gen-craft-pro', desc: 'Full-stack AI app builder' },
               ].map((app, i) => (
                 <div key={i} className="p-8 rounded-2xl bg-white/[0.02] border border-white/10 hover:border-white/20 transition-all group">
                   <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${app.gradient} flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform shadow-lg shadow-${app.gradient.split('-')[1]}-500/20`}>
@@ -1105,7 +1121,7 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
 
             <div>
               <h3 className="text-2xl font-bold mb-6 text-white">Buy Credits</h3>
-              <div className="grid md:grid-cols-3 gap-6">
+              <div className="grid md:grid-cols-3 lg:grid-cols-5 gap-6">
                 {creditPackages.map((pkg, i) => (
                   <button 
                     key={pkg.id}
@@ -1157,6 +1173,7 @@ const FullPageDashboard: React.FC<FullPageDashboardProps> = ({ userEmail = 'user
                   { name: 'Neural Chat', key: 'neural-chat' as const, color: 'purple', icon: '🧠' },
                   { name: 'Canvas Studio', key: 'canvas-studio' as const, color: 'cyan', icon: '🎨' },
                   { name: 'Maula Editor', key: 'maula-editor' as const, color: 'green', icon: '⚡' },
+                  { name: 'GenCraft Pro', key: 'gen-craft-pro' as const, color: 'violet', icon: '🚀' },
                 ].map((app, i) => {
                   const usage = dashboardData?.apps.usage[app.key];
                   const percent = usage?.percent || 0;

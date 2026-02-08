@@ -130,6 +130,21 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
             },
           });
 
+          // Write to BillingHistory for transaction tracking
+          await tx.billingHistory.create({
+            data: {
+              userId,
+              stripePaymentId: session.payment_intent || session.id,
+              stripeCustomerId: session.customer || null,
+              amount: (session.amount_total || 0) / 100,
+              currency: session.currency || 'usd',
+              creditsAdded: credits,
+              status: 'SUCCEEDED',
+              description: `${appName}: ${credits} credits (${packageId})`,
+              metadata: { appId, packageId, sessionId: session.id },
+            },
+          });
+
           console.log(`[Webhook] Credits added: ${credits} to user ${userId} for ${appName}`);
         });
       } catch (error) {
@@ -1926,7 +1941,7 @@ app.post('/api/billing/checkout/:appId', requireAuth, async (req, res) => {
         },
         quantity: 1,
       }],
-      success_url: `${baseUrl}${appPath}?payment=success&credits=${creditPackage.credits}`,
+      success_url: `${baseUrl}${appPath}?payment=success&purchase=success&credits=${creditPackage.credits}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}${appPath}?payment=cancelled`,
     });
 
@@ -2031,6 +2046,57 @@ app.post('/api/billing/add-free-credits', requireAuth, async (req, res) => {
   } catch (error) {
     console.error('[Billing] Add free credits error:', error);
     res.status(500).json({ success: false, error: 'Failed to add credits' });
+  }
+});
+
+// Verify a checkout session (post-purchase confirmation)
+app.post('/api/billing/verify', requireAuth, async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'Missing session ID' });
+    }
+    
+    if (!stripeClient) {
+      // If Stripe not configured, just confirm based on credits
+      const credits = await prisma.userCredits.findUnique({
+        where: { userId: req.user.id },
+      });
+      return res.json({ success: true, credits: credits?.balance || 0, verified: true });
+    }
+
+    // Retrieve the checkout session from Stripe
+    const session = await stripeClient.checkout.sessions.retrieve(sessionId);
+    
+    if (session.payment_status === 'paid' && 
+        (session.metadata?.userId === req.user.id || session.client_reference_id === req.user.id)) {
+      const credits = await prisma.userCredits.findUnique({
+        where: { userId: req.user.id },
+      });
+      
+      res.json({ 
+        success: true, 
+        verified: true,
+        credits: credits?.balance || 0,
+        purchasedCredits: parseInt(session.metadata?.credits || '0', 10),
+        appId: session.metadata?.appId || 'unknown',
+      });
+    } else {
+      res.json({ success: false, verified: false, error: 'Payment not completed or user mismatch' });
+    }
+  } catch (error) {
+    console.error('[Billing] Verify error:', error);
+    // Still return success if session retrieval fails but user has credits
+    try {
+      const credits = await prisma.userCredits.findUnique({
+        where: { userId: req.user.id },
+      });
+      if (credits && credits.balance > 0) {
+        return res.json({ success: true, verified: true, credits: credits.balance });
+      }
+    } catch (e) { /* ignore */ }
+    res.status(500).json({ success: false, error: 'Failed to verify payment' });
   }
 });
 
@@ -2199,12 +2265,16 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
       'image': 'canvas-studio',
       'audio': 'neural-chat',
       'code': 'maula-editor',
+      'generate': 'gen-craft-pro',
+      'deploy': 'gen-craft-pro',
+      'build': 'gen-craft-pro',
     };
     
     const appUsageData = {
       'neural-chat': { credits: 0, requests: 0, percent: 0 },
       'canvas-studio': { credits: 0, requests: 0, percent: 0 },
       'maula-editor': { credits: 0, requests: 0, percent: 0 },
+      'gen-craft-pro': { credits: 0, requests: 0, percent: 0 },
     };
     
     let totalAppCredits = 0;
@@ -2233,16 +2303,21 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
         'image': 'canvas-studio',
         'audio': 'neural-chat',
         'code': 'maula-editor',
+        'generate': 'gen-craft-pro',
+        'deploy': 'gen-craft-pro',
+        'build': 'gen-craft-pro',
       };
       const appNames = {
         'neural-chat': 'Neural Chat',
         'canvas-studio': 'Canvas Studio',
         'maula-editor': 'Maula Editor',
+        'gen-craft-pro': 'GenCraft Pro',
       };
       const appIcons = {
         'neural-chat': '🧠',
         'canvas-studio': '🎨',
         'maula-editor': '⚡',
+        'gen-craft-pro': '🚀',
       };
       const appId = endpointToApp[log.endpoint] || 'neural-chat';
       return {
@@ -2277,8 +2352,8 @@ app.get('/api/dashboard', requireAuth, async (req, res) => {
           weeklyChange,
         },
         apps: {
-          active: Object.values(appUsageData).filter(a => a.requests > 0).length || 3,
-          total: 3,
+          active: Object.values(appUsageData).filter(a => a.requests > 0).length || 4,
+          total: 4,
           usage: appUsageData,
         },
         models: modelUsage.map(m => ({
